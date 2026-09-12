@@ -11,9 +11,11 @@ build/
 .env
 .venv
 venv/
-data/
+data/*
 !data/README.md
 outputs/
+outputs_recon/
+outputs_*/
 *.tif
 *.tiff
 *.zip

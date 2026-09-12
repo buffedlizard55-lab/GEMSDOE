@@ -58,7 +58,7 @@
 4. **Time**
    - Training: 5-10h for full ensemble
    - Inference: ~1h for full region with TTA and ensemble
-   - Expert review period after competition close (per PDF section 3.6)
+   - Expert review of all submissions happens after close; winners notified ~60 days after the prize closes (per PDF section 3.6.5); ACH/W-9 within 30 days of notice (A.2)
 
 5. **Documentation for Winners**
    - Per PDF section 3.2 and 3.5: Winners must submit complete code assets + documentation sufficient to reproduce results, consistent with DrivenData's Winning Model Documentation Template.
@@ -84,3 +84,38 @@ All shareable with sponsor.
 - No synthetic fault data invented.
 - File names `training_features.tif`, `1m_DEM_links.csv` from official problem page.
 - Reference solution naming drift (`numeric_features.tif` vs `training_features.tif`) flagged as irregularity.
+
+### 1c. Fresh egress matrix — 2026-09-12T22:09Z (post-sandbox-restart re-test)
+
+| Host | curl result |
+|---|---|
+| github.com / api.github.com | ✅ data flows (git/gh) |
+| codeload.github.com | ✅ data flows (200, 1.3 MB tarball verified) — **NEW**, enables any public repo content |
+| raw.githubusercontent.com | ❌ exit 35 (TLS data dropped) |
+| objects.githubusercontent.com (release assets) | ❌ exit 35 → smp pretrained encoder weights NOT downloadable |
+| prd-tnm.s3 / drivendata-public-assets.s3 / www.dropbox.com / huggingface.co | ❌ exit 35 |
+| pypi.org / files.pythonhosted.org | ✅ (numpy/scipy/torch/rasterio/smp/geopandas installed) |
+
+**GitHub mirror hunt (definitive negative):** `gh api search/code` on 5 distinctive filenames
+(`gems-geodawn-numerical-features`, `existing_faults.tif`, `numeric_features.tif`, `1m_DEM_links`,
+`example_submission.tif`) → **0 hits**. The official competition files have no public GitHub mirror.
+
+### 1d. Reconstructed dataset caveat (2026-09-12)
+
+Because the official files cannot enter the sandbox, the pipeline was verified end-to-end on
+`data/reconstructed/` — REAL public-source data (GeoDAWN survey 22103 area1 + INGENIOUS QFaults +
+earthquake density; see `data/README.md`), **not** the official competition files: different band
+set (11 of 16 analog/extra vs official derivations), different processing, subregion extent.
+Usable for: pipeline proof, external-data pretraining, sanity CV. Required for leaderboard:
+official data-tab files via `scripts/download_competition_data.sh`.
+
+### 1e. Code-vs-docs discrepancies found during E2E (2026-09-12)
+
+- docs claimed torchvision augmentations in the training loop — **not implemented** in `src/train.py` (FaultDataset transform is a no-op placeholder). Docs corrected; augmentation remains a next-step.
+- `make_patches` keeps training windows that partially overlap held-out test regions (only fully-covered windows are excluded) → mild CV leakage vs the reference solution's global test-region zeroing. Flagged; fix queued in SUGGESTIONS §.
+- `pretrained: true` configs cannot fetch encoder weights from this sandbox (release-asset host blocked); sandbox runs use `pretrained: false`. On an unrestricted machine `configs/config.yaml` works as-is.
+- 3-epoch CPU smoke model ≈ constant-prediction baseline (DTI 0.0519 vs 0.0524) — honest result; not evidence of model quality.
+
+### 1f. Dropbox mirror fetch notes (2026-09-12)
+- Dropbox `scl/fi` links carry a short-lived `st` signature; it expired mid-capture of `Digital-elevation-model-links-JSON.pdf` (chunk 1/13 fetched, rest failed). The durable form is `rlkey` + `dl=1` (used in `scripts/download_competition_data.sh`).
+- DEM tiles are ~90-380 MB each; the full 3-project list is tens of GB — download on a machine with disk headroom (`scripts/download_dem_tiles.py`).

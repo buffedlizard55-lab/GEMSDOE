@@ -207,8 +207,9 @@ class FaultDataset(Dataset):
 
 def load_features_and_labels(feature_path, label_path):
     # Try multiple possible names
-    feat_candidates = [feature_path, "data/training_features.tif", "data/numeric_features.tif", "data/features.tif"]
-    label_candidates = [label_path, "data/labels.tif", "data/faults.tif"]
+    # Naming drift (flagged irregularity): problem page vs reference solution vs Dropbox mirrors
+    feat_candidates = [feature_path, "data/training_features.tif", "data/numeric_features.tif", "data/gems-geodawn-numerical-features.tif", "data/features.tif"]
+    label_candidates = [label_path, "data/labels.tif", "data/faults.tif", "data/existing_faults.tif"]
 
     feat_path = None
     for p in feat_candidates:

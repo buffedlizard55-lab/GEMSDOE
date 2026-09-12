@@ -46,7 +46,7 @@
 
 <main class="container">
   <div class="alert success">
-    <strong>✅ Verified & Auditable:</strong> Every link below fetched via official sources during development. See <a href="references.md">references.md</a> for fetch logs, <a href="data_catalog.csv">data_catalog.csv</a> and <a href="data_catalog.json">data_catalog.json</a> for full catalog. No hallucinations. Flagged irregularities inline.
+    <strong>✅ Verified & Auditable (re-verified 2026-09-12):</strong> Every link below was checked against official sources — fetch_page full-text retrieval, web_search cross-checks, and git clone of the reference solution; unverifiable links were removed and logged in <a href="references.md">references.md</a>. Per-link status in <a href="data_catalog.csv">data_catalog.csv</a> / <a href="data_catalog.json">data_catalog.json</a>. No hallucinations. Flagged irregularities inline.
   </div>
 
   <section id="overview" class="card">
@@ -186,14 +186,14 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
     <table>
       <thead><tr><th>#</th><th>Category</th><th>Feature</th><th>Official Source</th><th>Verified Link</th></tr></thead>
       <tbody>
-        <tr><td>1</td><td>MT</td><td>Surface conductivity</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a> DOI <a href="https://doi.org/10.15121/1881483" target="_blank">10.15121/1881483</a></td></tr>
+        <tr><td>1</td><td>MT</td><td>Surface conductivity</td><td>INGENIOUS (MT conductance)</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a> DOI <a href="https://doi.org/10.15121/1881483" target="_blank">10.15121/1881483</a>; sub-dataset <a href="https://doi.org/10.5066/P9TWT2LU" target="_blank">10.5066/P9TWT2LU</a></td></tr>
         <tr><td>2</td><td>MT</td><td>Depth to conductive base</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
-        <tr><td>3</td><td>Topo</td><td>Detrended elevation</td><td>USGS 3DEP + GeoDAWN</td><td><a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">3DEP About</a></td></tr>
+        <tr><td>3</td><td>Topo</td><td>Detrended elevation</td><td>INGENIOUS (USGS release)</td><td><a href="https://doi.org/10.5066/P9MQRCBY" target="_blank">10.5066/P9MQRCBY</a> + <a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">3DEP About</a></td></tr>
         <tr><td>4</td><td>Topo</td><td>Slope of detrended elevation</td><td>USGS 3DEP</td><td><a href="https://apps.nationalmap.gov/downloader/" target="_blank">TNM Downloader</a></td></tr>
         <tr><td>5</td><td>Geodesy</td><td>Dilatation rate</td><td>INGENIOUS / UNAVCO</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
         <tr><td>6</td><td>Geodesy</td><td>Shear strain rate</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
         <tr><td>7</td><td>Geodesy</td><td>Second invariant of strain rate</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
-        <tr><td>8</td><td>Gravity</td><td>Isostatic gravity anomaly</td><td>USGS Gravity</td><td><a href="https://www.usgs.gov/data/gravity-data" target="_blank">USGS Gravity Data</a> + GDR</td></tr>
+        <tr><td>8</td><td>Gravity</td><td>Isostatic gravity anomaly</td><td>USGS (Kucks 1999)</td><td><a href="https://mrdata.usgs.gov/gravity/isostatic/" target="_blank">mrdata gravity/isostatic</a> + <a href="https://mrdata.usgs.gov/metadata/usgraviso.html" target="_blank">metadata</a> + GDR <a href="https://doi.org/10.5066/P9Z6SA1Z" target="_blank">P9Z6SA1Z</a></td></tr>
         <tr><td>9</td><td>Gravity</td><td>Slope of isostatic gravity</td><td>Derived</td><td>Derived</td></tr>
         <tr><td>10</td><td>Mag</td><td>Reduced-to-pole anomaly</td><td>GeoDAWN</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase 657e1d85</a> DOI <a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">P93LGLVQ</a></td></tr>
         <tr><td>11</td><td>Mag</td><td>Total magnetic intensity (TMI)</td><td>GeoDAWN</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase</a></td></tr>
@@ -217,10 +217,10 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
     <table>
       <thead><tr><th>#</th><th>Dataset</th><th>Agency</th><th>Official Verified Links (Click to Verify)</th><th>License</th><th>Use</th><th>Status</th></tr></thead>
       <tbody>
-        <tr><td>1</td><td><strong>GeoDAWN Mag & Radiometric</strong></td><td>USGS</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase 657e1d85</a><br><a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">DOI 10.5066/P93LGLVQ</a><br><a href="https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and" target="_blank">USGS Overview</a></td><td>Public Domain</td><td>Primary geophysics</td><td>✅ Verified via web_search</td></tr>
-        <tr><td>2</td><td><strong>Quaternary Fault & Fold DB</strong></td><td>USGS Earthquake Hazards</td><td><a href="https://www.usgs.gov/programs/earthquake-hazards/faults" target="_blank">Interactive Fault Map</a><br><a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">ScienceBase QFaults</a><br><a href="https://doi.org/10.5066/P9BCVRCK" target="_blank">DOI P9BCVRCK</a><br><a href="https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files" target="_blank">KML Download</a><br><a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer" target="_blank">ArcGIS Service</a></td><td>Public Domain</td><td>Ground truth labels</td><td>✅ Verified</td></tr>
+        <tr><td>1</td><td><strong>GeoDAWN Mag & Radiometric</strong></td><td>USGS</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase 657e1d85</a><br><a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">DOI 10.5066/P93LGLVQ</a><br><a href="https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and" target="_blank">USGS Overview</a></td><td>CC0 1.0</td><td>Primary geophysics</td><td>✅ fetch_page 2026-09-12 — license CC0 1.0</td></tr>
+        <tr><td>2</td><td><strong>Quaternary Fault & Fold DB</strong></td><td>USGS Earthquake Hazards</td><td><a href="https://www.usgs.gov/programs/earthquake-hazards/faults" target="_blank">Interactive Fault Map</a><br><a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">ScienceBase QFaults</a><br><a href="https://doi.org/10.5066/P9BCVRCK" target="_blank">DOI P9BCVRCK</a><br><a href="https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format" target="_blank">USGS FAQ (KML+GIS)</a><br><a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer" target="_blank">ArcGIS Service</a></td><td>Public Domain</td><td>Ground truth labels</td><td>✅ Verified</td></tr>
         <tr><td>3</td><td><strong>3DEP 1m DEM / Lidar</strong></td><td>USGS NGP</td><td><a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">About 3DEP</a><br><a href="https://apps.nationalmap.gov/downloader/" target="_blank">TNM Downloader</a><br><a href="https://apps.nationalmap.gov/lidar-explorer/" target="_blank">LidarExplorer</a><br><a href="https://registry.opendata.aws/usgs-lidar/" target="_blank">AWS Open Data</a></td><td>Public Domain</td><td>Elevation, slope, TPI, TRI, curvature</td><td>✅ Verified</td></tr>
-        <tr><td>4</td><td><strong>INGENIOUS Regional Compilation</strong></td><td>GBCGE/DOE GDR</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a><br><a href="https://doi.org/10.15121/1881483" target="_blank">DOI 1881483</a><br><a href="https://www.osti.gov/biblio/1881483" target="_blank">OSTI 1881483</a><br><a href="https://gbcge.org/current-projects/ingenious/" target="_blank">Project Site</a></td><td>CC Public</td><td>Conductivity, strain, gravity, quake density, heat flow</td><td>✅ Verified</td></tr>
+        <tr><td>4</td><td><strong>INGENIOUS Regional Compilation</strong></td><td>GBCGE/DOE GDR</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a><br><a href="https://doi.org/10.15121/1881483" target="_blank">DOI 1881483</a><br><a href="https://www.osti.gov/biblio/1881483" target="_blank">OSTI 1881483</a><br><a href="https://gbcge.org/current-projects/ingenious/" target="_blank">Project Site</a></td><td>CC BY 4.0</td><td>Conductivity, strain, gravity, quake density, heat flow</td><td>✅ Verified</td></tr>
         <tr><td>5</td><td><strong>GBCGE Subsurface DB</strong></td><td>GBCGE</td><td><a href="https://doi.org/10.15121/1987556" target="_blank">DOI 1987556</a><br><a href="https://www.osti.gov/dataexplorer/biblio/dataset/1987556" target="_blank">OSTI Explorer</a></td><td>Public</td><td>Wells, springs, temps, chemistry</td><td>✅ Verified</td></tr>
         <tr><td>6</td><td><strong>Geothermal Favorability</strong></td><td>USGS + INGENIOUS</td><td><a href="https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43" target="_blank">ScienceBase 66e88690</a></td><td>Public</td><td>16 ML features</td><td>✅ Verified</td></tr>
         <tr><td>7</td><td><strong>EarthMRI</strong></td><td>USGS Mineral Resources</td><td><a href="https://mrdata.usgs.gov/earthmri/" target="_blank">Portal</a><br><a href="https://pubs.usgs.gov/publication/fs20203055" target="_blank">FS 2020-3055 DOI 10.3133/fs20203055</a></td><td>Public Domain</td><td>Critical mineral context</td><td>✅ Verified</td></tr>
@@ -233,9 +233,9 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
     <div class="alert">
       <strong>Irregularities flagged for review:</strong>
       <ul style="margin:8px 0;">
-        <li>Data tab https://www.drivendata.org/competitions/306/competition-doe-gems/data/ requires login — confirmed via fetch_page redirect to login. Cannot verify exact file list without auth. We handle both <code>training_features.tif</code> (problem page) and <code>numeric_features.tif</code> (reference solution) naming drift in <code>src/dataset.py</code>.</li>
+        <li>Data tab https://www.drivendata.org/competitions/306/competition-doe-gems/data/ requires login — confirmed via fetch_page redirect to login. Cannot verify exact file list without auth. We handle all three observed naming sets in <code>src/dataset.py</code>: <code>training_features.tif</code> (problem page), <code>numeric_features.tif</code> (reference solution), <code>gems-geodawn-numerical-features.tif</code> (Dropbox mirror), likewise labels (<code>labels.tif</code> / <code>existing_faults.tif</code>), submission (<code>sample_submission.tif</code> / <code>example_submission.tif</code>), DEM links (<code>1m_DEM_links.csv</code> / <code>Digital-elevation-model-links-JSON.pdf</code>).</li>
         <li>GeoDAWN ScienceBase has many zips (grids 42MB+227MB, gdb 350MB+378MB, tiffs 43MB+230MB, plus 3GB contractor packages) — exact file used for <code>training_features.tif</code> not documented; organizers pre-processed them.</li>
-        <li>INGENIOUS layers derivation not fully documented — we re-derive DEM derivatives in <code>src/external_data.py</code>.</li>
+        <li>INGENIOUS layers derivation not fully documented — closest official sources are INGENIOUS sub-datasets with own USGS DOIs: MT conductance 10.5066/P9TWT2LU, detrended elevation 10.5066/P9MQRCBY, gravity/magnetics 10.5066/P9Z6SA1Z, heat flow 10.5066/P9BZPVUC, slip/dilation tendency 10.5066/P9YL58W6.</li>
         <li>No official sample submission offline — we create dummy via <code>scripts/generate_dummy_submission.py</code> if missing.</li>
       </ul>
     </div>
@@ -251,7 +251,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
           <li>U-Net with segmentation_models_pytorch</li>
           <li>5 MC splits, patch 128, 5 epochs, Tversky loss α0.2 β0.8, basic [0,1] min-max norm</li>
           <li>Single model, no TTA, no external DEM, no post-process</li>
-          <li>Estimated LB: ~0.45-0.55 DTI</li>
+          <li>Rough DTI estimate only (clearly labeled estimate; no verified public baseline exists for this new competition)</li>
         </ul>
         <p>Notebook: <code>unet-mc-cv-reference-solution.ipynb</code> — loads features, patchify, train U-Net, average predictions.</p>
       </div>
@@ -260,7 +260,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
         <ul>
           <li><strong>Data:</strong> Robust percentile clipping (2-98%) + standardization, not just [0,1]. DEM augmentation: slope, curvature, TPI, TRI, detrended, hillshade from 3DEP via <code>src/external_data.py</code> (official source https://www.usgs.gov/3d-elevation-program/about-3dep-products-services)</li>
           <li><strong>Patches:</strong> 256px (larger context) + train_step 32 overlap, hard-negative mining (30% negatives kept)</li>
-          <li><strong>Aug:</strong> RandomResizedCrop 0.5-1.0, flips, rotations, elastic, Gaussian noise — via torchvision transforms</li>
+          <li><strong>Aug (planned — NOT yet wired into the train loop, flagged 2026-09-12):</strong> RandomResizedCrop 0.5-1.0, flips, rotations, elastic, Gaussian noise — <code>FaultDataset.transform</code> is currently a no-op placeholder</li>
           <li><strong>Models:</strong> Ensemble UNet++, DeepLabV3+, SegFormer with EfficientNet-B5 & MIT-B2 pretrained on ImageNet (via segmentation_models_pytorch)</li>
           <li><strong>Loss:</strong> BCE + Tversky + Focal Tversky combo matching metric α0.2 β0.8 — <code>src/losses.py</code></li>
           <li><strong>Train:</strong> 10 MC splits, 50 epochs, AdamW, ReduceLROnPlateau, early stopping on DTI, mixed precision — <code>src/train.py</code></li>
@@ -289,7 +289,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
   ↓ Validate: scripts/validate_submission.py checks CRS, res, bounds, dtype, range</pre>
 
     <h3>Why This Wins Final Round</h3>
-    <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review uses ALL submissions to find candidates — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
+    <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review builds the expanded label set from "expert review of all submissions" (competition main page, verbatim — verified 2026-09-12; problem page + PDF 3.6.1 wording: uses submitted predictions) — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
 
     <h3>Expected Gains</h3>
     <table>
@@ -309,8 +309,8 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
         <h3 style="margin-top:0;">Current Sandbox Limits</h3>
         <ul>
           <li>❌ <strong>No DrivenData auth</strong> → cannot auto-download <code>training_features.tif</code>, <code>labels.tif</code>, <code>sample_submission.tif</code>, <code>1m_DEM_links.csv</code> from https://www.drivendata.org/competitions/306/competition-doe-gems/data/ (requires login — verified via fetch_page redirect)</li>
-          <li>❌ <strong>CPU-only</strong> — Python 3.11.2, no torch initially (verified <code>pip show torch</code> → not found). Training large models needs GPU per ref solution https://github.com/drivendataorg/gems-prize-reference-solution#choosing-gpu-vs-cpu</li>
-          <li>❌ <strong>No large external data pre-downloaded</strong> — GeoDAWN GBs (ScienceBase https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 has 42MB+227MB grids, 350MB+378MB gdb, 3GB contractor), 3DEP 1m DEM many GB (via https://apps.nationalmap.gov/downloader/), INGENIOUS 116MB+ (https://gdr.openei.org/submissions/1391)</li>
+          <li>⚠️ <strong>CPU-only</strong> — Python 3.11.2; torch 2.14.0 installed 2026-09-12 (CPU wheel, verified import) — unit tests and metric self-tests run, but training large models needs GPU per ref solution https://github.com/drivendataorg/gems-prize-reference-solution#choosing-gpu-vs-cpu</li>
+          <li>❌ <strong>No large external data pre-downloaded</strong> — GeoDAWN GBs (ScienceBase https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 has 42MB+227MB grids, 350MB+378MB gdb, 3GB contractor), 3DEP 1m DEM many GB (canonical bucket VERIFIED 2026-09-12: prd-tnm.s3.amazonaws.com — 35 tiles captured, 6 S3-verified in <code>data/dem_links.json</code>; downloader <code>scripts/download_dem_tiles.py</code>; also https://apps.nationalmap.gov/downloader/), INGENIOUS 116MB+ (https://gdr.openei.org/submissions/1391)</li>
           <li>✅ Code built to work once data placed in <code>data/</code> — handles both naming conventions, validates via <code>scripts/prepare_data.py</code></li>
         </ul>
       </div>
@@ -333,6 +333,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
 
   <section id="quickstart" class="card">
     <h2>8. Quickstart — End-to-End</h2>
+    <div class="alert info"><strong>End-to-end verified 2026-09-12 (CPU):</strong> the full chain train → inference → format validation → DTI scoring was executed on a reconstructed public-source dataset (<code>data/reconstructed/</code>, built by <code>scripts/build_reconstruction_dataset.py</code> from official USGS GeoDAWN + INGENIOUS sources because the official files are login/egress-gated here). <code>validate_submission.py</code> result: ✅ PASSED (EPSG:32611, 100 m, float32, [0,1], grid match). Two real bugs were found and fixed in the process (YAML <code>1e-4</code> string crash; scikit-image Frangi API silently disabled). Details: <a href="../data/README.md">data/README.md</a>, <a href="../LIMITATIONS.md">LIMITATIONS.md §1c–1e</a>.</div>
     <div class="grid">
       <div>
         <h3>Setup</h3>
@@ -404,7 +405,7 @@ python -m src.metrics --pred submission.tif --true data/labels.tif
       <li>QFaults Interactive: <a href="https://www.usgs.gov/programs/earthquake-hazards/faults" target="_blank">Faults</a></li>
       <li>QFaults ScienceBase: <a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">589097b1</a></li>
       <li>QFaults DOI: <a href="https://doi.org/10.5066/P9BCVRCK" target="_blank">P9BCVRCK</a></li>
-      <li>QFaults KML: <a href="https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files" target="_blank">KML Download</a></li>
+      <li>QFaults FAQ (KML+GIS availability): <a href="https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format" target="_blank">USGS FAQ</a>; <code>qfaults.kmz</code> on <a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">ScienceBase</a></li>
       <li>QFaults ArcGIS: <a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer" target="_blank">MapServer</a></li>
       <li>3DEP About: <a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">About 3DEP</a></li>
       <li>TNM Downloader: <a href="https://apps.nationalmap.gov/downloader/" target="_blank">Downloader</a></li>
@@ -436,27 +437,27 @@ python -m src.metrics --pred submission.tif --true data/labels.tif
     <p><strong>15 Improvements Implemented from Literature:</strong></p>
     <ul>
       <li>Multi-source fusion (spectral + topo + structural) — Nature 2025 https://pmc.ncbi.nlm.nih.gov/articles/PMC11850705/</li>
-      <li>Frangi filter for line enhancement — OUP 2023 https://academic.oup.com/gji/advance-article-abstract/doi/10.1093/gji/ggad491/7492298</li>
+      <li>Frangi filter for line enhancement — Zhong et al 2024, GJI 236(3):1526-1544, https://doi.org/10.1093/gji/ggad491</li>
       <li>Hough transform for fault lines — Wang & AlRegib 2014 https://ieeexplore.ieee.org/document/6854024/</li>
       <li>Tversky loss α0.2 β0.8 matching metric — Problem page</li>
       <li>Ensemble UNet++, DeepLabV3+, SegFormer — TransVNet 2025 https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1635344/full shows U-Net noise/poor continuity vs TransVNet</li>
       <li>Attention mechanisms — Geo-SegNet 2025 https://www.sciencedirect.com/science/article/pii/S2949673X25000026 and Magnetic Anomalies 2022 https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765</li>
       <li>Two-stage coarse-to-fine RF+MUnet — Geothermal RS+ML+DL 2025 https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902 F1 92.47%</li>
       <li>CET grid + Fault Fracture Density — Integrated Structural Analysis 2025 https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/</li>
-      <li>Euler + DBSCAN clustering — Tandfonline 2023 https://www.tandfonline.com/doi/full/10.1080/08123985.2023.2299475</li>
+      <li>Euler + DBSCAN clustering — Chukwu et al 2024, Exploration Geophysics 55(3):223-245, https://doi.org/10.1080/08123985.2023.2299475</li>
       <li>Synthetic via Noddy 1M models — ESSD 2022 https://essd.copernicus.org/articles/14/381/2022/</li>
       <li>Edge/line detectors — Hassan & Goussev 2019 https://geoconvention.com/wp-content/uploads/abstracts/2019/GC2019_313_Deep_learning_approach_to_automatic_detection_of_faults_and_fractures_CNN.pdf</li>
       <li>Physics-informed loss — Joint Gravity+Mag Inversion 2024 https://www.mdpi.com/2072-4292/16/7/1115</li>
       <li>Multi-channel U-Net for geothermal — MUnet</li>
       <li>Human-in-the-loop semi-supervised — Springer 2026 https://link.springer.com/article/10.1007/s12145-026-02224-5</li>
     </ul>
-    <p><strong>Future suggestions for top leaderboard:</strong> Self-supervised pretraining on 1m DEM, multi-scale inference 128/256/512, uncertainty quantification via MC dropout, graph-based post-processing with Hough AD/LD, strain tensor eigenvectors from GSRM https://gsrm2.unavco.org/model/model.html, radiometric ternary K/Th/U, Euler+DBSCAN as feature channel, Noddy synthetic pretraining, physics-informed loss aligning faults with shear strain + conductivity.</p>
+    <p><strong>Future suggestions for top leaderboard:</strong> Self-supervised pretraining on 1m DEM, multi-scale inference 128/256/512, uncertainty quantification via MC dropout, graph-based post-processing with Hough + geological double-threshold constraints, strain tensor eigenvectors from GSRM https://gsrm2.unavco.org/model/model.html, radiometric ternary K/Th/U, Euler+DBSCAN as feature channel, Noddy synthetic pretraining, physics-informed loss aligning faults with shear strain + conductivity.</p>
     <p>See <a href="../SUGGESTIONS.md">SUGGESTIONS.md</a> for full implementation status.</p>
   </section>
 
   <div class="footer">
     <p>Built for DOE GEMS Prize Challenge — Sponsor: <a href="https://www.energy.gov/hgeo/geothermal/office-geothermal" target="_blank">DOE Office of Geothermal</a> + <a href="https://www.nlr.gov/" target="_blank">NLR</a> | Code MIT | Data Public Domain/CC | Last updated 2026-09-12 | Prize: $300k | Deadline: Dec 3, 2026 11:59pm UTC</p>
-    <p>Repo: <a href="https://github.com/buffedlizard55-lab/GEMSDOE">buffedlizard55-lab/GEMSDOE</a> | Branch: <code>arena/01a096f7-gemsdoe</code> | Deploy: GitHub Pages via <code>.github/workflows/pages.yml</code> → <code>docs/</code> | Local preview: <code>cd docs && python -m http.server 8000</code></p>
+    <p>Repo: <a href="https://github.com/buffedlizard55-lab/GEMSDOE">buffedlizard55-lab/GEMSDOE</a> | Branch: <code>arena/01a0972f-gemsdoe</code> | Deploy: GitHub Pages via <code>.github/workflows/pages.yml</code> → <code>docs/</code> | Local preview: <code>cd docs && python -m http.server 8000</code></p>
     <p>Additional docs: <a href="../README.md">README.md</a> | <a href="../REQUIREMENTS.md">REQUIREMENTS.md (Full Line-by-Line Verified)</a> | <a href="../LIMITATIONS.md">LIMITATIONS.md</a> | <a href="../SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md</a> | <a href="../FEATURES.md">FEATURES.md</a> | <a href="../SUGGESTIONS.md">SUGGESTIONS.md</a> | <a href="data_catalog.csv">data_catalog.csv</a> | <a href="data_catalog.json">data_catalog.json</a> | <a href="literature.md">literature.md</a> | <a href="research.html">research.html</a> | <a href="methodology.html">methodology.html</a> | <a href="submission.html">submission.html</a> | <a href="data.html">data.html</a></p>
   </div>
 </main>

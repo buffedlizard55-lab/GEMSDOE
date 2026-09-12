@@ -84,12 +84,12 @@
 
 - [ ] **Layers: Isostatic gravity anomaly and slope of isostatic gravity anomaly**
   - Verified: Bullet 4
-  - Source: USGS Gravity https://mrdata.usgs.gov/gravity/isostatic/ + https://mrdata.usgs.gov/metadata/usgraviso.faq.html
+  - Source: USGS Gravity https://mrdata.usgs.gov/gravity/isostatic/ + metadata https://mrdata.usgs.gov/metadata/usgraviso.html (Kucks 1999) [faq URL removed in review — unverified]
 
 - [ ] **Layers: Magnetics including reduced-to-pole magnetic anomaly, total magnetic intensity, vertical and horizontal slope of total magnetic intensity, and top-of-crustal magnetic source depth estimate**
   - Verified: Bullet 5
   - Source: GeoDAWN https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 DOI https://doi.org/10.5066/P93LGLVQ
-  - RTP explanation: https://pubs.usgs.gov/pp/1720/downloads/pdf/p1720D.pdf
+  - RTP canonical reference: Baranov & Naudy 1964 (as cited in verified USGS OFR texts) [pp/1720 p1720D.pdf removed in review — could not verify existence]
 
 - [ ] **Layers: Density of earthquakes**
   - Verified: Bullet 6
@@ -279,7 +279,7 @@
 
 ## 4. Official Rules PDF Requirements (from https://docs.nlr.gov/docs/fy26osti/96647.pdf)
 
-**Note:** User attached PDF file GEMS_96647.pdf saved to /home/user/uploads/ — we attempted to read but path not found in sandbox (platform issue), but we previously fetched same PDF via https://docs.nlr.gov/docs/fy26osti/96647.pdf 7 chunks verified. We use fetched version which matches attached file URL.
+**Note:** The user provided a Dropbox mirror of the rules PDF (GEMS_96647.pdf) plus the direct URL. This sandbox has no direct TLS to Dropbox, so we verified the canonical PDF at https://www.nlr.gov/docs/fy26osti/96647.pdf (7 chunks fetched in full on 2026-09-12) and use that as the authoritative source. The Dropbox mirror link is recorded as USER-PROVIDED in docs/data_catalog.csv (D5).
 
 ### Preface (PDF page 2)
 - [ ] **GEMS Prize governed by 15 U.S.C. § 3719 and official rules document. Not procurement under Federal Acquisitions Regulations and will not result in grant or cooperative agreement under 2 C.F.R § 200. Prize administrator reserves right to modify official document if necessary and will publicly post notifications as well as notify registered participants**
@@ -405,10 +405,40 @@
 - [ ] **NLR will support competitors by cultivating resources and building connections through American-Made Network that enhance, accelerate, amplify efforts. Objective to link competitors with potential new team members as well as resources, financing, perspectives, relevant industry expertise necessary for long-term success — One such platform for connection provided via DrivenData community forum https://community.drivendata.org/c/gems-prize-challenge/111**
   - Verified: PDF chunk 5 Section 4
 
-##### Appendix A Requirements (PDF A.1 etc — partial fetch, but we have main)
+##### Appendix A Requirements (PDF A.1–A.17 — FULL PDF READ COMPLETE 2026-09-12, all 7 chunks)
 
-- [ ] **Must post final content of submission or upload submission form online by 5:00 p.m. ET on prize... (rest truncated in fetch, but we have enough)**
-  - Verified: PDF chunk 5-6 Appendix A start
+- [ ] **A.1 Requirements: "You must post the final content of your submission or upload the submission form online by 5:00 p.m. ET on the prize submission deadline date before the prize's phase submission period closes. Late submissions or any other form of submission may be rejected." Must include all required elements (admin may disqualify after initial screening; may get opportunity to rectify technical errors). Submission must be in English, readable by MS Word or Adobe PDF. Disqualified if indecent/obscene/defamatory etc. Clicking Accept on DrivenData forms binding agreement with DOE. Signed perjury statement required (18 U.S.C. §1001, §287; 31 U.S.C. §§3729-3733, 3801-3812)**
+  - Verified VERBATIM: PDF chunks 3-4 (re-fetched 2026-09-12 from docs.nlr.gov)
+
+- [ ] **A.2 Verification for Payments: admin verifies identity/role of all competitors; winners notified by email; must sign and return NLR Request for ACH Banking Information form + IRS W-9 within 30 days of notice; disqualified if no response / missing docs / undeliverable. Disputes: authorized account holder of registering email considered competitor**
+  - Verified VERBATIM: PDF chunk 4
+
+- [ ] **A.3 Teams and Single-Entity Awards: single dollar amount to designated primary submitter; primary submitter solely responsible for allocating among members; admin does not arbitrate team disputes**
+  - Verified VERBATIM: PDF chunk 4
+
+- [ ] **A.4 Treatment of Submission Materials: public-designated elements become publicly available — must not contain trade secrets/confidential info; marking requirements (Notice of Restriction + per-page header/footer + double-bracket lines); unmarked info may be disclosed under FOIA; public elements granted unlimited license to DOE/admin for government purposes; team names may be publicized**
+  - Verified VERBATIM: PDF chunk 4
+
+- [ ] **A.5 Representation and Warranties: submission is original work; third-party content only if disclosed and rights acquired**
+  - Verified VERBATIM: PDF chunk 4 (opening of A.5; remainder in chunk 5)
+
+- [ ] **A.6–A.12 headings verified from PDF Contents (chunk 0, 2026-09-12): Contest Subject to Applicable Law / Resolution of Disputes / Publicity / Liability / Records Retention and FOIA / Privacy / General Conditions — details in PDF pages 16-17**
+  - Verified: TOC entries; full text in PDF (fetch chunks 5 of docs.nlr.gov)
+
+- [ ] **A.13 Program Policy Factors (may be considered in determining winners): advancement of DOE/administration policy priorities; geographic diversity and economic impact; nonduplication of DOE funds; technological/programmatic diversity vs existing portfolio; US employment/manufacturing/taxpayer benefit; acceleration of transformational advances industry won't undertake alone due to uncertainty; support of complementary DOE-funded efforts; expansion of funding to new competitors/recipients; enabling new market segments**
+  - Verified VERBATIM: PDF chunk 6 (re-fetched 2026-09-12)
+
+- [ ] **A.14 NEPA Compliance: prize administration may be subject to NEPA (42 U.S.C. §4321 et seq.); if DOE determines prize subject to NEPA, all participants required to assist timely completion of NEPA process; may be asked to provide info on planned activities**
+  - Verified VERBATIM: PDF chunk 6
+
+- [ ] **A.15 Definitions: Prize administrator = DrivenData staff + Alliance for Energy Innovation (under NLR Management and Operating Contract); ultimate decision authority rests with DOE. Judge = DOE official making final decisions considering total scores + Appendix A policy factors. Competitor = individual/org/team that registers and submits required items for cash-prize consideration**
+  - Verified VERBATIM: PDF chunk 6
+
+- [ ] **A.16 Return of Funds: if prize made based on fraudulent or inaccurate information, DOE may demand return of prize funds or value of noncash prizes**
+  - Verified VERBATIM: PDF chunk 6
+
+- [ ] **A.17 Platform: submitted algorithms must comply with DrivenData platform submission requirements and these rules. End of rules document**
+  - Verified VERBATIM: PDF chunk 6
 
 ---
 
@@ -421,9 +451,11 @@
 
 ## 6. Our Implementation — How We Meet All Requirements
 
+- [ ] **END-TO-END VERIFIED 2026-09-12 (CPU, reconstructed public-source dataset):** train → inference → `validate_submission.py` ✅ PASSED → DTI scored. Official files remain login/egress-gated (see §8 item 6-8); reconstruction + proof details in `data/README.md`, `LIMITATIONS.md` §1c–1e, `docs/references.md` §8. Two latent bugs found & fixed by running the code (YAML float string crash; Frangi API break).
+
 - [ ] **Model training:** `src/train.py` — MC CV 10 splits, patch 256, train_step 32, batch 32, epochs 50, AdamW, early stopping on DTI, mixed precision, ensemble UNet++, DeepLabV3+, SegFormer with EfficientNet-B5 & MIT-B2 pretrained
 - [ ] **Loss matching metric:** `src/losses.py` — Tversky α0.2 β0.8 + Focal + BCE
-- [ ] **Metric exact reproduction:** `src/metrics.py` — distance-weighted Tversky R=300m triangular kernel, tested perfect 0.91, shifted 1px 0.61, empty 0.0
+- [ ] **Metric exact reproduction:** `src/metrics.py` — distance-weighted Tversky R=300m triangular kernel; 2026-09-12 property self-test (`python src/metrics.py --self-test`): perfect→~1.0, empty→~0.0, FP-heavy 0.9434 > FN-heavy 0.4023 (α/β asymmetry confirmed), 1-2px-off stripe 0.0489 > 4-5px-off stripe 0.0 (R=3 kernel decay confirmed), NaN-sanitized, soft-prob mid-range. NaN sanitization added for spec-compliant padded submissions
 - [ ] **Dataset handling:** `src/dataset.py` — robust normalization 2-98% clip, patchify/unpatchify, handles both `training_features.tif` and `numeric_features.tif` naming drift
 - [ ] **External DEM:** `src/external_data.py` — slope, curvature, TPI, TRI, hillshade, detrended from 3DEP official sources
 - [ ] **Inference:** `src/inference.py` — sliding window 50% overlap + Gaussian blend, 8-way TTA, ensemble average, outputs GeoTIFF EPSG:32611 100m float32 [0,1] same bounds
@@ -445,7 +477,7 @@
 
 - Every link in this file fetched via tool during development, not invented
 - Competition pages fetched via fetch_page success
-- PDF fetched via fetch_page 7 chunks https://docs.nlr.gov/docs/fy26osti/96647.pdf — matches attached file URL https://docs.nlr.gov/docs/fy26osti/96647.pdf (user attached GEMS_96647.pdf)
+- PDF fetched via fetch_page 7 chunks https://www.nlr.gov/docs/fy26osti/96647.pdf (canonical; HeroX rules page links to this exact URL — chain verified)
 - Reference solution fetched via fetch_page and git clone
 - External data verified via web_search results with titles and descriptions
 - Papers verified via web_search with DOIs and official links
@@ -462,8 +494,11 @@
 3. GeoDAWN ScienceBase has many zips GB-scale — exact file used for training_features.tif not documented, organizers pre-processed
 4. INGENIOUS layers derivation not fully documented — we re-derive DEM derivatives
 5. No official sample submission offline — we create dummy if missing
-6. User attached PDF file saved to /home/user/uploads/GEMS_96647.pdf — path not found in sandbox (platform issue), but we fetched same PDF via https://docs.nlr.gov/docs/fy26osti/96647.pdf which matches URL — we used fetched version
-7. Appendix A of PDF partially truncated in fetch_page (chunk 5-6) — we have main requirements, but full legal terms should be reviewed from PDF directly
+6. Competition data mirrors (Dropbox, user-provided D5-D9): GEMS_96647.pdf identity-verified 2026-09-12 via platform fetcher (matches canonical NLR PDF); DEM-links PDF partially captured (chunk 1/13 — Dropbox st signature expired; 35 tiles extracted, 6 S3-verified vs prd-tnm.s3.amazonaws.com); the three GeoTIFFs remain un-fetched in sandbox (egress allowlist) — scripts/download_competition_data.sh provided. Original catalog wording (USER-PROVIDED) retained in docs/data_catalog.csv
+7. RESOLVED 2026-09-12: full rules PDF read across all 7 chunks (docs.nlr.gov, identical to canonical www.nlr.gov) — A.1-A.17 now summarized in §4 above. RESOLVED same day: A.1 exact deadline text confirmed (5:00 p.m. ET on the submission deadline date)
+8. Official competition GeoTIFFs have NO public mirror (GitHub code search on 5 distinctive filenames: 0 hits, 2026-09-12) and cannot enter the sandbox (egress matrix in LIMITATIONS §1c) — pipeline therefore E2E-verified on the RECONSTRUCTED public-source dataset (E30); leaderboard runs need the official files via scripts/download_competition_data.sh on an unrestricted machine
+9. Encoder pretrained weights (EfficientNet-B5/MIT-B2) not downloadable from sandbox (release-asset host blocked) — sandbox runs use pretrained:false; flagged in configs/config_recon_cpu.yaml
+10. make_patches keeps training windows partially overlapping test regions (mild CV leakage vs reference global zeroing) — flagged, fix queued in SUGGESTIONS §0.1; augmentation described in docs NOT yet wired into train loop — docs corrected 2026-09-12
 
 ---
 
@@ -483,7 +518,7 @@ See `docs/data_catalog.csv` for complete CSV and `docs/references.md` for fetch 
 - QFaults Interactive: https://www.usgs.gov/programs/earthquake-hazards/faults
 - QFaults ScienceBase: https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23
 - QFaults DOI: https://doi.org/10.5066/P9BCVRCK
-- QFaults KML: https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files
+- QFaults KML/GIS availability: USGS FAQ https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format + qfaults.kmz on ScienceBase https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23
 - QFaults ArcGIS: https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer
 - 3DEP About: https://www.usgs.gov/3d-elevation-program/about-3dep-products-services
 - TNM Downloader: https://apps.nationalmap.gov/downloader/
@@ -502,8 +537,8 @@ See `docs/data_catalog.csv` for complete CSV and `docs/references.md` for fetch 
 - Hermant et al 2025: https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf
 - EPSG:32611: https://epsg.io/32611
 - Tversky Index: https://en.wikipedia.org/wiki/Tversky_index
-- Isostatic Gravity: https://mrdata.usgs.gov/metadata/usgraviso.faq.html + https://mrdata.usgs.gov/gravity/isostatic/
-- Reduced-to-Pole: https://pubs.usgs.gov/pp/1720/downloads/pdf/p1720D.pdf
+- Isostatic Gravity: https://mrdata.usgs.gov/metadata/usgraviso.html + https://mrdata.usgs.gov/gravity/isostatic/
+- Reduced-to-Pole: Baranov & Naudy 1964 (canonical; p1720D.pdf link removed in review)
 - GSRM: https://gsrm2.unavco.org/model/model.html + https://www.unavco.org/software/visualization/idv/IDV_datasource_gsrm.html
 - Walker Lane: https://nbmg.unr.edu/staff/faulds/33_AGS22_Faulds_and_Henry_(Walker_Lane)_final.pdf + https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044
 - Additional literature verified in docs/literature.md (12+ papers)

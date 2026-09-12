@@ -4,19 +4,26 @@
 
 **Sources:** All verified, no hallucinations, links for manual review in `docs/literature.md` and `docs/references.md`.
 
+## 0. Priority code fixes queued from E2E verification (2026-09-12)
+
+1. **Test-region leakage in `make_patches`** (src/dataset.py): training windows partially overlapping held-out test patches are kept; reference solution zeroes test regions GLOBALLY before patching. Fix: apply a global boolean test mask before sliding-window extraction. Priority HIGH (affects trust in local DTI).
+2. **Wire augmentation into training** (src/dataset.py FaultDataset / train loop): flips + 90° rotations minimum (matches TTA); RandomResizedCrop optional. Docs currently overstate this — flagged in docs/index.html.
+3. **Pretrained encoders**: unreachable from sandbox (release-asset host blocked). On unrestricted machines, `pretrained: true` in configs/config.yaml works; verify EfficientNet-B5/MIT-B2 weight integrity after download.
+4. **Seismicity band**: the reconstructed eq-density band (500 m Albers → 100 m) is coarser than the official earthquake-density band; treat as analog only.
 ## Based on Literature Review — 15 Improvements Implemented
 
 ### 1. Multi-source Information Fusion (Nature 2025)
 **Paper:** https://pmc.ncbi.nlm.nih.gov/articles/PMC11850705/ + https://www.nature.com/articles/s41598-025-90823-5 — Enhancing fault morphological features through multi-source fusion improves accuracy. 16 factors, TPI/Valley line/SCD/RSI high importance, CNN Val Acc 0.990 F1 0.736.
+  - ⚠️ **Publisher Correction** to this article: doi 10.1038/s41598-025-99035-3 (published 28 April 2025, verified on article page 2026-09-12). Cite the corrected version; re-check the correction before relying on exact hyperparameters.
 **Implemented:** `src/external_data.py` computes DEM derivatives (slope, curvature, TPI, TRI, detrended, hillshade), `src/dataset.py` robust normalization, `configs/config.yaml` good_channels selection. Fuses spectral (radiometric), topographic/geomorphic (DEM), structural (magnetics, gravity, strain).
 
-### 2. Frangi Filter for Line Enhancement (OUP 2023)
-**Paper:** https://academic.oup.com/gji/advance-article-abstract/doi/10.1093/gji/ggad491/7492298 — Frangi enhances stripe-like features, improves sensitivity varying widths, highlights small-scale boundaries.
+### 2. Frangi Filter for Line Enhancement (Zhong et al 2024, GJI)
+**Paper:** https://doi.org/10.1093/gji/ggad491 — Zhong, D., Wang, J., Guo, Y., Liu, Y., Chen, J., & Xu, T. (2024). A Frangi filter aided deep learning approach for palaeochannel recognition. Geophysical Journal International, 236(3), 1526-1544 (online 22 Dec 2023). Frangi enhances stripe-like features, improves sensitivity varying widths, highlights small-scale boundaries.
 **Implemented:** `src/postprocess.py:frangi_enhance()` uses `skimage.filters.frangi` scale_range [1,10], blends 0.6*original + 0.4*vesselness. Used in inference pipeline.
 
 ### 3. Hough Transform for Fault Line Detection (Wang & AlRegib 2014)
-**Paper:** https://bpb-us-e1.wpmucdn.com/sites.gatech.edu/dist/1/564/files/2017/01/Zhen_ICASSP2014.pdf + https://ieeexplore.ieee.org/document/6854024/ — Highlight fault points via thresholding discontinuity, Hough to detect lines, remove false via double-threshold AD/LD geological constraints, tweak line using discontinuity.
-**Implemented:** Conceptually in `src/postprocess.py:connect_faults()` via dilation, morphological closing to connect segments. Future: full Hough with AD/LD thresholds.
+**Paper:** https://bpb-us-e1.wpmucdn.com/sites.gatech.edu/dist/1/564/files/2017/01/Zhen_ICASSP2014.pdf + https://ieeexplore.ieee.org/document/6854024/ — Highlight fault points via thresholding discontinuity, Hough to detect lines, remove false features via a double-threshold method using geological constraints, tweak line using discontinuity.
+**Implemented:** Conceptually in `src/postprocess.py:connect_faults()` via dilation, morphological closing to connect segments. Future: full Hough with learned double-threshold false-feature removal.
 
 ### 4. Tversky Loss Matching Metric α0.2 β0.8
 **Source:** Problem page https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric + reference solution https://github.com/drivendataorg/gems-prize-reference-solution
@@ -27,7 +34,7 @@
 **Implemented:** `src/models.py:get_model()` supports unet, unetplusplus, deeplabv3plus, segformer, fpn with efficientnet-b5, mit_b2 pretrained. `EnsembleModel` averages logits. Cycle architectures per MC split for diversity.
 
 ### 6. Attention Mechanisms (Geo-SegNet 2025, Magnetic Anomalies 2022)
-**Papers:** https://www.sciencedirect.com/science/article/pii/S2949673X25000026 (Geo-SegNet: 2% increase over U-Net-only, U-Net+ResNet, U-Net++ first for partial volume, entropy-based masking, contrastive learning) and https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765 (YOLO+DenseNet + Grad-CAM + t-SNE, U-Net-like with attention refines via channel and spatial)
+**Papers:** https://www.sciencedirect.com/science/article/pii/S2949673X25000026 (Geo-SegNet — contrastive-learning encoder (modified ResNet-101) inside U-Net improves geomaterial segmentation vs standard U-Net. NOTE verified scope: micro-CT pore segmentation of sandstone cores — method inspiration only, not fault-specific) and https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765 (Florsch et al 2022: YOLO+DenseNet + Grad-CAM + t-SNE for magnetic anomaly characterization; U-Net-like with attention refines via channel and spatial attention)
 **Implemented:** SegFormer uses self-attention, DeepLabV3+ uses atrous spatial pyramid pooling for multi-scale context, attention refines feature maps.
 
 ### 7. Contrastive Learning (Geo-SegNet)
@@ -42,8 +49,8 @@
 **Paper:** https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/ — Subsurface lineaments via CET grid analysis in Oasis Montaj, enhance textures + edge detection, FFD maps via lineament length per grid cell in ArcGIS, higher fidelity for high-permeability zones vs surface only, 5 high-density zones correlated to hot springs.
 **Implemented:** FFD concept via Frangi + closing + lineament density in postprocess, could be extended with Oasis Montaj.
 
-### 10. Euler Deconvolution + DBSCAN Clustering (Tandfonline 2023)
-**Paper:** https://www.tandfonline.com/doi/full/10.1080/08123985.2023.2299475 — Euler deconvolution estimates location/depth of mag anomalies, DBSCAN identifies clusters irregular shapes/densities to determine fault location/dip over large distances/depths, track faults near-surface to deep roots.
+### 10. Euler Deconvolution + DBSCAN Clustering (Chukwu et al 2024, Exploration Geophysics)
+**Paper:** https://doi.org/10.1080/08123985.2023.2299475 — Chukwu, Betts, Moore, Munukutla, Armit, McLean & Grose (2024), Exploration Geophysics 55(3), 223–245 (online 03 May 2024; accepted 21 Dec 2023) — Euler deconvolution estimates location/depth of mag anomalies, DBSCAN identifies clusters irregular shapes/densities to determine fault location/dip over large distances/depths, track faults near-surface to deep roots.
 **Implemented:** Future work suggestion in `src/external_data.py` — apply Euler deconvolution to GeoDAWN magnetic data to get depth solutions, cluster with DBSCAN, use as additional feature channel.
 
 ### 11. Synthetic Data via Noddy (ESSD 2022)
@@ -72,7 +79,7 @@
 - Multi-scale inference at 128, 256, 512 + average
 - Test-time augmentation scale TTA + 8-way already implemented in `src/inference.py`
 - Uncertainty quantification via MC dropout or ensemble variance, threshold based on uncertainty for Final Round discoveries
-- Graph-based post-processing: build graph of fault segments, connect via Hough transform and geological constraints AD/LD from Wang & AlRegib
+- Graph-based post-processing: build graph of fault segments, connect via Hough transform and geological double-threshold constraints (Wang & AlRegib 2014)
 - Incorporate strain rate tensor eigenvectors from GPS https://gsrm2.unavco.org/model/model.html, https://www.unavco.org/software/visualization/idv/IDV_datasource_gsrm.html
 - Use radiometric ternary maps K/Th/U as additional features from GeoDAWN https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7
 - Euler deconvolution + DBSCAN for fault architecture as feature channel

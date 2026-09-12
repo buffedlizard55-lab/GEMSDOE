@@ -22,7 +22,8 @@ class TverskyLoss(nn.Module):
             logits = logits.squeeze(1)
         if targets.dim() == 4 and targets.shape[1] == 1:
             targets = targets.squeeze(1)
-        probs = torch.sigmoid(logits) if logits.min() < 0 or logits.max() > 1 else logits
+        probs = torch.sigmoid(logits)  # inputs are raw logits (explicit; range-sniffing removed)
+        # (if you ever pass probabilities instead, wrap: loss(torch.logit(p.clamp(1e-6,1-1e-6)), t))
         # flatten
         probs = probs.view(probs.shape[0], -1)
         targets = targets.view(targets.shape[0], -1).float()
@@ -45,7 +46,8 @@ class FocalTverskyLoss(nn.Module):
             logits = logits.squeeze(1)
         if targets.dim() == 4 and targets.shape[1] == 1:
             targets = targets.squeeze(1)
-        probs = torch.sigmoid(logits) if logits.min() < 0 or logits.max() > 1 else logits
+        probs = torch.sigmoid(logits)  # inputs are raw logits (explicit; range-sniffing removed)
+        # (if you ever pass probabilities instead, wrap: loss(torch.logit(p.clamp(1e-6,1-1e-6)), t))
         probs = probs.view(probs.shape[0], -1)
         targets = targets.view(targets.shape[0], -1).float()
         TP = (probs * targets).sum(dim=1)
