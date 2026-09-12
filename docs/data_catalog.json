@@ -1,0 +1,136 @@
+[
+  {
+    "id": 1,
+    "name": "GeoDAWN Airborne Magnetic & Radiometric Surveys",
+    "agency": "USGS",
+    "official_links": [
+      "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
+      "https://doi.org/10.5066/P93LGLVQ",
+      "https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and"
+    ],
+    "doi": "10.5066/P93LGLVQ",
+    "license": "Public Domain (USGS)",
+    "citation": "Glen, J.M.G., and Earney, T.E., 2024, GeoDAWN: Airborne magnetic and radiometric surveys of the northwestern Great Basin, Nevada and California: U.S. Geological Survey data release",
+    "relevance": "Primary geophysics for fault detection, source of mag & radiometric features",
+    "files": ["22103_area1_grids.zip", "22103_area2_grids.zip", "22103_area1_tiffs.zip", "22103_area2_tiffs.zip"],
+    "verified": true
+  },
+  {
+    "id": 2,
+    "name": "USGS Quaternary Fault and Fold Database",
+    "agency": "USGS Earthquake Hazards",
+    "official_links": [
+      "https://www.usgs.gov/programs/earthquake-hazards/faults",
+      "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23",
+      "https://doi.org/10.5066/P9BCVRCK",
+      "https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files",
+      "https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer"
+    ],
+    "doi": "10.5066/P9BCVRCK",
+    "license": "Public Domain",
+    "citation": "U.S. Geological Survey, 2020, Quaternary Fault and Fold Database for the Nation",
+    "relevance": "Ground truth labels for training, validation of fault traces",
+    "files": ["Qfaults_GIS.zip", "qfaults.kmz"],
+    "verified": true
+  },
+  {
+    "id": 3,
+    "name": "USGS 3DEP 1m DEM / Lidar",
+    "agency": "USGS National Geospatial Program",
+    "official_links": [
+      "https://www.usgs.gov/3d-elevation-program/about-3dep-products-services",
+      "https://apps.nationalmap.gov/downloader/",
+      "https://apps.nationalmap.gov/lidar-explorer/",
+      "https://registry.opendata.aws/usgs-lidar/"
+    ],
+    "doi": null,
+    "license": "Public Domain",
+    "citation": "USGS 3D Elevation Program",
+    "relevance": "High-res elevation, source for 1m_DEM_links.csv, slope, curvature, TPI, TRI",
+    "files": ["1m DEM tiles via TNM"],
+    "verified": true
+  },
+  {
+    "id": 4,
+    "name": "INGENIOUS Great Basin Regional Dataset Compilation",
+    "agency": "GBCGE / DOE GDR",
+    "official_links": [
+      "https://gdr.openei.org/submissions/1391",
+      "https://doi.org/10.15121/1881483",
+      "https://www.osti.gov/biblio/1881483",
+      "https://gbcge.org/current-projects/ingenious/"
+    ],
+    "doi": "10.15121/1881483",
+    "license": "CC, Publicly accessible",
+    "citation": "Ayling, Bridget, et al. INGENIOUS - Great Basin Regional Dataset Compilation. GBCGE, NBMG, UNR, 30 June 2022, GDR",
+    "relevance": "Source of conductivity, strain, gravity, earthquake density, heat flow, magnetotellurics",
+    "files": ["2m Temperature Probes.zip", "Earthquake Density Models.zip", "Gravity", "Magnetics", "Well and Spring Temperature and Chemistry.zip"],
+    "verified": true
+  },
+  {
+    "id": 5,
+    "name": "GBCGE Subsurface Database Explorer and APIs",
+    "agency": "GBCGE",
+    "official_links": [
+      "https://doi.org/10.15121/1987556",
+      "https://www.osti.gov/dataexplorer/biblio/dataset/1987556"
+    ],
+    "doi": "10.15121/1987556",
+    "license": "Public",
+    "citation": "Mlawsky, Elijah and Ayling, Bridget. GBCGE Subsurface Database Explorer and APIs",
+    "relevance": "Geothermal wells, springs, temps, chemistry for external features",
+    "files": ["Web mapping application"],
+    "verified": true
+  },
+  {
+    "id": 6,
+    "name": "Geothermal Favorability: INGENIOUS Features",
+    "agency": "USGS + INGENIOUS",
+    "official_links": [
+      "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43"
+    ],
+    "doi": null,
+    "license": "Public",
+    "citation": "Mordensky, S.P., and DeAngelo, J., 2025, Geothermal resource favorability",
+    "relevance": "16 input features curated for hydrothermal favorability ML",
+    "files": ["Point data for 16 features"],
+    "verified": true
+  },
+  {
+    "id": 7,
+    "name": "USGS EarthMRI",
+    "agency": "USGS Mineral Resources",
+    "official_links": [
+      "https://mrdata.usgs.gov/earthmri/",
+      "https://pubs.usgs.gov/publication/fs20203055",
+      "https://www.usgs.gov/special-topics/earth-mri"
+    ],
+    "doi": "10.3133/fs20203055",
+    "license": "Public Domain",
+    "citation": "Day, W., 2020, Technical overview of the U.S. Geological Survey Earth Mapping Resources Initiative (Earth MRI): USGS Fact Sheet 2020–3055",
+    "relevance": "Critical mineral context, understanding acquisition areas",
+    "files": [],
+    "verified": true
+  },
+  {
+    "id": 8,
+    "name": "Competition Official Pages",
+    "agency": "DrivenData / DOE",
+    "official_links": [
+      "https://www.drivendata.org/competitions/306/competition-doe-gems/",
+      "https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/",
+      "https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/",
+      "https://www.drivendata.org/competitions/306/competition-doe-gems/data/",
+      "https://www.drivendata.org/competitions/306/competition-doe-gems/rules/",
+      "https://www.herox.com/GEMSPrize/resource/2274",
+      "https://www.nlr.gov/docs/fy26osti/96647.pdf",
+      "https://github.com/drivendataorg/gems-prize-reference-solution"
+    ],
+    "doi": null,
+    "license": "Competition Rules",
+    "citation": "GEMS Prize Challenge, DOE Office of Geothermal",
+    "relevance": "Problem definition, metric, submission format, rules",
+    "files": ["training_features.tif", "labels.tif", "sample_submission.tif", "1m_DEM_links.csv"],
+    "verified": true
+  }
+]
