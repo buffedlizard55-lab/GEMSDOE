@@ -58,7 +58,7 @@
 4. **Time**
    - Training: 5-10h for full ensemble
    - Inference: ~1h for full region with TTA and ensemble
-   - Expert review period after competition close (per PDF section 3.6)
+   - Expert review of all submissions happens after close; winners notified ~60 days after the prize closes (per PDF section 3.6.5); ACH/W-9 within 30 days of notice (A.2)
 
 5. **Documentation for Winners**
    - Per PDF section 3.2 and 3.5: Winners must submit complete code assets + documentation sufficient to reproduce results, consistent with DrivenData's Winning Model Documentation Template.

@@ -23,21 +23,21 @@ In addition, you will find a CSV file called `1m_DEM_links.csv` that contains li
 
 | # | Feature Category | Feature Name | Official Source | Verified Link | Description |
 |---|------------------|--------------|-----------------|---------------|-------------|
-| 1 | Magnetotellurics | Surface conductivity | INGENIOUS | https://gdr.openei.org/submissions/1391 DOI https://doi.org/10.15121/1881483 | Surface conductance from MT |
+| 1 | Magnetotellurics | Surface conductivity | INGENIOUS (MT conductance maps) | https://gdr.openei.org/submissions/1391 DOI https://doi.org/10.15121/1881483; sub-dataset DOI https://doi.org/10.5066/P9TWT2LU | Surface conductance from 3D MT model, 5 depth ranges 2-200 km |
 | 2 | Magnetotellurics | Depth to conductive base | INGENIOUS | https://gdr.openei.org/submissions/1391 | Depth to base of conductive layer |
-| 3 | Topography | Detrended elevation | USGS 3DEP + GeoDAWN | https://www.usgs.gov/3d-elevation-program/about-3dep-products-services | Elevation minus smoothed elevation (Gaussian) |
+| 3 | Topography | Detrended elevation | INGENIOUS sub-dataset (USGS) | https://doi.org/10.5066/P9MQRCBY (Elevation Trend and Detrended Elevation) + 3DEP https://www.usgs.gov/3d-elevation-program/about-3dep-products-services | Elevation minus regional trend — official INGENIOUS release P9MQRCBY |
 | 4 | Topography | Slope of detrended elevation | USGS 3DEP | https://apps.nationalmap.gov/downloader/ | Slope of detrended |
-| 5 | Geodesy | Dilatation rate | INGENIOUS / UNAVCO | https://gdr.openei.org/submissions/1391 | Rate of area change from GPS strain |
+| 5 | Geodesy | Dilatation rate | INGENIOUS (Nevada Geodetic Lab) | https://gdr.openei.org/submissions/1391 → "Geodetic Shear and Dilation Models.zip" (51.99 MB) | Rate of area change from GPS strain (context: GSRM v2.1 https://gsrm2.unavco.org/) |
 | 6 | Geodesy | Shear strain rate | INGENIOUS | https://gdr.openei.org/submissions/1391 | Shear component |
 | 7 | Geodesy | Second invariant of strain rate tensor | INGENIOUS | https://gdr.openei.org/submissions/1391 | Invariant measure |
-| 8 | Gravity | Isostatic gravity anomaly | USGS Gravity | https://www.usgs.gov/data/gravity-data + INGENIOUS | Gravity anomaly corrected for isostasy |
+| 8 | Gravity | Isostatic gravity anomaly | USGS (Kucks 1999) + INGENIOUS | https://mrdata.usgs.gov/gravity/isostatic/ + https://mrdata.usgs.gov/metadata/usgraviso.html + GDR gravity DOI https://doi.org/10.5066/P9Z6SA1Z | Gravity anomaly corrected for isostasy (~1M Bouguer values, 2.67 g/cc) |
 | 9 | Gravity | Slope of isostatic gravity anomaly | USGS | Derived from above | Gradient of gravity anomaly |
-| 10 | Magnetics | Reduced-to-pole magnetic anomaly | GeoDAWN | https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 DOI https://doi.org/10.5066/P93LGLVQ | Mag anomaly reduced to pole |
+| 10 | Magnetics | Reduced-to-pole magnetic anomaly | GeoDAWN (CC0) + INGENIOUS geophysics (P9Z6SA1Z) | https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 DOI https://doi.org/10.5066/P93LGLVQ; https://doi.org/10.5066/P9Z6SA1Z | Mag anomaly reduced to pole (Baranov & Naudy 1964 method) |
 | 11 | Magnetics | Total magnetic intensity | GeoDAWN | https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 | TMI |
 | 12 | Magnetics | Vertical slope of TMI | GeoDAWN | Derived | Vertical derivative |
 | 13 | Magnetics | Horizontal slope of TMI | GeoDAWN | Derived | Horizontal gradient |
 | 14 | Magnetics | Top-of-crustal magnetic source depth estimate | GeoDAWN | https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 | Depth to magnetic source |
-| 15 | Seismicity | Density of earthquakes | INGENIOUS | https://gdr.openei.org/submissions/1391 | Earthquake density model |
+| 15 | Seismicity | Density of earthquakes | INGENIOUS (Nevada Seismological Lab) | https://gdr.openei.org/submissions/1391 → "Earthquake Density Models.zip" (22.98 MB) | Independent and dependent earthquake density models |
 
 **Additional file:**
 - `1m_DEM_links.csv` — links to 1m DEM from USGS 3DEP LidarExplorer https://apps.nationalmap.gov/lidar-explorer/ and Downloader https://apps.nationalmap.gov/downloader/ and AWS https://registry.opendata.aws/usgs-lidar/

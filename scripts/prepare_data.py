@@ -8,13 +8,18 @@ from pathlib import Path
 import os
 
 def check_data():
+    # Naming drift (flagged irregularity): problem page vs reference solution vs Dropbox mirrors
     candidates = [
         "data/training_features.tif",
         "data/numeric_features.tif",
+        "data/gems-geodawn-numerical-features.tif",
         "data/labels.tif",
         "data/faults.tif",
+        "data/existing_faults.tif",
         "data/sample_submission.tif",
-        "data/1m_DEM_links.csv"
+        "data/example_submission.tif",
+        "data/1m_DEM_links.csv",
+        "data/Digital-elevation-model-links-JSON.pdf"
     ]
     for p in candidates:
         if os.path.exists(p):
@@ -34,9 +39,10 @@ def check_data():
             print(f"MISSING: {p}")
 
     # If no sample submission, create dummy
-    if not os.path.exists("data/sample_submission.tif") and os.path.exists("data/labels.tif"):
-        print("Creating dummy sample_submission.tif from labels.tif")
-        with rasterio.open("data/labels.tif") as src:
+    label_src = next((p for p in ["data/labels.tif", "data/faults.tif", "data/existing_faults.tif"] if os.path.exists(p)), None)
+    if not os.path.exists("data/sample_submission.tif") and label_src:
+        print(f"Creating dummy sample_submission.tif from {label_src}")
+        with rasterio.open(label_src) as src:
             meta = src.meta.copy()
             meta.update(dtype='float32', count=1, nodata=None)
             data = np.zeros((src.height, src.width), dtype=np.float32)

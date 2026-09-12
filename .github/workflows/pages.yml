@@ -2,7 +2,7 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches: ["arena/01a096f7-gemsdoe", "main"]
+    branches: ["arena/01a0972f-gemsdoe", "arena/01a096f7-gemsdoe", "main"]
   workflow_dispatch:
 
 permissions:

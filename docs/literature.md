@@ -20,7 +20,7 @@
 **Verified external sources for tectonic context:**
 - USGS Quaternary Faults interactive map https://www.usgs.gov/programs/earthquake-hazards/faults and ScienceBase https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23 DOI https://doi.org/10.5066/P9BCVRCK
 - Walker Lane tectonic influences: https://nbmg.unr.edu/staff/faulds/33_AGS22_Faulds_and_Henry_(Walker_Lane)_final.pdf (from search result id 5, strain rate query)
-- Strain rates: Robust Imaging of Fault Slip Rates in Walker Lane from GPS https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044 and Steady contemporary deformation https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145 and GSRM model https://gsrm2.unavco.org/model/model.html and https://www.unavco.org/software/visualization/idv/IDV_datasource_gsrm.html
+- Strain rates: Robust Imaging of Fault Slip Rates in Walker Lane from GPS https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044 (Hammond, Kreemer & Blewitt 2024, JGR Solid Earth 129, e2023JB028044) and GSRM model https://gsrm2.unavco.org/model/model.html and https://www.unavco.org/software/visualization/idv/IDV_datasource_gsrm.html (cite Kreemer, Blewitt & Klein 2014, doi:10.1002/2014GC005407). [REMOVED during verification: 10.1002/2014JB011145 — search could not confirm the previously stated title for that DOI; removed to avoid mislabeling.]
 
 ## 2. GeoDAWN — High-Resolution Geophysics
 
@@ -37,8 +37,8 @@
 **Why magnetics/radiometrics detect faults:**
 - Magnetic anomalies reflect subsurface structure and geology, density/magnetic anomalies infer faults through contrasts.
 - Radiometric (K, Th, U) reflects surface geology and soil composition.
-- Reduced-to-pole (RTP) corrects shifts of anomaly from center of source due to oblique magnetic field orientation — see USGS publication https://pubs.usgs.gov/pp/1720/downloads/pdf/p1720D.pdf (from gravity search id 4) — standard reduction-to-pole operation.
-- Isostatic residual gravity anomaly produced from Bouguer gravity using Airy-Heiskanen compensation model depth 30km (Kucks 1999) — see https://mrdata.usgs.gov/metadata/usgraviso.faq.html and https://mrdata.usgs.gov/gravity/isostatic/ — reflects local density distributions within middle to upper crustal levels, useful for fault detection.
+- Reduced-to-pole (RTP) corrects shifts of anomaly from center of source due to oblique magnetic field orientation — canonical method: Baranov & Naudy (1964), as described in verified USGS open-file text (e.g. USGS OFR 2013-1024 aeromagnetic processing chapter). [Note: previously linked p1720D.pdf could not be verified to exist and was removed during review.] The competition's RTP band is provided directly in training_features.tif.
+- Isostatic residual gravity anomaly produced from ~1M Bouguer gravity values (reduction density 2.67 g/cc) plus offshore free-air data (Kucks 1999) — see https://mrdata.usgs.gov/metadata/usgraviso.html and https://mrdata.usgs.gov/gravity/isostatic/ — reflects local density distributions within middle to upper crustal levels, useful for fault detection. [usgraviso.faq.html URL removed during review — unverified; metadata page usgraviso.html verified.]
 
 ## 3. Provided Features — Scientific Interpretation
 
@@ -49,7 +49,7 @@
 | Surface conductivity & depth to conductive base | Magnetotellurics conductance, depth to base of conductive layer — geothermal fluids increase conductivity | INGENIOUS | https://gdr.openei.org/submissions/1391 DOI https://doi.org/10.15121/1881483 |
 | Detrended elevation & slope | Topography minus smoothed, highlights fault scarps and lineaments | USGS 3DEP | https://www.usgs.gov/3d-elevation-program/about-3dep-products-services |
 | Dilatation, shear strain rate, second invariant | GPS-derived crustal deformation, area change (dilatation) and shear, transtensional zones host geothermal | GSRM, UNAVCO | https://gsrm2.unavco.org/model/model.html, https://www.unavco.org/software/visualization/idv/IDV_datasource_gsrm.html, https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044 |
-| Isostatic gravity anomaly & slope | Local density anomalies, fault zones show gravity gradients | USGS Gravity | https://mrdata.usgs.gov/gravity/isostatic/ and https://mrdata.usgs.gov/metadata/usgraviso.faq.html |
+| Isostatic gravity anomaly & slope | Local density anomalies, fault zones show gravity gradients | USGS Gravity (Kucks 1999) | https://mrdata.usgs.gov/gravity/isostatic/ and https://mrdata.usgs.gov/metadata/usgraviso.html |
 | Magnetics: RTP, TMI, vertical/horizontal slope, top-of-crustal depth | Subsurface structure, fault offsets show magnetic lineaments | GeoDAWN | https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 DOI https://doi.org/10.5066/P93LGLVQ |
 | Density of earthquakes | Seismicity clusters along active faults | INGENIOUS | https://gdr.openei.org/submissions/1391 |
 
@@ -98,7 +98,7 @@
 
 - Integrated structural analysis for geothermal exploration combining remote sensing and aeromagnetic geophysical data https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/ (Jan 28 2025) — Protocol summary: Subsurface Lineaments detect via CET grid analysis in Seequent Oasis Montaj, enhance textures and apply edge detection to identify major/minor lineaments. Lineament Density Mapping: create Fault Fracture Density (FFD) maps for surface and subsurface lineaments by calculating lineament length per grid cell area using ArcGIS. Outcomes indicate higher fidelity in identifying high-permeability zones compared to Arrofi and Abu-Mahfouz who primarily observed surface features. Leveraging enhanced capabilities of CET Grid Analysis alongside FFD method, analysis revealed five distinct high-density zones, significant correlation to thermal manifestations such as hot springs.
 
-- Geo-SegNet: contrastive learning enhanced U-net for geomaterial segmentation https://www.sciencedirect.com/science/article/pii/S2949673X25000026 (Jan 20 2025) — Compared to U-Net-only model, Geo-SegNet demonstrates 2.0% increase in segmentation accuracy. Combining U-Net and ResNet shown to enhance segmentation accuracy merging detailed segmentation capabilities of U-Net with deep learning strengths of ResNet. U-Net++ first to apply for partial volume segmentation, introduced entropy-based masking indicator kriging to generate high-quality training data, significantly enhancing segmentation accuracy near boundaries and small targets. By integrating contrastive learning with U-Net architecture, method capitalizes on strengths: contrastive learning improved ability to differentiate between features, U-Net provided reliable framework. Implementation Python on NVIDIA RTX 4090 GPU.
+- Geo-SegNet: contrastive learning enhanced U-net for geomaterial segmentation https://www.sciencedirect.com/science/article/pii/S2949673X25000026 (Jan 20 2025) — **Scope corrected during verification:** this paper is about micro-CT pore/geomaterial segmentation of sandstone cores, NOT fault mapping — used here as method inspiration only. Verified abstract: Geo-SegNet employs a feature extractor trained through contrastive learning (derived from a modified ResNet-101) integrated as the U-Net encoder, and significantly improved segmentation masks vs a standard U-Net on heterogeneous pore networks.
 
 ## 5. Critical Thinking — Challenges, Biases, Limitations
 
@@ -126,7 +126,7 @@
 - Faults cause changes in surface elevation — SL (Stream Length?) increases significantly due to sudden surface height changes caused by faults (from multi-source fusion paper).
 - Faults show as sharp changes/high gradients in magnetic images — edge detectors identify abrupt discontinuities, line detectors highlight coherent alignments (Hassan & Goussev 2019).
 - Gravity and magnetic data inversion using CNNs can predict subsurface property distribution directly from field data, without heavy prior assumptions, addressing non-uniqueness and reducing computational costs (Joint Gravity and Magnetic Inversion Using CNNs https://www.mdpi.com/2072-4292/16/7/1115).
-- Euler deconvolution + DBSCAN clustering can determine location, dip, overprinting relationship of faults from magnetic data at various scales, tracking faults from near-surface to deeper roots (Tandfonline 2023).
+- Euler deconvolution + DBSCAN clustering can determine location, dip, overprinting relationship of faults from magnetic data at various scales, tracking faults from near-surface to deeper roots (Chukwu et al 2024, Exploration Geophysics 55(3):223-245, https://doi.org/10.1080/08123985.2023.2299475).
 
 ## 6. Suggestions and Improvements — Implemented
 
@@ -134,9 +134,9 @@
 
 1. **Multi-source information fusion** (from Nature 2025 paper): Fuse spectral (radiometric), topographic/geomorphic (DEM derivatives: slope, TPI, TRI, curvature, detrended, hillshade, SL), structural (magnetics, gravity, strain rate). Our `src/external_data.py` implements DEM derivatives, `src/dataset.py` robust normalization, `configs/config.yaml` allows good_channels selection.
 
-2. **Frangi filter for line enhancement** (from OUP 2023 palaeochannel paper and our earlier postprocess): Enhances stripe-like features, improves sensitivity to varying widths, highlights boundaries of small-scale features. Implemented in `src/postprocess.py:frangi_enhance()` and used in inference pipeline.
+2. **Frangi filter for line enhancement** (from Zhong et al 2024 GJI palaeochannel paper, https://doi.org/10.1093/gji/ggad491 and our earlier postprocess): Enhances stripe-like features, improves sensitivity to varying widths, highlights boundaries of small-scale features. Implemented in `src/postprocess.py:frangi_enhance()` and used in inference pipeline.
 
-3. **Hough transform for fault line detection** (from Wang & AlRegib 2014): Semi-automatic algorithm to detect faults as lines from discontinuity map, remove false features via double-threshold AD/LD based on geological constraints. We implement morphological closing + Hough transform conceptually in post-processing to connect fault segments — `src/postprocess.py:connect_faults()` uses dilation, could be extended to Hough.
+3. **Hough transform for fault line detection** (from Wang & AlRegib 2014): Semi-automatic algorithm to detect faults as lines from discontinuity map, remove false features via a double-threshold method based on geological constraints. We implement morphological closing + Hough transform conceptually in post-processing to connect fault segments — `src/postprocess.py:connect_faults()` uses dilation, could be extended to Hough.
 
 4. **Tversky loss with α0.2 β0.8 matching metric** (from reference solution and metric definition): Penalizes FN more than FP, rewards high recall. Implemented in `src/losses.py:TverskyLoss` and `FocalTverskyLoss` and `CombinedLoss` (BCE + Tversky + Focal).
 
@@ -150,7 +150,7 @@
 
 9. **CET grid analysis + Fault Fracture Density** (from Integrated structural analysis 2025): Detect subsurface lineaments via CET grid analysis in Oasis Montaj, create FFD maps by calculating lineament length per grid cell. We implement FFD concept via Frangi + morphological closing + lineament density — could be extended with external Oasis Montaj if available.
 
-10. **Euler deconvolution + DBSCAN clustering** (from Tandfonline 2023): Determine location, dip of faults from magnetic data at various scales. Suggestion: apply Euler deconvolution to GeoDAWN magnetic data to get depth solutions, cluster with DBSCAN to get fault architecture, use as additional feature channel. Implemented as future work in `src/external_data.py` — noted.
+10. **Euler deconvolution + DBSCAN clustering** (from Chukwu et al 2024, Exploration Geophysics): Determine location, dip of faults from magnetic data at various scales. Suggestion: apply Euler deconvolution to GeoDAWN magnetic data to get depth solutions, cluster with DBSCAN to get fault architecture, use as additional feature channel. Implemented as future work in `src/external_data.py` — noted.
 
 11. **Synthetic data generation via Noddy** (from ESSD 2022 Into the Noddyverse): Generate 1 million 3D geological models and gravity/magnetic responses via Noddy for ML training, test cases for inversion. Suggestion: generate synthetic fault models with varying attitudes, use to pretrain CNN, then fine-tune on real GeoDAWN data. Could improve generalization to hidden faults. Noted as future work.
 
@@ -168,7 +168,7 @@
 - **Multi-scale inference:** Inference at multiple patch sizes (128, 256, 512) and average — captures both fine scarps and large fault zones.
 - **Test-time augmentation (TTA):** Already implemented 8-way (4 rot × 2 flip) in `src/inference.py`, could add scale TTA.
 - **Uncertainty quantification:** Use Monte Carlo dropout or ensemble variance to estimate uncertainty, threshold based on uncertainty for Final Round discoveries.
-- **Graph-based post-processing:** Build graph of fault segments, connect via Hough transform and geological constraints (AD/LD thresholds from Wang & AlRegib).
+- **Graph-based post-processing:** Build graph of fault segments, connect via Hough transform and geological double-threshold constraints (Wang & AlRegib 2014).
 - **Incorporate strain rate tensor eigenvectors:** From GPS data https://gsrm2.unavco.org/model/model.html, compute principal strain directions, encourage fault predictions to align with maximum shear.
 - **Use radiometric ternary maps:** GeoDAWN provides radiometric ternary PDFs/maps — could extract K, Th, U channels as additional features for surface geology.
 
@@ -225,8 +225,8 @@ See `docs/data_catalog.csv`, `docs/data_catalog.json`, `docs/references.md`, `FE
 - Integrated structural analysis geothermal: https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/
 - Geo-SegNet: https://www.sciencedirect.com/science/article/pii/S2949673X25000026
 - GSRM strain rate: https://gsrm2.unavco.org/model/model.html, https://www.unavco.org/software/visualization/idv/IDV_datasource_gsrm.html
-- Isostatic gravity: https://mrdata.usgs.gov/metadata/usgraviso.faq.html, https://mrdata.usgs.gov/gravity/isostatic/
-- Reduced-to-pole: https://pubs.usgs.gov/pp/1720/downloads/pdf/p1720D.pdf
-- Walker Lane tectonic: https://nbmg.unr.edu/staff/faulds/33_AGS22_Faulds_and_Henry_(Walker_Lane)_final.pdf, https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044, https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145
+- Isostatic gravity: https://mrdata.usgs.gov/metadata/usgraviso.html, https://mrdata.usgs.gov/gravity/isostatic/ (Kucks 1999)
+- Reduced-to-pole: Baranov & Naudy 1964 (canonical; previously listed p1720D.pdf removed in review — unverified)
+- Walker Lane tectonic: https://nbmg.unr.edu/staff/faulds/33_AGS22_Faulds_and_Henry_(Walker_Lane)_final.pdf (Faulds & Henry 2008, AGS Digest 22:437-470), https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044 (Hammond et al 2024)
 - Competition: https://www.drivendata.org/competitions/306/competition-doe-gems/, https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/, https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/, https://www.drivendata.org/competitions/306/competition-doe-gems/data/, https://www.drivendata.org/competitions/306/competition-doe-gems/rules/, https://www.herox.com/GEMSPrize/resource/2274, https://docs.nlr.gov/docs/fy26osti/96647.pdf, https://github.com/drivendataorg/gems-prize-reference-solution
 - About page papers: https://doi.org/10.1029/2020JB021269, https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf

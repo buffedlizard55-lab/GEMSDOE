@@ -11,7 +11,7 @@ build/
 .env
 .venv
 venv/
-data/
+data/*
 !data/README.md
 outputs/
 *.tif
