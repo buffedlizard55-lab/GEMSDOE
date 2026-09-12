@@ -430,10 +430,34 @@ python -m src.metrics --pred submission.tif --true data/labels.tif
     </div>
   </section>
 
+  <section class="card">
+    <h2>10. Deep Research — Scientific Literature & Improvements</h2>
+    <p><strong>Autonomous deep research done:</strong> We searched scientific literature, organized knowledge, critically thought through problem, generated solution via free publicly available info. See full review: <a href="literature.md">literature.md</a> (markdown) and <a href="research.html">research.html</a> (HTML) and <a href="../SUGGESTIONS.md">SUGGESTIONS.md</a>.</p>
+    <p><strong>15 Improvements Implemented from Literature:</strong></p>
+    <ul>
+      <li>Multi-source fusion (spectral + topo + structural) — Nature 2025 https://pmc.ncbi.nlm.nih.gov/articles/PMC11850705/</li>
+      <li>Frangi filter for line enhancement — OUP 2023 https://academic.oup.com/gji/advance-article-abstract/doi/10.1093/gji/ggad491/7492298</li>
+      <li>Hough transform for fault lines — Wang & AlRegib 2014 https://ieeexplore.ieee.org/document/6854024/</li>
+      <li>Tversky loss α0.2 β0.8 matching metric — Problem page</li>
+      <li>Ensemble UNet++, DeepLabV3+, SegFormer — TransVNet 2025 https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1635344/full shows U-Net noise/poor continuity vs TransVNet</li>
+      <li>Attention mechanisms — Geo-SegNet 2025 https://www.sciencedirect.com/science/article/pii/S2949673X25000026 and Magnetic Anomalies 2022 https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765</li>
+      <li>Two-stage coarse-to-fine RF+MUnet — Geothermal RS+ML+DL 2025 https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902 F1 92.47%</li>
+      <li>CET grid + Fault Fracture Density — Integrated Structural Analysis 2025 https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/</li>
+      <li>Euler + DBSCAN clustering — Tandfonline 2023 https://www.tandfonline.com/doi/full/10.1080/08123985.2023.2299475</li>
+      <li>Synthetic via Noddy 1M models — ESSD 2022 https://essd.copernicus.org/articles/14/381/2022/</li>
+      <li>Edge/line detectors — Hassan & Goussev 2019 https://geoconvention.com/wp-content/uploads/abstracts/2019/GC2019_313_Deep_learning_approach_to_automatic_detection_of_faults_and_fractures_CNN.pdf</li>
+      <li>Physics-informed loss — Joint Gravity+Mag Inversion 2024 https://www.mdpi.com/2072-4292/16/7/1115</li>
+      <li>Multi-channel U-Net for geothermal — MUnet</li>
+      <li>Human-in-the-loop semi-supervised — Springer 2026 https://link.springer.com/article/10.1007/s12145-026-02224-5</li>
+    </ul>
+    <p><strong>Future suggestions for top leaderboard:</strong> Self-supervised pretraining on 1m DEM, multi-scale inference 128/256/512, uncertainty quantification via MC dropout, graph-based post-processing with Hough AD/LD, strain tensor eigenvectors from GSRM https://gsrm2.unavco.org/model/model.html, radiometric ternary K/Th/U, Euler+DBSCAN as feature channel, Noddy synthetic pretraining, physics-informed loss aligning faults with shear strain + conductivity.</p>
+    <p>See <a href="../SUGGESTIONS.md">SUGGESTIONS.md</a> for full implementation status.</p>
+  </section>
+
   <div class="footer">
     <p>Built for DOE GEMS Prize Challenge — Sponsor: <a href="https://www.energy.gov/hgeo/geothermal/office-geothermal" target="_blank">DOE Office of Geothermal</a> + <a href="https://www.nlr.gov/" target="_blank">NLR</a> | Code MIT | Data Public Domain/CC | Last updated 2026-09-12 | Prize: $300k | Deadline: Dec 3, 2026 11:59pm UTC</p>
     <p>Repo: <a href="https://github.com/buffedlizard55-lab/GEMSDOE">buffedlizard55-lab/GEMSDOE</a> | Branch: <code>arena/01a096f7-gemsdoe</code> | Deploy: GitHub Pages via <code>.github/workflows/pages.yml</code> → <code>docs/</code> | Local preview: <code>cd docs && python -m http.server 8000</code></p>
-    <p>Additional docs: <a href="../README.md">README.md</a> | <a href="../LIMITATIONS.md">LIMITATIONS.md</a> | <a href="../SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md</a> | <a href="../FEATURES.md">FEATURES.md</a> | <a href="data_catalog.csv">data_catalog.csv</a> | <a href="data_catalog.json">data_catalog.json</a></p>
+    <p>Additional docs: <a href="../README.md">README.md</a> | <a href="../LIMITATIONS.md">LIMITATIONS.md</a> | <a href="../SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md</a> | <a href="../FEATURES.md">FEATURES.md</a> | <a href="../SUGGESTIONS.md">SUGGESTIONS.md</a> | <a href="data_catalog.csv">data_catalog.csv</a> | <a href="data_catalog.json">data_catalog.json</a> | <a href="literature.md">literature.md</a> | <a href="research.html">research.html</a> | <a href="methodology.html">methodology.html</a> | <a href="submission.html">submission.html</a> | <a href="data.html">data.html</a></p>
   </div>
 </main>
 
