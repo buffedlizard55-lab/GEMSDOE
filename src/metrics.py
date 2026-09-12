@@ -28,7 +28,7 @@ def compute_distance_weighted_tversky(pred, gt, R_pixels=3, alpha=0.2, beta=0.8,
     gt: (H,W) binary {0,1} or bool
     R_pixels: int, 300m / 100m = 3
     """
-    pred = pred.astype(np.float32)
+    pred = np.nan_to_num(np.asarray(pred, dtype=np.float32), nan=0.0, posinf=1.0, neginf=0.0)
     gt = (gt > 0.5).astype(bool) if gt.dtype != bool else gt
 
     # If no GT faults, handle edge case: metric should be 1 if no pred, else penalize FP
@@ -103,7 +103,8 @@ def compute_distance_weighted_tversky(pred, gt, R_pixels=3, alpha=0.2, beta=0.8,
 def evaluate_geotiff(pred_path, true_path, R_meters=300, resolution=100, alpha=0.2, beta=0.8):
     with rasterio.open(pred_path) as src:
         pred = src.read(1).astype(np.float32)
-        # handle nodata
+        # handle nodata AND NaN (submission spec: NaN outside training bounds)
+        pred = np.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=0.0)
         if src.nodata is not None:
             pred = np.where(pred == src.nodata, 0, pred)
         pred = np.clip(pred, 0, 1)
@@ -116,7 +117,49 @@ def evaluate_geotiff(pred_path, true_path, R_meters=300, resolution=100, alpha=0
     print(f"DTI={dti:.5f} TP_w={tp:.2f} FP_w={fp:.2f} FN_w={fn:.2f}")
     return dti
 
+def _self_test():
+    """Property tests on synthetic data. Run: python src/metrics.py --self-test"""
+    rng = np.random.default_rng(0)
+    gt = np.zeros((64, 64), bool); gt[20:40, 20:44] = True
+    # 1) perfect prediction -> DTI ~ 1
+    assert compute_distance_weighted_tversky(gt.astype(float), gt) > 0.9999, "perfect pred must give ~1"
+    # 2) empty prediction -> DTI ~ 0
+    assert compute_distance_weighted_tversky(np.zeros_like(gt, float), gt) < 1e-4, "empty pred must give ~0"
+    # 3) FN-weighted more than FP (beta=0.8 > alpha=0.2):
+    #    a thin far-away extra blob (pure FP) must score HIGHER than a missing
+    #    fault stripe of equal area (pure FN)
+    pred_fp = gt.astype(float).copy(); pred_fp[50:56, 20:44] = 1.0          # extra, off-fault
+    pred_fn = gt.astype(float).copy(); pred_fn[20:34, 20:44] = 0.0          # removed on-fault area (24*14)
+    d_fp = compute_distance_weighted_tversky(pred_fp, gt)
+    d_fn = compute_distance_weighted_tversky(pred_fn, gt)
+    assert d_fp > d_fn, f"asymmetry violated: FP-heavy {d_fp:.4f} should beat FN-heavy {d_fn:.4f}"
+    # 4a) overlapping shift credited: rect shifted 1px still overlaps at d=0
+    shifted1 = np.zeros_like(gt, float); shifted1[:, 1:] = gt.astype(float)[:, :-1]
+    assert compute_distance_weighted_tversky(shifted1, gt) > 0.5
+    # 4b) kernel decay: pred stripe just off the fault edge (1-2px) is partially
+    #     credited; stripe 4-5px off (> R=3) is fully uncredited (FP only)
+    off1 = np.zeros_like(gt, float); off1[:, 44:46] = 1.0
+    off4 = np.zeros_like(gt, float); off4[:, 47:49] = 1.0
+    d1 = compute_distance_weighted_tversky(off1, gt)
+    d4 = compute_distance_weighted_tversky(off4, gt)
+    assert d1 > d4 and d4 == 0.0, f"kernel decay violated: {d1:.4f} vs {d4:.4f}"
+    # 5) NaN padding must not poison the metric
+    nanpadded = gt.astype(float); nanpadded[:, :10] = np.nan
+    assert np.isfinite(compute_distance_weighted_tversky(nanpadded, gt)), "NaN must be sanitized"
+    # 6) soft probabilities in (0,1) are credited proportionally near GT
+    soft = gt.astype(float) * 0.5
+    d = compute_distance_weighted_tversky(soft, gt)
+    assert 0.4 < d < 0.75, f"soft pred should land mid-range, got {d:.4f}"
+    print("metrics self-test: all property checks passed "
+          f"(d_fp={d_fp:.4f} > d_fn={d_fn:.4f} => alpha/beta asymmetry confirmed; "
+          f"near-stripe {d1:.4f} > far-stripe {d4:.4f} => R=3 kernel decay confirmed)")
+
+
 if __name__ == "__main__":
+    import sys
+    if "--self-test" in sys.argv:
+        _self_test(); sys.exit(0)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--pred", required=True, help="predicted GeoTIFF")
     parser.add_argument("--true", required=True, help="ground truth GeoTIFF")

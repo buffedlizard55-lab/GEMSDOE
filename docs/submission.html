@@ -52,6 +52,7 @@
 
   <section class="card">
     <h2>Feedback & Limits — PDF 3.4</h2>
+    <p style="color:#8a6d3b">⚠️ Discrepancy flagged: earlier instruction said 2 per 7 days; PDF §3.4 verbatim = "up to three per week". PDF/website authoritative — details in <a href="../SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md §3</a>.</p>
     <ul>
       <li>Up to 3 submissions per week for automated scoring</li>
       <li>Must select only one as final before deadline Dec 3 2026 11:59pm UTC (from main page https://www.drivendata.org/competitions/306/competition-doe-gems/)</li>
@@ -65,10 +66,10 @@
     <ul>
       <li>Metric: distance-weighted Tversky index https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric — penalizes FN more than FP</li>
       <li>Public test → public leaderboard, Private test → Initial Round $50k</li>
-      <li>Expert review uses ALL submissions to find candidate new faults → expanded label set</li>
+      <li>Second-round score is against the updated test dataset created by geology experts after close (PDF 3.6.1 verbatim); per the about page, expert review uses submitted predictions to update the fault-label set for the full region</li>
       <li>Final Round $250k scored against expanded set — 1st $100k, 2nd $70k, 3rd $40k, 4th $25k, 5th $15k</li>
       <li>Must choose final without knowing private scores (PDF 3.6.2) — encourages generalization</li>
-      <li>Set of faults in public test and relative weight determined by organizers before start</li>
+      <li>Set of faults in the public test dataset and relative weight of faults in both test datasets determined by organizers before start (PDF 3.6.2)</li>
       <li>Winners must submit complete code + docs reproducible, per Winning Model Documentation Template, plus eligibility certs (PDF 3.2, 3.5)</li>
       <li>DOE is judge and final decision maker, may award all, none, or some (PDF 3.6.4, Appendix A)</li>
       <li>Interviews may be held after announcement (PDF 3.6.3)</li>
@@ -104,11 +105,18 @@ python scripts/validate_submission.py --pred submission.tif --sample data/sample
   </section>
 
   <section class="card">
+    <h2>Generative-AI Disclosure Obligation (PDF §3.2 — applies to US)</h2>
+    <p>This project is developed with an AI coding agent. Per PDF §3.2 (<a href="https://www.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">rules</a>), if generative AI is used, the submission narrative must <strong>disclose the extent and manner of use</strong> (disclosure not counted in word limit); the competitor remains responsible for accuracy, authenticity, and authorship. Plan: include a short genAI-use statement in the submission narrative and, if finalist, in the code documentation.</p>
+  </section>
+
+  <section class="card">
     <h2>Irregularities Flagged</h2>
     <ul>
-      <li>Sample submission not available without login — we create dummy if missing via scripts/prepare_data.py and generate_dummy_submission.py</li>
-      <li>Training features naming: problem page says training_features.tif, reference solution says numeric_features.tif — we handle both in src/dataset.py</li>
-      <li>1m DEM links CSV — links point to TNM, but download requires handling large tiles — fallback via LidarExplorer https://apps.nationalmap.gov/lidar-explorer/</li>
+      <li><strong>Submission cadence discrepancy:</strong> earlier project instruction said 2 per 7 days; rules PDF §3.4 (re-verified verbatim 2026-09-12) says <em>"up to three per week"</em> — PDF/website authoritative; see SUBMISSION_GUIDE.md §3 for the full flag.</li>
+      <li>Sample submission: Dropbox mirror (<code>example_submission.tif</code>) verified reachable 2026-09-12 but binary not fetchable in sandbox (egress allowlist) — use <code>scripts/download_competition_data.sh</code>; dummy fallback in <code>scripts/generate_dummy_submission.py</code></li>
+      <li>Training features naming: problem page says training_features.tif, reference solution says numeric_features.tif, mirror file is gems-geodawn-numerical-features.tif — all three handled in src/dataset.py</li>
+      <li>1m DEM links: RESOLVED 2026-09-12 — point at official USGS bucket prd-tnm.s3.amazonaws.com (verified via S3 listing); 35 tiles captured / 6 S3-verified in data/dem_links.json; full list via <code>scripts/download_dem_tiles.py --complete-listing</code>; competition JSON itself has duplicate rows + path/filename project mismatches (filename project is canonical — S3-proven)</li>
+      <li>Rules PDF host: canonical www.nlr.gov; docs.nlr.gov verified serving identical document 2026-09-12 (title + TOC match)</li>
     </ul>
   </section>
 

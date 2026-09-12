@@ -96,3 +96,9 @@ Evidence standard used: a link is marked **VERIFIED** only if (a) fetched full-t
 - **Canonical URL rule proven by S3 ListObjectsV2:** filename-project path returns key_count=1 (with exact size/ETag); the competition JSON's mismatched CA-path variant returns key_count=0. Spot checks: x75y441_CA (238,657,987 B), x75y442_NV (208,488,258 B), x26y449_Humboldt (90,967,138 B), x27y443_NV (376,446,112 B), x24y442_CA (137,528,564 B), x27y430_NV (264,004,305 B).
 - **New verified source E29:** `prd-tnm.s3.amazonaws.com` staged-products listing (USGS TNM) — full tile enumeration available without the competition PDF via `scripts/download_dem_tiles.py --complete-listing`.
 - **Not acquired (sandbox):** the three competition GeoTIFFs — binary + egress block. `scripts/download_competition_data.sh` fetches them (Dropbox durable `rlkey&dl=1` form) and copies to canonical names.
+
+## 7. Rules PDF completion + literature re-checks — 2026-09-12 (same day, later)
+
+- **Rules PDF FULLY READ:** docs.nlr.gov/docs/fy26osti/96647.pdf chunks 3, 4, 6 re-fetched → A.1 verbatim deadline ("5:00 p.m. ET on the prize submission deadline date... Late submissions... may be rejected"), A.2–A.5, A.13–A.17 captured verbatim; both hosts (www/docs.nlr.gov) verified serving identical September 2026 document. §3.4 "up to three per week" re-confirmed verbatim.
+- **Guo et al. Sci Rep (s41598-025-90823-5):** Publisher Correction confirmed on article page — doi 10.1038/s41598-025-99035-3, published 28 April 2025. Our recorded stats match the abstract (CART 0.993/0.988/0.994; CNN Val Acc 0.990, F1 0.736, Val Loss 0.025). Correction note added in SUGGESTIONS.md + docs/literature.md.
+- **Code verification:** src/metrics.py 6-property self-test passing (α/β asymmetry, R=3 kernel decay, NaN sanitize); src/losses.py smoke test on torch 2.14.0 (forward/backward finite, near-perfect loss ~0.0008, empty-target safe).

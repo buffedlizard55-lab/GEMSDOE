@@ -2,7 +2,8 @@
 
 **Primary sources:**
 - Problem description submission format: https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format
-- Official Rules PDF: https://docs.nlr.gov/docs/fy26osti/96647.pdf (Sections 3.2, 3.3, 3.5, 3.6)
+- Official Rules PDF: https://www.nlr.gov/docs/fy26osti/96647.pdf (Sections 3.2, 3.3, 3.5, 3.6)
+  - Both hosts verified identical 2026-09-12: `www.nlr.gov` and `docs.nlr.gov` serve the same SEPTEMBER 2026 document (title + TOC match). Full PDF read across 7 chunks.
 - Competition main: https://www.drivendata.org/competitions/306/competition-doe-gems/
 - Reference solution: https://github.com/drivendataorg/gems-prize-reference-solution
 
@@ -32,6 +33,13 @@ From PDF https://docs.nlr.gov/docs/fy26osti/96647.pdf:
 - [ ] **Generative AI disclosure:** If using generative AI, indicate in narrative (not included in word count) extent and how used (PDF section 3.2). Responsible for accuracy, authenticity, authorship.
 
 ## 3. Feedback & Limits (Per PDF Section 3.4)
+
+> **⚠️ FLAGGED DISCREPANCY (not silently resolved):** an earlier project instruction stated
+> "max 2 submissions per 7 days"; the official rules PDF (§3.2 + §3.4, verified 2026-09-12)
+> says **up to three per week**. Per project policy, the official PDF + competition website are
+> authoritative; the 2-per-7-days figure is treated as superseded but is recorded here for audit.
+> Practical consequence: we plan around **3 submissions/week** (the binding limit per the
+> platform may also be displayed at submission time — check before submitting).
 
 - [ ] Each entity may submit **more than one set of predictions** for automated scoring up to **three per week**, as specified on competition website
 - [ ] By submission deadline, **must select only one set of predictions** to use as final submission for final evaluation and ranking
@@ -90,16 +98,17 @@ For finalists, for chosen algorithm, must submit:
 - Resolution == 100m
 - Bounds match sample submission (or training_features.tif)
 - Single band, float32, values in [0,1]
-- No NaN outside? Actually NaN allowed outside bounds, but inside should be 0-1
+- NaN/nodata allowed **outside** training bounds (spec: "data outside bounds is null or NaN"); values **inside** bounds must be within [0,1]. Our scorer (`src/metrics.py`) sanitizes NaN→0 so padded files evaluate correctly.
 - File size matches expected
 
 See reference solution for example: https://github.com/drivendataorg/gems-prize-reference-solution
 
 ## 8. Irregularities Flagged
 
-- Sample submission file not available without login — we create dummy if missing in `scripts/prepare_data.py`
-- Training features file naming: problem page says `training_features.tif`, reference solution says `numeric_features.tif` — we handle both in `src/dataset.py`
-- 1m DEM links CSV — links likely point to The National Map, but actual download requires handling large tiles — we provide fallback via LidarExplorer https://apps.nationalmap.gov/lidar-explorer/
+- Sample submission: user-provided Dropbox mirror (`example_submission.tif`) verified reachable 2026-09-12; binary not fetched in sandbox (egress allowlist) — `scripts/download_competition_data.sh` fetches it; dummy fallback in `scripts/generate_dummy_submission.py`
+- Training features file naming: problem page says `training_features.tif`, reference solution says `numeric_features.tif`, mirror file is `gems-geodawn-numerical-features.tif` — all three handled in `src/dataset.py`
+- 1m DEM links: RESOLVED 2026-09-12 — links point at official USGS bucket `prd-tnm.s3.amazonaws.com` (verified); partial capture of the links file yielded 35 tiles / 6 S3-verified (`data/dem_links.json`); full authoritative list via `python scripts/download_dem_tiles.py --complete-listing`; tiles are 90–380 MB each. Competition JSON itself contains irregularities (duplicate rows, path≠filename project rows — the filename project is canonical, S3-proven; garbled hosts in the PDF print)
+- Rules PDF submission cadence: see flagged discrepancy atop §3 (3/week per PDF vs earlier 2/7-days instruction)
 
 ## 9. No Hallucinations
 

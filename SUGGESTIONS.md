@@ -8,6 +8,7 @@
 
 ### 1. Multi-source Information Fusion (Nature 2025)
 **Paper:** https://pmc.ncbi.nlm.nih.gov/articles/PMC11850705/ + https://www.nature.com/articles/s41598-025-90823-5 — Enhancing fault morphological features through multi-source fusion improves accuracy. 16 factors, TPI/Valley line/SCD/RSI high importance, CNN Val Acc 0.990 F1 0.736.
+  - ⚠️ **Publisher Correction** to this article: doi 10.1038/s41598-025-99035-3 (published 28 April 2025, verified on article page 2026-09-12). Cite the corrected version; re-check the correction before relying on exact hyperparameters.
 **Implemented:** `src/external_data.py` computes DEM derivatives (slope, curvature, TPI, TRI, detrended, hillshade), `src/dataset.py` robust normalization, `configs/config.yaml` good_channels selection. Fuses spectral (radiometric), topographic/geomorphic (DEM), structural (magnetics, gravity, strain).
 
 ### 2. Frangi Filter for Line Enhancement (Zhong et al 2024, GJI)

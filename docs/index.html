@@ -289,7 +289,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
   ↓ Validate: scripts/validate_submission.py checks CRS, res, bounds, dtype, range</pre>
 
     <h3>Why This Wins Final Round</h3>
-    <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review uses ALL submissions to find candidates — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
+    <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review uses submitted predictions to update the fault-label set (per problem page + PDF 3.6.1) — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
 
     <h3>Expected Gains</h3>
     <table>
@@ -309,8 +309,8 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
         <h3 style="margin-top:0;">Current Sandbox Limits</h3>
         <ul>
           <li>❌ <strong>No DrivenData auth</strong> → cannot auto-download <code>training_features.tif</code>, <code>labels.tif</code>, <code>sample_submission.tif</code>, <code>1m_DEM_links.csv</code> from https://www.drivendata.org/competitions/306/competition-doe-gems/data/ (requires login — verified via fetch_page redirect)</li>
-          <li>❌ <strong>CPU-only</strong> — Python 3.11.2, no torch initially (verified <code>pip show torch</code> → not found). Training large models needs GPU per ref solution https://github.com/drivendataorg/gems-prize-reference-solution#choosing-gpu-vs-cpu</li>
-          <li>❌ <strong>No large external data pre-downloaded</strong> — GeoDAWN GBs (ScienceBase https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 has 42MB+227MB grids, 350MB+378MB gdb, 3GB contractor), 3DEP 1m DEM many GB (via https://apps.nationalmap.gov/downloader/), INGENIOUS 116MB+ (https://gdr.openei.org/submissions/1391)</li>
+          <li>⚠️ <strong>CPU-only</strong> — Python 3.11.2; torch 2.14.0 installed 2026-09-12 (CPU wheel, verified import) — unit tests and metric self-tests run, but training large models needs GPU per ref solution https://github.com/drivendataorg/gems-prize-reference-solution#choosing-gpu-vs-cpu</li>
+          <li>❌ <strong>No large external data pre-downloaded</strong> — GeoDAWN GBs (ScienceBase https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 has 42MB+227MB grids, 350MB+378MB gdb, 3GB contractor), 3DEP 1m DEM many GB (canonical bucket VERIFIED 2026-09-12: prd-tnm.s3.amazonaws.com — 35 tiles captured, 6 S3-verified in <code>data/dem_links.json</code>; downloader <code>scripts/download_dem_tiles.py</code>; also https://apps.nationalmap.gov/downloader/), INGENIOUS 116MB+ (https://gdr.openei.org/submissions/1391)</li>
           <li>✅ Code built to work once data placed in <code>data/</code> — handles both naming conventions, validates via <code>scripts/prepare_data.py</code></li>
         </ul>
       </div>
