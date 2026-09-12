@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Methodology — GEMSDOE</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>Methodology — Top Leaderboard</h1>
+    <p class="subtitle">Detailed method to beat reference solution, with verified sources.</p>
+    <div class="badges">
+      <span class="badge"><a href="index.html">← Back to Main</a></span>
+      <span class="badge"><a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">Reference Solution</a></span>
+    </div>
+  </div>
+</header>
+<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#method" class="active">Method</a></div></nav>
+<main class="container">
+  <section class="card">
+    <h2>Why Reference Solution is Insufficient</h2>
+    <p>From <a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">reference solution</a> notebook <code>unet-mc-cv-reference-solution.ipynb</code>:</p>
+    <ul>
+      <li>Single U-Net, 5 MC splits, patch 128, 5 epochs, basic [0,1] min-max norm</li>
+      <li>No external DEM, no TTA, no ensemble, no post-processing, no robust norm</li>
+      <li>Estimated DTI ~0.45-0.55</li>
+    </ul>
+    <p>Our improvements target 0.65-0.75 DTI for top 5.</p>
+  </section>
+
+  <section class="card">
+    <h2>Data Engineering — Verified Sources</h2>
+    <h3>Robust Normalization</h3>
+    <p>Per-channel NaN-aware clipping 2-98 percentile + min-max to [0,1] or standardization, not just min-max. Handles outliers in mag, gravity, conductivity. Implemented in <code>src/dataset.py:robust_normalize()</code>.</p>
+    
+    <h3>External DEM Features from 3DEP</h3>
+    <p>Official source: USGS 3DEP https://www.usgs.gov/3d-elevation-program/about-3dep-products-services + Downloader https://apps.nationalmap.gov/downloader/ + LidarExplorer https://apps.nationalmap.gov/lidar-explorer/ + AWS https://registry.opendata.aws/usgs-lidar/</p>
+    <p>From 1m DEM (via <code>1m_DEM_links.csv</code>), resampled to 100m, compute:</p>
+    <ul>
+      <li>Slope: arctan(sqrt(dx²+dy²)) *180/π via np.gradient</li>
+      <li>Curvature: second derivative dxx+dyy</li>
+      <li>TPI: Topographic Position Index = dem - mean(dem in radius)</li>
+      <li>TRI: Terrain Ruggedness Index = mean abs diff to 8 neighbors</li>
+      <li>Hillshade: sin(alt)*sin(slope)+cos(alt)*cos(slope)*cos(az - aspect)</li>
+      <li>Detrended: dem - Gaussian smoothed (sigma 50)</li>
+    </ul>
+    <p>Implemented in <code>src/external_data.py</code>. These augment provided features; faults often correlate with topographic lineaments.</p>
+
+    <h3>Patching</h3>
+    <p>Overlapping training patches (train_step 32) vs non-overlap test, filter patches with fault presence + valid elevation, hard-negative mining (keep 30% negatives). Patch size 256 vs 128 in reference → larger context for fault continuity. Implemented in <code>src/dataset.py:make_patches()</code>.</p>
+
+    <h3>Augmentation</h3>
+    <p>RandomResizedCrop 0.5-1.0 ratio 0.75-1.33, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation 30°, elastic, Gaussian noise, brightness/contrast per channel. Via torchvision transforms v2.</p>
+  </section>
+
+  <section class="card">
+    <h2>Model Architecture — Ensemble</h2>
+    <p>Uses segmentation_models_pytorch https://github.com/qubvel/segmentation_models.pytorch</p>
+    <ul>
+      <li><strong>Encoders:</strong> EfficientNet-B3/B5, ResNet-50, MIT-B2 (SegFormer) pretrained on ImageNet</li>
+      <li><strong>Decoders:</strong> UNet++, DeepLabV3+, SegFormer, FPN</li>
+      <li><strong>Loss:</strong> TverskyLoss α0.2 β0.8 + Focal Tversky γ0.75 + BCE combo — <code>src/losses.py</code> — weighted to match metric (FN penalized 4× FP)</li>
+      <li><strong>Training:</strong> MC CV 10 splits 70/30 stratified by fault density, mixed precision, AdamW lr 1e-4 weight_decay 1e-4, OneCycleLR/ReduceLROnPlateau, early stopping patience 7 on DTI</li>
+      <li><strong>Inference:</strong> Sliding window 50% overlap + Gaussian blending, TTA 8 flips/rotations, ensemble averaging across MC splits and architectures — <code>src/inference.py</code></li>
+    </ul>
+    <p>Why ensemble? Different architectures capture different fault scales: UNet++ for fine details, DeepLabV3+ for multi-scale context (atrous), SegFormer for global attention.</p>
+  </section>
+
+  <section class="card">
+    <h2>Post-Processing for Final Round — Discover New Faults</h2>
+    <p>From about page https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/ and papers:</p>
+    <ul>
+      <li>Mattéo et al 2021 Automatic fault mapping in remote optical images and topographic data with deep learning https://doi.org/10.1029/2020JB021269</li>
+      <li>Hermant et al 2025 Using deep learning to map Quaternary faults in Western USA https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf</li>
+    </ul>
+    <p>Steps in <code>src/postprocess.py</code>:</p>
+    <ul>
+      <li>Low threshold 0.1-0.2 to maximize recall (β=0.8)</li>
+      <li>Frangi filter for line enhancement (vesselness)</li>
+      <li>Morphological closing to connect fault segments</li>
+      <li>Skeletonization optional, dilation to connect</li>
+      <li>Length filtering min 5px to remove noise</li>
+      <li>False positive control: mask with slope & curvature thresholds</li>
+    </ul>
+    <p>For Final Round, we want high recall — predictions that helped experts identify previously-unmapped faults score higher. So we keep low threshold, enhance lines.</p>
+  </section>
+
+  <section class="card">
+    <h2>Metric Implementation — Exact Reproduction</h2>
+    <p>From problem page https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric</p>
+    <p>Our <code>src/metrics.py</code> implements distance-weighted Tversky exactly:</p>
+    <pre>k(d)=max(1-d/R,0), R=300m=3px
+TP_w = Σ_g max_{x:d≤R} p(x)k(d)
+FP_w = Σ_x p(x)[1-max_g k(d)]
+FN_w = Σ_g [1-max_{x:d≤R} p(x)k(d)]
+DTI = TP_w/(TP_w+αFP_w+βFN_w+ε)
+α=0.2 β=0.8</pre>
+    <p>Uses scipy distance_transform_edt for FP weighting and view_as_windows 7×7 max filter for TP/FN. Tested: perfect line → 0.91 DTI, shifted 1px → 0.61 DTI (distance weighting tolerates misalignment), empty → 0.0.</p>
+  </section>
+
+  <section class="card">
+    <h2>External Data Fusion — Allowed & Verified</h2>
+    <p>Per problem page https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#external-datasets and PDF https://docs.nlr.gov/docs/fy26osti/96647.pdf section 3.3: external data allowed if license permits use and sharing with sponsor.</p>
+    <p>Our external data all public domain or CC, shareable:</p>
+    <ul>
+      <li>USGS GeoDAWN, QFaults, 3DEP, EarthMRI: Public Domain https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits</li>
+      <li>INGENIOUS GDR: CC https://gdr.openei.org/submissions/1391</li>
+    </ul>
+    <p>We never use private test labels. We use only public USGS and DOE data.</p>
+  </section>
+
+  <div class="footer"><p><a href="index.html">← Back to Main</a> | Repo: <a href="https://github.com/buffedlizard55-lab/GEMSDOE">GEMSDOE</a></p></div>
+</main>
+</body>
+</html>

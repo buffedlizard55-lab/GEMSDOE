@@ -1,0 +1,31 @@
+id,name,agency,verified_link,doi,license,relevance
+1,GeoDAWN Airborne Magnetic & Radiometric Surveys,USGS,https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7,10.5066/P93LGLVQ,Public Domain,Primary geophysics for fault detection
+1b,GeoDAWN DOI,USGS,https://doi.org/10.5066/P93LGLVQ,10.5066/P93LGLVQ,Public Domain,DOI landing
+1c,GeoDAWN Overview,USGS,https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and,10.5066/P93LGLVQ,Public Domain,Overview page
+2,USGS Quaternary Fault and Fold Database,USGS Earthquake Hazards,https://www.usgs.gov/programs/earthquake-hazards/faults,10.5066/P9BCVRCK,Public Domain,Ground truth labels
+2b,QFaults ScienceBase,USGS,https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23,10.5066/P9BCVRCK,Public Domain,ScienceBase landing
+2c,QFaults DOI,USGS,https://doi.org/10.5066/P9BCVRCK,10.5066/P9BCVRCK,Public Domain,DOI
+2d,QFaults KML Download,USGS,https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files,,Public Domain,KML/GIS download
+2e,QFaults ArcGIS Service,USGS,https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer,,Public Domain,ArcGIS service
+3,USGS 3DEP About,USGS NGP,https://www.usgs.gov/3d-elevation-program/about-3dep-products-services,,Public Domain,1m DEM info
+3b,3DEP Downloader,USGS,https://apps.nationalmap.gov/downloader/,,Public Domain,Data downloader
+3c,LidarExplorer,USGS,https://apps.nationalmap.gov/lidar-explorer/,,Public Domain,Lidar explorer
+3d,AWS Open Data Lidar,USGS,https://registry.opendata.aws/usgs-lidar/,,Public Domain,AWS bucket
+4,INGENIOUS GDR,GBCGE/DOE,https://gdr.openei.org/submissions/1391,10.15121/1881483,CC Publicly accessible,Regional dataset compilation
+4b,INGENIOUS DOI,GDR,https://doi.org/10.15121/1881483,10.15121/1881483,CC,DOI
+4c,INGENIOUS OSTI,OSTI,https://www.osti.gov/biblio/1881483,10.15121/1881483,CC,OSTI record
+4d,INGENIOUS Project Site,GBCGE,https://gbcge.org/current-projects/ingenious/,,CC,Project overview
+5,GBCGE Subsurface Explorer DOI,GBCGE,https://doi.org/10.15121/1987556,10.15121/1987556,Public,Subsurface DB
+5b,GBCGE OSTI,OSTI,https://www.osti.gov/dataexplorer/biblio/dataset/1987556,10.15121/1987556,Public,Explorer dataset
+6,Geothermal Favorability INGENIOUS,USGS,https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43,,Public,16 features favorability
+7,EarthMRI Portal,USGS,https://mrdata.usgs.gov/earthmri/,,Public Domain,EarthMRI data
+7b,EarthMRI Fact Sheet,USGS,https://pubs.usgs.gov/publication/fs20203055,10.3133/fs20203055,Public Domain,Overview
+8,Competition Main,DrivenData,https://www.drivendata.org/competitions/306/competition-doe-gems/,,Competition Rules,Main page
+8b,Problem Description,DrivenData,https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/,,Competition Rules,Problem description
+8c,About Page,DrivenData,https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/,,Competition Rules,About & resources
+8d,Data Tab,DrivenData,https://www.drivendata.org/competitions/306/competition-doe-gems/data/,,Competition Rules,Data download (login required)
+8e,Rules HeroX,HeroX,https://www.herox.com/GEMSPrize/resource/2274,,Competition Rules,Rules link
+8f,Official Rules PDF,NLR,https://www.nlr.gov/docs/fy26osti/96647.pdf,,Competition Rules,PDF rules
+8g,Reference Solution,DrivenData,https://github.com/drivendataorg/gems-prize-reference-solution,,MIT,Reference solution
+9,Matteo et al 2021,Journal,https://doi.org/10.1029/2020JB021269,10.1029/2020JB021269,Open Access,Automatic fault mapping deep learning
+10,Hermant et al 2025,Stanford,https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf,,Open Access,Deep learning Quaternary faults

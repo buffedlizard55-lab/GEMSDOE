@@ -1,0 +1,58 @@
+# GEMS Prize Challenge Config - Top Leaderboard Target
+data:
+  feature_path: "data/training_features.tif"  # fallback: data/numeric_features.tif
+  label_path: "data/labels.tif"
+  sample_submission_path: "data/sample_submission.tif"
+  dem_links_csv: "data/1m_DEM_links.csv"
+  external_dir: "data/external"
+  output_dir: "outputs"
+  # GeoDAWN external augment (optional)
+  use_external_dem: true
+  use_ingenious_extra: true
+
+training:
+  patch_size: 256
+  train_step: 32  # overlap for training patches
+  test_proportion: 0.3
+  mc_splits: 10
+  batch_size: 32
+  epochs: 50
+  init_lr: 1e-4
+  weight_decay: 1e-4
+  alpha: 0.2  # Tversky FP penalty
+  beta: 0.8   # Tversky FN penalty
+  early_stopping_patience: 7
+  num_workers: 4
+  seed: 42
+  good_channels: null  # null = all, or list e.g. [0,1,2,3]
+
+model:
+  architectures: ["unetplusplus", "deeplabv3plus", "segformer"]  # ensemble
+  encoder: "efficientnet-b5"  # for unetplusplus/deeplabv3plus
+  segformer_encoder: "mit_b2"
+  pretrained: true
+  in_channels: null  # auto from data
+  classes: 1
+
+inference:
+  overlap: 0.5
+  batch_size: 16
+  tta: true  # 8-way flips/rotations
+  threshold: 0.15  # low for recall, metric beta=0.8
+  blend_mode: "gaussian"
+  ensemble_weights: null  # equal if null
+
+postprocess:
+  skeletonize: false
+  frangi_filter: true
+  frangi_scale_range: [1, 10]
+  morphological_closing: true
+  closing_kernel: 3
+  min_fault_length: 5  # pixels
+
+metric:
+  R_meters: 300
+  resolution_m: 100
+  alpha: 0.2
+  beta: 0.8
+  epsilon: 1e-7

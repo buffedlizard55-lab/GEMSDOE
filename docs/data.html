@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Catalog — GEMSDOE</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>Data Catalog — Auditable</h1>
+    <p class="subtitle">All external data with official verified links for manual verification. No hallucinations.</p>
+    <div class="badges">
+      <span class="badge"><a href="index.html">← Back to Main</a></span>
+      <span class="badge"><a href="data_catalog.csv">CSV</a></span>
+      <span class="badge"><a href="data_catalog.json">JSON</a></span>
+      <span class="badge"><a href="references.md">Verification Log</a></span>
+    </div>
+  </div>
+</header>
+<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#data" class="active">Data Catalog</a></div></nav>
+<main class="container">
+  <section class="card">
+    <h2>Verified External Data — Official Links</h2>
+    <p>All public domain or CC, allowed per https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#external-datasets and PDF https://docs.nlr.gov/docs/fy26osti/96647.pdf</p>
+    <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>#</th><th>Dataset</th><th>Agency</th><th>Official Links</th><th>License</th><th>Use</th><th>Verified</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>GeoDAWN Mag & Radiometric</td><td>USGS</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase 657e1d85</a><br><a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">DOI P93LGLVQ</a><br><a href="https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and" target="_blank">USGS Overview</a></td><td>Public Domain</td><td>Primary geophysics</td><td>✅ web_search result id 3</td></tr>
+        <tr><td>2</td><td>Quaternary Fault & Fold DB</td><td>USGS</td><td><a href="https://www.usgs.gov/programs/earthquake-hazards/faults" target="_blank">Interactive Map</a><br><a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">ScienceBase QFaults</a><br><a href="https://doi.org/10.5066/P9BCVRCK" target="_blank">DOI P9BCVRCK</a><br><a href="https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files" target="_blank">KML</a><br><a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer" target="_blank">ArcGIS</a></td><td>Public Domain</td><td>Ground truth</td><td>✅ web_search id 2</td></tr>
+        <tr><td>3</td><td>3DEP 1m DEM</td><td>USGS NGP</td><td><a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">About</a><br><a href="https://apps.nationalmap.gov/downloader/" target="_blank">Downloader</a><br><a href="https://apps.nationalmap.gov/lidar-explorer/" target="_blank">LidarExplorer</a><br><a href="https://registry.opendata.aws/usgs-lidar/" target="_blank">AWS</a></td><td>Public Domain</td><td>Elevation, slope, TPI, TRI</td><td>✅ web_search</td></tr>
+        <tr><td>4</td><td>INGENIOUS Regional</td><td>GBCGE/DOE</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a><br><a href="https://doi.org/10.15121/1881483" target="_blank">DOI 1881483</a><br><a href="https://www.osti.gov/biblio/1881483" target="_blank">OSTI</a><br><a href="https://gbcge.org/current-projects/ingenious/" target="_blank">Project</a></td><td>CC Public</td><td>Conductivity, strain, gravity, quake density</td><td>✅ web_search id 1</td></tr>
+        <tr><td>5</td><td>GBCGE Subsurface DB</td><td>GBCGE</td><td><a href="https://doi.org/10.15121/1987556" target="_blank">DOI 1987556</a><br><a href="https://www.osti.gov/dataexplorer/biblio/dataset/1987556" target="_blank">OSTI Explorer</a></td><td>Public</td><td>Wells, springs</td><td>✅ web_search</td></tr>
+        <tr><td>6</td><td>Geothermal Favorability</td><td>USGS</td><td><a href="https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43" target="_blank">ScienceBase 66e88690</a></td><td>Public</td><td>16 ML features</td><td>✅ web_search</td></tr>
+        <tr><td>7</td><td>EarthMRI</td><td>USGS</td><td><a href="https://mrdata.usgs.gov/earthmri/" target="_blank">Portal</a><br><a href="https://pubs.usgs.gov/publication/fs20203055" target="_blank">FS 2020-3055</a></td><td>Public Domain</td><td>Critical mineral context</td><td>✅ web_search</td></tr>
+        <tr><td>8</td><td>Competition Official</td><td>DrivenData/DOE</td><td><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/" target="_blank">Main</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/" target="_blank">Problem Desc</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/" target="_blank">About</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/data/" target="_blank">Data (login)</a><br><a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">PDF Rules</a><br><a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">Ref Solution</a></td><td>Competition</td><td>Task</td><td>✅ fetch_page</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>Download: <a href="data_catalog.csv">CSV</a> | <a href="data_catalog.json">JSON</a></p>
+  </section>
+
+  <section class="card">
+    <h2>Provided Features — From Official Page</h2>
+    <p>Source: https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#provided-features — training_features.tif EPSG:32611 100m, plus 1m_DEM_links.csv</p>
+    <ul>
+      <li>Surface conductivity and depth to conductive base surface</li>
+      <li>Detrended elevation and slope of detrended elevation</li>
+      <li>Dilatation rate, shear strain rate, second invariant of strain rate tensor</li>
+      <li>Isostatic gravity anomaly and slope of isostatic gravity anomaly</li>
+      <li>Magnetics: reduced-to-pole anomaly, TMI, vertical & horizontal slope of TMI, top-of-crustal magnetic source depth estimate</li>
+      <li>Density of earthquakes</li>
+      <li>Plus 1m DEM links CSV</li>
+    </ul>
+    <p>Details: <a href="../FEATURES.md">FEATURES.md</a></p>
+  </section>
+
+  <div class="footer"><p><a href="index.html">← Back to Main</a></p></div>
+</main>
+</body>
+</html>
