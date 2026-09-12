@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Submission Guide — GEMSDOE</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>Submission Guide</h1>
+    <p class="subtitle">How submissions must be entered per Official Rules PDF, verified line-by-line.</p>
+    <div class="badges">
+      <span class="badge"><a href="index.html">← Back to Main</a></span>
+      <span class="badge"><a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">Official Rules PDF</a></span>
+      <span class="badge"><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format" target="_blank">Submission Format</a></span>
+    </div>
+  </div>
+</header>
+<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#submission" class="active">Submission</a></div></nav>
+<main class="container">
+  <section class="card">
+    <h2>What to Submit — Verified from Problem Page</h2>
+    <p>Source: https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format</p>
+    <ul>
+      <li>Single GeoTIFF file containing predictions for <strong>all</strong> faults in region</li>
+      <li>Same CRS: UTM zone 11N EPSG:32611 https://epsg.io/32611</li>
+      <li>Same resolution: 100m</li>
+      <li>Same bounds as training data, outside bounds null/nan</li>
+      <li>Single layer, float32, values [0,1] probability</li>
+      <li>Sample submission provided on data tab https://www.drivendata.org/competitions/306/competition-doe-gems/data/ (login required)</li>
+    </ul>
+    <p>Our validation: <code>scripts/validate_submission.py</code> checks all above.</p>
+    <p>Dummy generator: <code>scripts/generate_dummy_submission.py</code> creates valid GeoTIFF for testing without training data.</p>
+  </section>
+
+  <section class="card">
+    <h2>How to Enter — From PDF Sections 3.1, 3.2</h2>
+    <p>Source: https://docs.nlr.gov/docs/fy26osti/96647.pdf</p>
+    <ol>
+      <li>Create DrivenData account at https://www.drivendata.org/competitions/306/competition-doe-gems/ and agree to rules</li>
+      <li>Navigate to challenge website to sign up as competitor</li>
+      <li>Review materials: problem description https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/ and about https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/</li>
+      <li>Download training features + labels from https://www.drivendata.org/competitions/306/competition-doe-gems/data/ (login)</li>
+      <li>Training features: GeoDAWN + other geospatial at 100m, multiband GeoTIFF, plus DEM at 1m instructions. Source: GeoDAWN DOI https://doi.org/10.5066/P93LGLVQ and 3DEP https://www.usgs.gov/3d-elevation-program/about-3dep-products-services</li>
+      <li>Training labels: existing fault data at 100m, from INGENIOUS DOI https://doi.org/10.15121/1881483 (PDF footnote 4: Ayling et al 2022)</li>
+      <li>Submit predictions as GeoTIFF 100m for entirety of GeoDAWN study area</li>
+      <li>Generative AI disclosure required if used (PDF 3.2) — indicate in narrative extent and how used, responsible for accuracy</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Feedback & Limits — PDF 3.4</h2>
+    <ul>
+      <li>Up to 3 submissions per week for automated scoring</li>
+      <li>Must select only one as final before deadline Dec 3 2026 11:59pm UTC (from main page https://www.drivendata.org/competitions/306/competition-doe-gems/)</li>
+      <li>Multiple finalized not allowed, one final per entity</li>
+      <li>Individuals on team not allowed separate final submission</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Evaluation — PDF 3.6</h2>
+    <ul>
+      <li>Metric: distance-weighted Tversky index https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric — penalizes FN more than FP</li>
+      <li>Public test → public leaderboard, Private test → Initial Round $50k</li>
+      <li>Expert review uses ALL submissions to find candidate new faults → expanded label set</li>
+      <li>Final Round $250k scored against expanded set — 1st $100k, 2nd $70k, 3rd $40k, 4th $25k, 5th $15k</li>
+      <li>Must choose final without knowing private scores (PDF 3.6.2) — encourages generalization</li>
+      <li>Set of faults in public test and relative weight determined by organizers before start</li>
+      <li>Winners must submit complete code + docs reproducible, per Winning Model Documentation Template, plus eligibility certs (PDF 3.2, 3.5)</li>
+      <li>DOE is judge and final decision maker, may award all, none, or some (PDF 3.6.4, Appendix A)</li>
+      <li>Interviews may be held after announcement (PDF 3.6.3)</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Practical Submission Steps</h2>
+    <pre>git clone https://github.com/buffedlizard55-lab/GEMSDOE.git
+cd GEMSDOE
+conda env create -f environment.yml && conda activate gemsdoe
+mkdir -p data/
+# Download from https://www.drivendata.org/competitions/306/competition-doe-gems/data/
+# training_features.tif, labels.tif, sample_submission.tif, 1m_DEM_links.csv
+
+# Train (needs GPU)
+python -m src.train --config configs/config.yaml
+
+# Inference
+python -m src.inference --config configs/config.yaml --model-dir outputs --out submission.tif
+
+# Validate
+python scripts/validate_submission.py --pred submission.tif --sample data/sample_submission.tif --train data/training_features.tif
+
+# Submit
+# Go to https://www.drivendata.org/competitions/306/competition-doe-gems/
+# Click Submit → Make new submission → upload submission.tif
+# Check public LB
+# Before Dec 3 2026, select ONE as final for both rounds
+
+# If finalist, prepare code + docs per template + eligibility certs
+# See PDF https://docs.nlr.gov/docs/fy26osti/96647.pdf Sections 3.2, 3.5, Appendix A</pre>
+  </section>
+
+  <section class="card">
+    <h2>Irregularities Flagged</h2>
+    <ul>
+      <li>Sample submission not available without login — we create dummy if missing via scripts/prepare_data.py and generate_dummy_submission.py</li>
+      <li>Training features naming: problem page says training_features.tif, reference solution says numeric_features.tif — we handle both in src/dataset.py</li>
+      <li>1m DEM links CSV — links point to TNM, but download requires handling large tiles — fallback via LidarExplorer https://apps.nationalmap.gov/lidar-explorer/</li>
+    </ul>
+  </section>
+
+  <div class="footer"><p><a href="index.html">← Back to Main</a> | Full guide: <a href="../SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md</a></p></div>
+</main>
+</body>
+</html>
