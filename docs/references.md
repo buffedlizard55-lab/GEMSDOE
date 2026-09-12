@@ -102,3 +102,13 @@ Evidence standard used: a link is marked **VERIFIED** only if (a) fetched full-t
 - **Rules PDF FULLY READ:** docs.nlr.gov/docs/fy26osti/96647.pdf chunks 3, 4, 6 re-fetched → A.1 verbatim deadline ("5:00 p.m. ET on the prize submission deadline date... Late submissions... may be rejected"), A.2–A.5, A.13–A.17 captured verbatim; both hosts (www/docs.nlr.gov) verified serving identical September 2026 document. §3.4 "up to three per week" re-confirmed verbatim.
 - **Guo et al. Sci Rep (s41598-025-90823-5):** Publisher Correction confirmed on article page — doi 10.1038/s41598-025-99035-3, published 28 April 2025. Our recorded stats match the abstract (CART 0.993/0.988/0.994; CNN Val Acc 0.990, F1 0.736, Val Loss 0.025). Correction note added in SUGGESTIONS.md + docs/literature.md.
 - **Code verification:** src/metrics.py 6-property self-test passing (α/β asymmetry, R=3 kernel decay, NaN sanitize); src/losses.py smoke test on torch 2.14.0 (forward/backward finite, near-perfect loss ~0.0008, empty-target safe).
+
+## 8. Autonomous data acquisition + E2E pipeline proof — 2026-09-12 (final round)
+
+- Fresh egress matrix (curl, 22:09Z): only github.com/api.github.com/codeload.github.com + pypi hosts pass; raw/objects.githubusercontent, S3, Dropbox, HF all exit 35. Logged in LIMITATIONS §1c.
+- `gems.drivendata.org` fetched → redirects to canonical competition main page (same content).
+- GitHub search: repositories (4 queries) → only jklinck/geothermal_research relevant; code search on 5 distinctive competition filenames → 0 hits (no public mirror of official files — definitive).
+- jklinck/geothermal_research sparse-cloned (196 MB; commit 6dbf-length in provenance.json): GeoDAWN 22103 area1 13 rasters verified EPSG:32611 50 m (matches competition CRS); INGENIOUS faults shapefile 22,118 features EPSG:4269; eq density Albers-117 500 m → all SHA256'd in data/reconstructed/provenance.json.
+- Reconstructed dataset built: 16 bands float32 EPSG:32611 100 m 489×667; labels 1.42 % positive; zeros sample. Builder + provenance committed.
+- E2E run on configs/config_recon_cpu.yaml: train 14.9 s (loss 0.746→0.633), inference 5.5 s, validate_submission ✅ PASSED, DTI=0.0519 (vs constant 0.0524, perfect 1.0, zeros 0.0 — sane).
+- Real bugs found by running the code: PyYAML `1e-4`→str AdamW crash (fixed src/train.py + both configs); skimage Frangi API break silently disabled filter (fixed version-tolerant, verified line enhancement). Docs-vs-code discrepancies corrected (augmentation claim).

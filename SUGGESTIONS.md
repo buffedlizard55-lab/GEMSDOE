@@ -4,6 +4,12 @@
 
 **Sources:** All verified, no hallucinations, links for manual review in `docs/literature.md` and `docs/references.md`.
 
+## 0. Priority code fixes queued from E2E verification (2026-09-12)
+
+1. **Test-region leakage in `make_patches`** (src/dataset.py): training windows partially overlapping held-out test patches are kept; reference solution zeroes test regions GLOBALLY before patching. Fix: apply a global boolean test mask before sliding-window extraction. Priority HIGH (affects trust in local DTI).
+2. **Wire augmentation into training** (src/dataset.py FaultDataset / train loop): flips + 90° rotations minimum (matches TTA); RandomResizedCrop optional. Docs currently overstate this — flagged in docs/index.html.
+3. **Pretrained encoders**: unreachable from sandbox (release-asset host blocked). On unrestricted machines, `pretrained: true` in configs/config.yaml works; verify EfficientNet-B5/MIT-B2 weight integrity after download.
+4. **Seismicity band**: the reconstructed eq-density band (500 m Albers → 100 m) is coarser than the official earthquake-density band; treat as analog only.
 ## Based on Literature Review — 15 Improvements Implemented
 
 ### 1. Multi-source Information Fusion (Nature 2025)

@@ -260,7 +260,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
         <ul>
           <li><strong>Data:</strong> Robust percentile clipping (2-98%) + standardization, not just [0,1]. DEM augmentation: slope, curvature, TPI, TRI, detrended, hillshade from 3DEP via <code>src/external_data.py</code> (official source https://www.usgs.gov/3d-elevation-program/about-3dep-products-services)</li>
           <li><strong>Patches:</strong> 256px (larger context) + train_step 32 overlap, hard-negative mining (30% negatives kept)</li>
-          <li><strong>Aug:</strong> RandomResizedCrop 0.5-1.0, flips, rotations, elastic, Gaussian noise — via torchvision transforms</li>
+          <li><strong>Aug (planned — NOT yet wired into the train loop, flagged 2026-09-12):</strong> RandomResizedCrop 0.5-1.0, flips, rotations, elastic, Gaussian noise — <code>FaultDataset.transform</code> is currently a no-op placeholder</li>
           <li><strong>Models:</strong> Ensemble UNet++, DeepLabV3+, SegFormer with EfficientNet-B5 & MIT-B2 pretrained on ImageNet (via segmentation_models_pytorch)</li>
           <li><strong>Loss:</strong> BCE + Tversky + Focal Tversky combo matching metric α0.2 β0.8 — <code>src/losses.py</code></li>
           <li><strong>Train:</strong> 10 MC splits, 50 epochs, AdamW, ReduceLROnPlateau, early stopping on DTI, mixed precision — <code>src/train.py</code></li>
@@ -289,7 +289,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
   ↓ Validate: scripts/validate_submission.py checks CRS, res, bounds, dtype, range</pre>
 
     <h3>Why This Wins Final Round</h3>
-    <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review uses submitted predictions to update the fault-label set (per problem page + PDF 3.6.1) — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
+    <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review builds the expanded label set from "expert review of all submissions" (competition main page, verbatim — verified 2026-09-12; problem page + PDF 3.6.1 wording: uses submitted predictions) — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
 
     <h3>Expected Gains</h3>
     <table>
@@ -333,6 +333,7 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
 
   <section id="quickstart" class="card">
     <h2>8. Quickstart — End-to-End</h2>
+    <div class="alert info"><strong>End-to-end verified 2026-09-12 (CPU):</strong> the full chain train → inference → format validation → DTI scoring was executed on a reconstructed public-source dataset (<code>data/reconstructed/</code>, built by <code>scripts/build_reconstruction_dataset.py</code> from official USGS GeoDAWN + INGENIOUS sources because the official files are login/egress-gated here). <code>validate_submission.py</code> result: ✅ PASSED (EPSG:32611, 100 m, float32, [0,1], grid match). Two real bugs were found and fixed in the process (YAML <code>1e-4</code> string crash; scikit-image Frangi API silently disabled). Details: <a href="../data/README.md">data/README.md</a>, <a href="../LIMITATIONS.md">LIMITATIONS.md §1c–1e</a>.</div>
     <div class="grid">
       <div>
         <h3>Setup</h3>

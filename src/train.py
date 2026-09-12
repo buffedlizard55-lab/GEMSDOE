@@ -114,7 +114,7 @@ def main():
     mc_splits = cfg["training"]["mc_splits"]
     batch_size = cfg["training"]["batch_size"]
     epochs = cfg["training"]["epochs"]
-    lr = cfg["training"]["init_lr"]
+    lr = float(cfg["training"]["init_lr"])  # coerce: YAML parses 1e-4 as str (bug found in E2E test)
     alpha = cfg["training"]["alpha"]
     beta = cfg["training"]["beta"]
     R_pixels = cfg["metric"]["R_meters"] // cfg["metric"]["resolution_m"]
@@ -156,7 +156,7 @@ def main():
         model = model.to(device)
 
         criterion = CombinedLoss(alpha=alpha, beta=beta)
-        optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=cfg["training"]["weight_decay"])
+        optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=float(cfg["training"]["weight_decay"]))
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
 
         scaler = torch.cuda.amp.GradScaler() if device.type == "cuda" else None

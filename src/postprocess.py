@@ -23,11 +23,17 @@ def morphological_close(binary, kernel_size=3):
     return closing(binary, square(kernel_size))
 
 def frangi_enhance(pred, scale_range=(1,10), scale_step=2):
-    # pred in [0,1], frangi expects float
-    # Returns vesselness
+    """Vesselness via Frangi. Version-tolerant: scikit-image >=0.19 renamed
+    scale_range->sigmas and beta1/beta2->beta/gamma (old kwargs REMOVED in 0.21+
+    and previously failed silently here, disabling the filter)."""
+    import inspect
+    pred = np.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=0.0)
+    sigmas = np.arange(scale_range[0], scale_range[1] + 1, scale_step)
     try:
-        vessel = frangi(pred, scale_range=scale_range, scale_step=scale_step, beta1=0.5, beta2=15)
-        # Blend with original
+        if "sigmas" in inspect.signature(frangi).parameters:
+            vessel = frangi(pred, sigmas=sigmas, beta=0.5, gamma=15)
+        else:  # very old scikit-image
+            vessel = frangi(pred, scale_range=scale_range, scale_step=scale_step, beta1=0.5, beta2=15)
         enhanced = 0.6 * pred + 0.4 * vessel
         return np.clip(enhanced, 0, 1)
     except Exception as e:

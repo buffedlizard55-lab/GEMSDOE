@@ -767,5 +767,23 @@
       "path/filename project mismatches (canonical = filename project; S3-proven)",
       "PDF print host garbling (prdtnm / prd.tnm / prd- tnm)"
     ]
+  },
+  "sources": [
+    {
+      "id": "E30",
+      "name": "jklinck/geothermal_research",
+      "url": "https://github.com/jklinck/geothermal_research",
+      "verified": "2026-09-12",
+      "note": "Unofficial GitHub aggregator of official USGS GeoDAWN 22103-area1 rasters (EPSG:32611 50m), INGENIOUS regional quaternary faults shapefile (22,118 lines), dependent-earthquake rate-density GeoTIFF. Sparse-cloned (196MB, commit in provenance.json) into data/external/jklinck; used to build the reconstructed dataset. GitHub code search confirmed NO public mirror of the official competition files exists."
+    }
+  ],
+  "reconstructed_dataset_2026_09_12": {
+    "what": "Real public-source reconstruction (NOT official competition files) at data/reconstructed/",
+    "grid": "EPSG:32611, 100m, 489x667 px (16 bands float32 + binary labels + zeros sample)",
+    "e2e_proof": "train -> inference -> validate_submission PASSED -> DTI scored; 3-epoch CPU model ~= constant baseline (honest)",
+    "bugs_found_and_fixed": [
+      "PyYAML parses 1e-4 as string -> AdamW TypeError (coerced float in src/train.py + configs)",
+      "skimage frangi old kwargs silently disabled filter (version-tolerant call now)"
+    ]
   }
 }

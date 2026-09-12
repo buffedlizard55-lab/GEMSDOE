@@ -14,6 +14,38 @@ Irregularities found inside the competition DEM-links JSON (documented, S3-prove
 
 ---
 
+## Reconstructed public-source dataset (2026-09-12) — NOT official competition data
+
+`reconstructed/` holds a REAL (non-synthetic) dataset built from the official public sources the
+competition derives from, because the official files cannot enter this sandbox (egress allowlist;
+fresh curl matrix in LIMITATIONS.md §1). Builder: `scripts/build_reconstruction_dataset.py`;
+full provenance incl. SHA256 of every input: `reconstructed/provenance.json`.
+
+- `recon_training_features.tif` — 16 bands, float32, **EPSG:32611, 100 m**, 489×667 px
+  (GeoDAWN survey 22103 area1: dem, rtp, tmi, tmi_vg, tmi_hg, upcont_tmi150, tc, k, th, u, thk, uk, uth
+  + derived dem_detrended, dem_slope + INGENIOUS dependent-earthquake rate density; band→official-source
+  mapping inside the file tags and provenance.json)
+- `recon_labels.tif` — quaternary faults (INGENIOUS regional shapefile, 22,118 features) rasterized
+  at 100 m, all_touched; 1.42 % positive pixels
+- `recon_sample_submission.tif` — zeros (total fault absence format template)
+- Sources: github.com/jklinck/geothermal_research (unofficial aggregator of official USGS/INGENIOUS
+  data; underlying data USGS public domain, DOI 10.5066/P93LGLVQ / 10.5066/P9BCVRCK, INGENIOUS
+  DOI 10.15121/1881483). ⚠️ Repo carries no license — only the upstream-licensed DATA files were used.
+
+**Caveat (flagged):** different bands/processing/extent than the official competition files. Valid
+for pipeline verification and external-data pretraining; leaderboard submissions require the official
+data tab files.
+
+## End-to-end pipeline verification (2026-09-12, CPU)
+
+`configs/config_recon_cpu.yaml` on the reconstructed data: **train ✓ → inference ✓ →
+`validate_submission.py` ✅ PASSED (CRS/res/dtype/range/grid) → DTI scoring ✓**. Model after 3 CPU
+epochs ≈ constant baseline (DTI 0.052 vs 0.052) — plumbing proven, predictive power requires the
+full config + GPU + official data. Two real bugs found & fixed by this run: YAML `1e-4` parsed as
+string crashed AdamW (now coerced); skimage Frangi API change had silently disabled the filter.
+
+---
+
 # data/ — Competition Data Placement Guide
 
 All competition data requires **DriventData login + enrollment**: https://www.drivendata.org/competitions/306/competition-doe-gems/data/

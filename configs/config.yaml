@@ -17,8 +17,8 @@ training:
   mc_splits: 10
   batch_size: 32
   epochs: 50
-  init_lr: 1e-4
-  weight_decay: 1e-4
+  init_lr: 1.0e-4
+  weight_decay: 1.0e-4
   alpha: 0.2  # Tversky FP penalty
   beta: 0.8   # Tversky FN penalty
   early_stopping_patience: 7

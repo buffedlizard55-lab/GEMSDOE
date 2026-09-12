@@ -451,6 +451,8 @@
 
 ## 6. Our Implementation — How We Meet All Requirements
 
+- [ ] **END-TO-END VERIFIED 2026-09-12 (CPU, reconstructed public-source dataset):** train → inference → `validate_submission.py` ✅ PASSED → DTI scored. Official files remain login/egress-gated (see §8 item 6-8); reconstruction + proof details in `data/README.md`, `LIMITATIONS.md` §1c–1e, `docs/references.md` §8. Two latent bugs found & fixed by running the code (YAML float string crash; Frangi API break).
+
 - [ ] **Model training:** `src/train.py` — MC CV 10 splits, patch 256, train_step 32, batch 32, epochs 50, AdamW, early stopping on DTI, mixed precision, ensemble UNet++, DeepLabV3+, SegFormer with EfficientNet-B5 & MIT-B2 pretrained
 - [ ] **Loss matching metric:** `src/losses.py` — Tversky α0.2 β0.8 + Focal + BCE
 - [ ] **Metric exact reproduction:** `src/metrics.py` — distance-weighted Tversky R=300m triangular kernel; 2026-09-12 property self-test (`python src/metrics.py --self-test`): perfect→~1.0, empty→~0.0, FP-heavy 0.9434 > FN-heavy 0.4023 (α/β asymmetry confirmed), 1-2px-off stripe 0.0489 > 4-5px-off stripe 0.0 (R=3 kernel decay confirmed), NaN-sanitized, soft-prob mid-range. NaN sanitization added for spec-compliant padded submissions
@@ -494,6 +496,9 @@
 5. No official sample submission offline — we create dummy if missing
 6. Competition data mirrors (Dropbox, user-provided D5-D9): GEMS_96647.pdf identity-verified 2026-09-12 via platform fetcher (matches canonical NLR PDF); DEM-links PDF partially captured (chunk 1/13 — Dropbox st signature expired; 35 tiles extracted, 6 S3-verified vs prd-tnm.s3.amazonaws.com); the three GeoTIFFs remain un-fetched in sandbox (egress allowlist) — scripts/download_competition_data.sh provided. Original catalog wording (USER-PROVIDED) retained in docs/data_catalog.csv
 7. RESOLVED 2026-09-12: full rules PDF read across all 7 chunks (docs.nlr.gov, identical to canonical www.nlr.gov) — A.1-A.17 now summarized in §4 above. RESOLVED same day: A.1 exact deadline text confirmed (5:00 p.m. ET on the submission deadline date)
+8. Official competition GeoTIFFs have NO public mirror (GitHub code search on 5 distinctive filenames: 0 hits, 2026-09-12) and cannot enter the sandbox (egress matrix in LIMITATIONS §1c) — pipeline therefore E2E-verified on the RECONSTRUCTED public-source dataset (E30); leaderboard runs need the official files via scripts/download_competition_data.sh on an unrestricted machine
+9. Encoder pretrained weights (EfficientNet-B5/MIT-B2) not downloadable from sandbox (release-asset host blocked) — sandbox runs use pretrained:false; flagged in configs/config_recon_cpu.yaml
+10. make_patches keeps training windows partially overlapping test regions (mild CV leakage vs reference global zeroing) — flagged, fix queued in SUGGESTIONS §0.1; augmentation described in docs NOT yet wired into train loop — docs corrected 2026-09-12
 
 ---
 

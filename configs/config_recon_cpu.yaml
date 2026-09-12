@@ -1,0 +1,60 @@
+# CPU smoke-test config - trains/validates the FULL pipeline on the
+# RECONSTRUCTED public-source dataset (data/reconstructed/ - see
+# scripts/build_reconstruction_dataset.py). NOT for leaderboard submission;
+# the competition config remains configs/config.yaml.
+data:
+  feature_path: "data/reconstructed/recon_training_features.tif"
+  label_path: "data/reconstructed/recon_labels.tif"
+  sample_submission_path: "data/reconstructed/recon_sample_submission.tif"
+  dem_links_csv: "data/reconstructed/provenance.json"
+  external_dir: "data/external"
+  output_dir: "outputs_recon"
+  use_external_dem: false   # DEM derivatives already built into the stack
+  use_ingenious_extra: false
+
+training:
+  patch_size: 128
+  train_step: 64
+  test_proportion: 0.3
+  mc_splits: 1
+  batch_size: 8
+  epochs: 3
+  init_lr: 5.0e-4
+  weight_decay: 1.0e-4
+  alpha: 0.2
+  beta: 0.8
+  early_stopping_patience: 3
+  num_workers: 0
+  seed: 42
+  good_channels: null
+
+model:
+  architectures: ["unet"]   # single small arch for CPU smoke test
+  encoder: "mobilenet_v2"
+  segformer_encoder: "mit_b0"
+  pretrained: false         # encoder weight downloads are egress-blocked (flagged)
+  in_channels: null
+  classes: 1
+
+inference:
+  overlap: 0.5
+  batch_size: 8
+  tta: false                # 8-way TTA verified separately; off for CPU speed
+  threshold: 0.15
+  blend_mode: "gaussian"
+  ensemble_weights: null
+
+postprocess:
+  skeletonize: false
+  frangi_filter: true
+  frangi_scale_range: [1, 10]
+  morphological_closing: true
+  closing_kernel: 3
+  min_fault_length: 5
+
+metric:
+  R_meters: 300
+  resolution_m: 100
+  alpha: 0.2
+  beta: 0.8
+  epsilon: 1e-7
