@@ -1,3 +1,19 @@
+# data/ — Competition Data: ACQUISITION STATUS (updated 2026-09-12)
+
+| File | Status | Where |
+|---|---|---|
+| `1m_DEM_links` (JSON in PDF) | ✅ **PARTIALLY CAPTURED** (chunk 1/13; Dropbox `st` signature expired mid-fetch) — 35 unique DEM tile URLs extracted, 6 S3-verified (1,316 MB of tiles confirmed with exact sizes/ETags) | `data/dem_links.json`, evidence in `data/evidence/` |
+| `GEMS_96647.pdf` (rules mirror) | ✅ **IDENTITY VERIFIED** — fetched via platform; content matches canonical `https://www.nlr.gov/docs/fy26osti/96647.pdf` (not duplicated here; canonical already verified) | fetch log: `data/evidence/dropbox_fetch_log.md` |
+| `gems-geodawn-numerical-features.tif` | ❌ **NOT DOWNLOADED** — sandbox egress allowlist blocks Dropbox/S3; binary too large for text fetch | run `bash scripts/download_competition_data.sh` on any unrestricted machine |
+| `existing_faults.tif` (labels) | ❌ NOT DOWNLOADED — same | same |
+| `example_submission.tif` | ❌ NOT DOWNLOADED — same | same |
+
+DEM tile URLs point at the official USGS bucket `prd-tnm.s3.amazonaws.com` (projects `CA_SierraNevada_B22`, `NV_WestCentral_EarthMRI_2020_D20`, `NV_Humboldt_2021_D21`). The full authoritative tile list can be enumerated without the competition PDF: `python scripts/download_dem_tiles.py --complete-listing`.
+
+Irregularities found inside the competition DEM-links JSON (documented, S3-proven): duplicate rows (up to 5×), path/filename project mismatches (canonical URL uses the FILENAME project — the mismatched path variant returns key_count=0), garbled host variants in the PDF print (prdtnm / prd.tnm / prd- tnm).
+
+---
+
 # data/ — Competition Data Placement Guide
 
 All competition data requires **DriventData login + enrollment**: https://www.drivendata.org/competitions/306/competition-doe-gems/data/

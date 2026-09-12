@@ -83,3 +83,16 @@ Evidence standard used: a link is marked **VERIFIED** only if (a) fetched full-t
 1. **Competition data files** — need DrivenData login (C4). Mirror links (D5–D9) are user-provided from the data tab; sandbox TLS policy blocks Dropbox, so their contents were not independently fetched. Filenames differ across three official sources (problem page vs reference solution vs mirrors) — `src/dataset.py` and `scripts/prepare_data.py` handle all variants.
 2. **Band-by-band meaning of `gems-geodawn-numerical-features.tif`** — the exact band list/order will be read from the GeoTIFF's band descriptions once downloaded (`src/dataset.py` prints them); the problem page's prose list is the authoritative expectation.
 3. **Exact GeoDAWN processing provenance for the detrended-elevation band** — competition organizers' derivation not documented publicly; INGENIOUS DOI P9MQRCBY ("Elevation Trend and Detrended Elevation") is the closest official source.
+
+
+---
+
+## 6. Data acquisition round — 2026-09-12 (Dropbox mirrors of the data tab)
+
+- **Sandbox egress measured:** MITM proxy allowlist — `github.com`, `api.github.com`, `pypi.org`, `files.pythonhosted.org` return data; Dropbox / S3 / USGS complete TLS handshake then drop data (curl exit 000). Documented in `LIMITATIONS.md`.
+- **GEMS_96647.pdf (D5):** fetched via platform fetcher; redirect to `uc1e5a971f0f01d2561eedee33fc.dl.dropboxusercontent.com`; content identical to canonical NLR PDF (September 2026 header, TOC, sections). ✅ mirror identity check.
+- **Digital-elevation-model-links-JSON.pdf (D9):** partial capture — chunk 1/13 fetched (redirect to `uc5de62780fd99e55ec23e4ead7f.dl.dropboxusercontent.com`), then Dropbox `st` share signature expired (6 further attempts failed, with and without `st`). Verbatim evidence: `data/evidence/dem_links_pdf_chunk0.txt`. PDF title reveals original: `drivendata-prod.s3.amazonaws.com_data_3...2a849339558581222ae921a8e0314f2f03b959`.
+- **Extraction (mechanical, no transcription):** `scripts/build_dem_links.py` regex-parses the verbatim evidence → `data/dem_links.json` (35 unique tiles; 6 S3-verified; broken/truncated tokens resolved only via direct S3 checks; 1 genuinely unreconstructable fragment documented).
+- **Canonical URL rule proven by S3 ListObjectsV2:** filename-project path returns key_count=1 (with exact size/ETag); the competition JSON's mismatched CA-path variant returns key_count=0. Spot checks: x75y441_CA (238,657,987 B), x75y442_NV (208,488,258 B), x26y449_Humboldt (90,967,138 B), x27y443_NV (376,446,112 B), x24y442_CA (137,528,564 B), x27y430_NV (264,004,305 B).
+- **New verified source E29:** `prd-tnm.s3.amazonaws.com` staged-products listing (USGS TNM) — full tile enumeration available without the competition PDF via `scripts/download_dem_tiles.py --complete-listing`.
+- **Not acquired (sandbox):** the three competition GeoTIFFs — binary + egress block. `scripts/download_competition_data.sh` fetches them (Dropbox durable `rlkey&dl=1` form) and copies to canonical names.

@@ -84,3 +84,7 @@ All shareable with sponsor.
 - No synthetic fault data invented.
 - File names `training_features.tif`, `1m_DEM_links.csv` from official problem page.
 - Reference solution naming drift (`numeric_features.tif` vs `training_features.tif`) flagged as irregularity.
+
+### 1c. Dropbox mirror fetch notes (2026-09-12)
+- Dropbox `scl/fi` links carry a short-lived `st` signature; it expired mid-capture of `Digital-elevation-model-links-JSON.pdf` (chunk 1/13 fetched, rest failed). The durable form is `rlkey` + `dl=1` (used in `scripts/download_competition_data.sh`).
+- DEM tiles are ~90-380 MB each; the full 3-project list is tens of GB — download on a machine with disk headroom (`scripts/download_dem_tiles.py`).

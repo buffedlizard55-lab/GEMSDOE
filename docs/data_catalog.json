@@ -4,7 +4,10 @@
     "purpose": "Auditable catalog of every data and literature source used, with official verified links for manual review. One entry per source. Verification performed autonomously on 2026-09-12 via platform-side fetch_page and web_search (sandbox has no direct TLS to external hosts - see LIMITATIONS.md).",
     "verification_date": "2026-09-12",
     "no_hallucinations_statement": "Every link below was either fetched directly (fetch_page), git-cloned, hit via web_search results with matching title/content, or is explicitly marked USER-PROVIDED / LINKED-FROM-OFFICIAL-PAGE / REMOVED. Nothing is asserted without one of these evidence types.",
-    "companion_files": ["docs/data_catalog.csv", "docs/references.md"]
+    "companion_files": [
+      "docs/data_catalog.csv",
+      "docs/references.md"
+    ]
   },
   "competition_official": [
     {
@@ -13,7 +16,16 @@
       "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/",
       "verified": true,
       "method": "fetch_page",
-      "facts": ["End date Dec 3, 2026 11:59 p.m. UTC", "Total prize pool $300,000", "Initial round: top 5 on private test set, $10,000 each", "Final round: $100k/$70k/$40k/$25k/$15k on expanded label set", "Eligibility: individuals must be U.S. citizens or permanent residents; team captain U.S. citizen/PR", "Sponsor: DOE Office of Geothermal with support from National Lab of the Rockies (NLR)", "Contact: gemsprize@nlr.gov", "3 key rules highlighted: eligibility, use of test data, use of external data"]
+      "facts": [
+        "End date Dec 3, 2026 11:59 p.m. UTC",
+        "Total prize pool $300,000",
+        "Initial round: top 5 on private test set, $10,000 each",
+        "Final round: $100k/$70k/$40k/$25k/$15k on expanded label set",
+        "Eligibility: individuals must be U.S. citizens or permanent residents; team captain U.S. citizen/PR",
+        "Sponsor: DOE Office of Geothermal with support from National Lab of the Rockies (NLR)",
+        "Contact: gemsprize@nlr.gov",
+        "3 key rules highlighted: eligibility, use of test data, use of external data"
+      ]
     },
     {
       "id": "C2",
@@ -21,7 +33,15 @@
       "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/",
       "verified": true,
       "method": "fetch_page",
-      "facts": ["Task: predict geological faults in GeoDAWN region", "Metric: distance-weighted Tversky index, triangular kernel k(d)=max(1-d/300m,0), alpha=0.2 (FP), beta=0.8 (FN)", "Submission: single-layer float32 GeoTIFF, [0,1], EPSG:32611, 100m, same bounds as training data, NaN outside", "training_features.tif bands: surface conductivity + depth to conductive base; detrended elevation + slope; dilatation/shear strain/second invariant of strain rate; isostatic gravity anomaly + slope; RTP magnetic anomaly, TMI, vertical+horizontal slope of TMI, top-of-crustal magnetic source depth; earthquake density", "1m_DEM_links.csv provided for 1m DEM", "Labels from USGS quaternary fault maps and INGENIOUS, vector + raster", "External data allowed with license permitting use and sharing with sponsor"]
+      "facts": [
+        "Task: predict geological faults in GeoDAWN region",
+        "Metric: distance-weighted Tversky index, triangular kernel k(d)=max(1-d/300m,0), alpha=0.2 (FP), beta=0.8 (FN)",
+        "Submission: single-layer float32 GeoTIFF, [0,1], EPSG:32611, 100m, same bounds as training data, NaN outside",
+        "training_features.tif bands: surface conductivity + depth to conductive base; detrended elevation + slope; dilatation/shear strain/second invariant of strain rate; isostatic gravity anomaly + slope; RTP magnetic anomaly, TMI, vertical+horizontal slope of TMI, top-of-crustal magnetic source depth; earthquake density",
+        "1m_DEM_links.csv provided for 1m DEM",
+        "Labels from USGS quaternary fault maps and INGENIOUS, vector + raster",
+        "External data allowed with license permitting use and sharing with sponsor"
+      ]
     },
     {
       "id": "C3",
@@ -29,7 +49,12 @@
       "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/",
       "verified": true,
       "method": "fetch_page",
-      "facts": ["GeoDAWN = USGS+DOE airborne magnetic/radiometric over N/W Nevada and E California, under EarthMRI with DOE Office of Geothermal support", "Coordinated 3DEP airborne lidar", "Fault detection background and methods", "Recommended reading: Matteo et al 2021 (doi:10.1029/2020JB021269) and Hermant et al 2025 (Stanford SGW)"]
+      "facts": [
+        "GeoDAWN = USGS+DOE airborne magnetic/radiometric over N/W Nevada and E California, under EarthMRI with DOE Office of Geothermal support",
+        "Coordinated 3DEP airborne lidar",
+        "Fault detection background and methods",
+        "Recommended reading: Matteo et al 2021 (doi:10.1029/2020JB021269) and Hermant et al 2025 (Stanford SGW)"
+      ]
     },
     {
       "id": "C4",
@@ -45,7 +70,9 @@
       "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/rules/",
       "verified": true,
       "method": "fetch_page",
-      "facts": ["Single sentence pointing to https://www.herox.com/GEMSPrize/resource/2274"]
+      "facts": [
+        "Single sentence pointing to https://www.herox.com/GEMSPrize/resource/2274"
+      ]
     },
     {
       "id": "C6",
@@ -53,7 +80,10 @@
       "url": "https://www.herox.com/GEMSPrize/resource/2274",
       "verified": true,
       "method": "fetch_page",
-      "facts": ["Page titled 'GEMS Prize Official Rules'", "Links to https://www.nlr.gov/docs/fy26osti/96647.pdf"]
+      "facts": [
+        "Page titled 'GEMS Prize Official Rules'",
+        "Links to https://www.nlr.gov/docs/fy26osti/96647.pdf"
+      ]
     },
     {
       "id": "C7",
@@ -61,7 +91,21 @@
       "url": "https://www.nlr.gov/docs/fy26osti/96647.pdf",
       "verified": true,
       "method": "fetch_page (7 chunks)",
-      "facts": ["Governed by 15 U.S.C. 3719; not a procurement or grant", "1.1: two phases; Phase 1 $50,000 split equally among top 5 on private test set; Phase 2 $250,000 = $100k/$70k/$40k/$25k/$15k on updated label set", "1.3: individual competitors must be U.S. citizens or permanent residents; team captains U.S. citizen/PR; FFRDC researchers may compete individually (honorable mention only, no cash); federal employees and DOE-affiliated persons ineligible; FCOC/MFTRP restrictions", "1.4: prize goals including commercialization intent statement", "3.2: register on DrivenData; single GeoTIFF single raster layer 100m for entire GeoDAWN area; up to three submissions per week; must indicate generative-AI use in narrative", "3.3: training labels contain existing fault data obtained from INGENIOUS project Great Basin Regional Dataset Compilation (footnote 4: Ayling et al. 2022, doi:10.15121/1881483); features footnote 3: Glen & Earney 2024 GeoDAWN doi:10.5066/P93LGLVQ", "3.4: up to 3 submissions/week; choose exactly ONE final submission", "3.5: one submission scored across both prize rounds; complete code assets + documentation consistent with DrivenData Winning Model Documentation Template", "3.6.1: public/private split of ground truth; public shown on leaderboard", "3.6.2: choose single submission without knowledge of private scores", "3.6.5: winner notification ~60 days after close", "A.1: submit by 5:00 p.m. ET on deadline; English; certification under penalty of perjury", "A.2: ACH + IRS W-9 within 30 days of notice"]
+      "facts": [
+        "Governed by 15 U.S.C. 3719; not a procurement or grant",
+        "1.1: two phases; Phase 1 $50,000 split equally among top 5 on private test set; Phase 2 $250,000 = $100k/$70k/$40k/$25k/$15k on updated label set",
+        "1.3: individual competitors must be U.S. citizens or permanent residents; team captains U.S. citizen/PR; FFRDC researchers may compete individually (honorable mention only, no cash); federal employees and DOE-affiliated persons ineligible; FCOC/MFTRP restrictions",
+        "1.4: prize goals including commercialization intent statement",
+        "3.2: register on DrivenData; single GeoTIFF single raster layer 100m for entire GeoDAWN area; up to three submissions per week; must indicate generative-AI use in narrative",
+        "3.3: training labels contain existing fault data obtained from INGENIOUS project Great Basin Regional Dataset Compilation (footnote 4: Ayling et al. 2022, doi:10.15121/1881483); features footnote 3: Glen & Earney 2024 GeoDAWN doi:10.5066/P93LGLVQ",
+        "3.4: up to 3 submissions/week; choose exactly ONE final submission",
+        "3.5: one submission scored across both prize rounds; complete code assets + documentation consistent with DrivenData Winning Model Documentation Template",
+        "3.6.1: public/private split of ground truth; public shown on leaderboard",
+        "3.6.2: choose single submission without knowledge of private scores",
+        "3.6.5: winner notification ~60 days after close",
+        "A.1: submit by 5:00 p.m. ET on deadline; English; certification under penalty of perjury",
+        "A.2: ACH + IRS W-9 within 30 days of notice"
+      ]
     },
     {
       "id": "C8",
@@ -69,7 +113,14 @@
       "url": "https://github.com/drivendataorg/gems-prize-reference-solution",
       "verified": true,
       "method": "git clone + inspection",
-      "facts": ["Author: John Lipor (Portland State)", "Notebook: unet-mc-cv-reference-solution.ipynb", "Uses data/numeric_features.tif and data/labels.tif", "segmentation_models_pytorch U-Net; MC=5 splits; patch_size=128; test_proportion=0.5; batch 32; epochs 5; init_lr 1e-4; Tversky alpha 0.2 beta 0.8", "patchify helpers adapted from patchify.py (MIT)", "Output: predicted_faults_example.tif with CRS/transform from labels"]
+      "facts": [
+        "Author: John Lipor (Portland State)",
+        "Notebook: unet-mc-cv-reference-solution.ipynb",
+        "Uses data/numeric_features.tif and data/labels.tif",
+        "segmentation_models_pytorch U-Net; MC=5 splits; patch_size=128; test_proportion=0.5; batch 32; epochs 5; init_lr 1e-4; Tversky alpha 0.2 beta 0.8",
+        "patchify helpers adapted from patchify.py (MIT)",
+        "Output: predicted_faults_example.tif with CRS/transform from labels"
+      ]
     }
   ],
   "competition_data_mirrors": [
@@ -119,7 +170,9 @@
       "id": "E1",
       "name": "GeoDAWN: Airborne magnetic and radiometric surveys of the northwestern Great Basin (ScienceBase folder)",
       "agency": "USGS",
-      "urls": ["https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7"],
+      "urls": [
+        "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7"
+      ],
       "doi": "10.5066/P93LGLVQ",
       "license": "CC0 1.0 Universal (stated on USGS overview page E2)",
       "citation": "Glen, J.M.G., and Earney, T.E., 2024, GeoDAWN: Airborne magnetic and radiometric surveys of the northwestern Great Basin, Nevada and California: U.S. Geological Survey data release",
@@ -154,7 +207,14 @@
         "22103_spec_a2_gdb.zip": "2.96 GB",
         "22103_spec_a1_csv.zip": "49.14 MB"
       },
-      "survey_facts": ["149,030 line-km total over 51,857 sq km", "Four acquisition blocks: Winnemucca, Fallon, Hawthorne, Tonopah", "Area 1 (Clayton Valley, Li focus): 200 m line spacing, 100-150 m drape", "Area 2 (geothermal focus): 400 m line spacing, 150-200 m drape", "Contractor EDCON-PRJ Inc., Nov 1 2021 - Nov 20 2022", "Under EarthMRI with DOE Geothermal Technologies Office support; coordinated 3DEP lidar"],
+      "survey_facts": [
+        "149,030 line-km total over 51,857 sq km",
+        "Four acquisition blocks: Winnemucca, Fallon, Hawthorne, Tonopah",
+        "Area 1 (Clayton Valley, Li focus): 200 m line spacing, 100-150 m drape",
+        "Area 2 (geothermal focus): 400 m line spacing, 150-200 m drape",
+        "Contractor EDCON-PRJ Inc., Nov 1 2021 - Nov 20 2022",
+        "Under EarthMRI with DOE Geothermal Technologies Office support; coordinated 3DEP lidar"
+      ],
       "verified": true,
       "method": "fetch_page (2 chunks)"
     },
@@ -162,7 +222,9 @@
       "id": "E2",
       "name": "GeoDAWN USGS overview page",
       "agency": "USGS",
-      "urls": ["https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and"],
+      "urls": [
+        "https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and"
+      ],
       "doi": "10.5066/P93LGLVQ",
       "license": "CC0 1.0 Universal",
       "verified": true,
@@ -172,12 +234,23 @@
       "id": "E4",
       "name": "USGS Quaternary Fault and Fold Database of the United States (ScienceBase)",
       "agency": "USGS Earthquake Hazards",
-      "urls": ["https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23"],
+      "urls": [
+        "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23"
+      ],
       "doi": "10.5066/P9BCVRCK",
       "license": "Public Domain (USGS)",
       "citation": "U.S. Geological Survey, 2020, Quaternary Fault and Fold Database for the Nation",
-      "files_verified": {"Change_Log.txt": "3.23 KB", "qfaults.kmz": "18.97 MB", "Qfaults_GIS.zip": "30.87 MB"},
-      "related_verified": ["https://www.usgs.gov/programs/earthquake-hazards/faults (Q Faults Web Page)", "https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer (ArcGIS service)", "https://doi.org/10.5066/F7S75FJM (Interactive Fault Map)", "https://pubs.usgs.gov/fs/2004/3033/FS2004-3033.pdf (fact sheet)"],
+      "files_verified": {
+        "Change_Log.txt": "3.23 KB",
+        "qfaults.kmz": "18.97 MB",
+        "Qfaults_GIS.zip": "30.87 MB"
+      },
+      "related_verified": [
+        "https://www.usgs.gov/programs/earthquake-hazards/faults (Q Faults Web Page)",
+        "https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer (ArcGIS service)",
+        "https://doi.org/10.5066/F7S75FJM (Interactive Fault Map)",
+        "https://pubs.usgs.gov/fs/2004/3033/FS2004-3033.pdf (fact sheet)"
+      ],
       "relevance": "Origin of training fault labels (per competition problem page, with INGENIOUS)",
       "verified": true,
       "method": "fetch_page"
@@ -186,7 +259,9 @@
       "id": "E7",
       "name": "USGS FAQ - US fault map in GIS/KML",
       "agency": "USGS",
-      "urls": ["https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format"],
+      "urls": [
+        "https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format"
+      ],
       "license": "Public Domain",
       "verified": true,
       "method": "web_search (FAQ text confirms KML + GIS shapefiles available from QFaults site)"
@@ -195,7 +270,9 @@
       "id": "E8",
       "name": "3DEP products and services (about)",
       "agency": "USGS National Geospatial Program",
-      "urls": ["https://www.usgs.gov/3d-elevation-program/about-3dep-products-services"],
+      "urls": [
+        "https://www.usgs.gov/3d-elevation-program/about-3dep-products-services"
+      ],
       "license": "Public Domain - 'All 3DEP products are available, free of charge and without use restrictions'",
       "verified": true,
       "method": "fetch_page"
@@ -204,7 +281,9 @@
       "id": "E9",
       "name": "The National Map Downloader",
       "agency": "USGS NGP",
-      "urls": ["https://apps.nationalmap.gov/downloader/"],
+      "urls": [
+        "https://apps.nationalmap.gov/downloader/"
+      ],
       "license": "Public Domain",
       "verified": true,
       "method": "web_search (USGS media/FAQ pages confirm URL)"
@@ -213,7 +292,10 @@
       "id": "E10",
       "name": "3DEP LidarExplorer",
       "agency": "USGS NGP",
-      "urls": ["https://apps.nationalmap.gov/lidar-explorer/", "https://www.usgs.gov/NationalMap/LidarExplorer"],
+      "urls": [
+        "https://apps.nationalmap.gov/lidar-explorer/",
+        "https://www.usgs.gov/NationalMap/LidarExplorer"
+      ],
       "license": "Public Domain",
       "verified": true,
       "method": "web_search + 3DEP page quick links"
@@ -222,22 +304,46 @@
       "id": "E11",
       "name": "USGS 3DEP LiDAR point clouds (AWS Open Data)",
       "agency": "Hobu Inc. / USGS",
-      "urls": ["https://registry.opendata.aws/usgs-lidar/"],
+      "urls": [
+        "https://registry.opendata.aws/usgs-lidar/"
+      ],
       "license": "US Government Public Domain",
       "verified": true,
       "method": "fetch_page",
-      "facts": ["s3://usgs-lidar-public (free EPT, no-sign-request)", "s3://usgs-lidar (requester-pays raw LAZ 1.4)"]
+      "facts": [
+        "s3://usgs-lidar-public (free EPT, no-sign-request)",
+        "s3://usgs-lidar (requester-pays raw LAZ 1.4)"
+      ]
     },
     {
       "id": "E12",
       "name": "INGENIOUS - Great Basin Regional Dataset Compilation (GDR 1391)",
       "agency": "GBCGE, NBMG, UNR (Ayling et al., 30 June 2022)",
-      "urls": ["https://gdr.openei.org/submissions/1391"],
+      "urls": [
+        "https://gdr.openei.org/submissions/1391"
+      ],
       "doi": "10.15121/1881483",
       "license": "CC BY 4.0 (badge on GDR page)",
       "relevance": "Competition training labels (per rules PDF 3.3 footnote 4) and source of several feature layers",
       "download_size": "116.98 MB across 9 files",
-      "resources_verified": ["2m Temperature Probes.zip (1.03 MB)", "Earthquake Density Models.zip (22.98 MB)", "Electrical Conductance Maps - MT (view DOI 10.5066/P9TWT2LU)", "Elevation Trend and Detrended Elevation (view DOI 10.5066/P9MQRCBY)", "Geodetic Shear and Dilation Models.zip (51.99 MB)", "Geophysical Maps - Gravity and Magnetics (view DOI 10.5066/P9Z6SA1Z)", "Heat Flow Maps (view DOI 10.5066/P9BZPVUC)", "INGENIOUS Project Site (https://gbcge.org/current-projects/ingenious/)", "Paleo Geothermal Features.zip (82.04 kB)", "Quaternary Faulting Slip and Dilation Tendency (view DOI 10.5066/P9YL58W6)", "Quaternary Faults v1.zip (5.76 MB)", "Quaternary Faults v2.zip (5.85 MB, supersedes v1)", "Quaternary Volcanics.zip (9.44 MB)", "Study Area Boundary.zip (6.68 kB)", "Thermal Conductivity (linked dataset https://gdr.openei.org/submissions/1390)", "Well and Spring Temperature and Chemistry.zip (19.85 MB)"],
+      "resources_verified": [
+        "2m Temperature Probes.zip (1.03 MB)",
+        "Earthquake Density Models.zip (22.98 MB)",
+        "Electrical Conductance Maps - MT (view DOI 10.5066/P9TWT2LU)",
+        "Elevation Trend and Detrended Elevation (view DOI 10.5066/P9MQRCBY)",
+        "Geodetic Shear and Dilation Models.zip (51.99 MB)",
+        "Geophysical Maps - Gravity and Magnetics (view DOI 10.5066/P9Z6SA1Z)",
+        "Heat Flow Maps (view DOI 10.5066/P9BZPVUC)",
+        "INGENIOUS Project Site (https://gbcge.org/current-projects/ingenious/)",
+        "Paleo Geothermal Features.zip (82.04 kB)",
+        "Quaternary Faulting Slip and Dilation Tendency (view DOI 10.5066/P9YL58W6)",
+        "Quaternary Faults v1.zip (5.76 MB)",
+        "Quaternary Faults v2.zip (5.85 MB, supersedes v1)",
+        "Quaternary Volcanics.zip (9.44 MB)",
+        "Study Area Boundary.zip (6.68 kB)",
+        "Thermal Conductivity (linked dataset https://gdr.openei.org/submissions/1390)",
+        "Well and Spring Temperature and Chemistry.zip (19.85 MB)"
+      ],
       "verified": true,
       "method": "fetch_page"
     },
@@ -245,18 +351,24 @@
       "id": "E14",
       "name": "INGENIOUS OSTI record",
       "agency": "OSTI",
-      "urls": ["https://www.osti.gov/biblio/1881483"],
+      "urls": [
+        "https://www.osti.gov/biblio/1881483"
+      ],
       "doi": "10.15121/1881483",
       "license": "CC BY 4.0",
       "verified": true,
       "method": "fetch_page",
-      "facts": ["23 authors: Ayling, Faulds, Morales Rivera, Koehler, Kreemer, Mlawsky, Coolbaugh, Micander, dePolo, Kraal, Wagoner, Siler, DeAngelo, Glen, Peacock, Batir, Gentry, Berti, Lifton, Clark, Kirby, Hardwick, Kleber - matches official rules PDF footnote 4"]
+      "facts": [
+        "23 authors: Ayling, Faulds, Morales Rivera, Koehler, Kreemer, Mlawsky, Coolbaugh, Micander, dePolo, Kraal, Wagoner, Siler, DeAngelo, Glen, Peacock, Batir, Gentry, Berti, Lifton, Clark, Kirby, Hardwick, Kleber - matches official rules PDF footnote 4"
+      ]
     },
     {
       "id": "E16",
       "name": "INGENIOUS sub-dataset: Electrical Conductance Maps - MT",
       "agency": "USGS via GDR 1391",
-      "urls": ["https://doi.org/10.5066/P9TWT2LU"],
+      "urls": [
+        "https://doi.org/10.5066/P9TWT2LU"
+      ],
       "doi": "10.5066/P9TWT2LU",
       "license": "Public Domain (USGS)",
       "verified": true,
@@ -266,7 +378,9 @@
       "id": "E17",
       "name": "INGENIOUS sub-dataset: Elevation Trend and Detrended Elevation",
       "agency": "USGS via GDR 1391",
-      "urls": ["https://doi.org/10.5066/P9MQRCBY"],
+      "urls": [
+        "https://doi.org/10.5066/P9MQRCBY"
+      ],
       "doi": "10.5066/P9MQRCBY",
       "license": "Public Domain (USGS)",
       "verified": true,
@@ -276,7 +390,9 @@
       "id": "E18",
       "name": "INGENIOUS sub-dataset: Geophysical Maps - Gravity and Magnetics",
       "agency": "USGS via GDR 1391",
-      "urls": ["https://doi.org/10.5066/P9Z6SA1Z"],
+      "urls": [
+        "https://doi.org/10.5066/P9Z6SA1Z"
+      ],
       "doi": "10.5066/P9Z6SA1Z",
       "license": "Public Domain (USGS)",
       "verified": true,
@@ -286,7 +402,9 @@
       "id": "E19",
       "name": "INGENIOUS sub-dataset: Heat Flow Maps",
       "agency": "USGS via GDR 1391",
-      "urls": ["https://doi.org/10.5066/P9BZPVUC"],
+      "urls": [
+        "https://doi.org/10.5066/P9BZPVUC"
+      ],
       "doi": "10.5066/P9BZPVUC",
       "license": "Public Domain (USGS)",
       "verified": true,
@@ -296,7 +414,9 @@
       "id": "E20",
       "name": "INGENIOUS sub-dataset: Quaternary Faulting Slip and Dilation Tendency",
       "agency": "USGS via GDR 1391",
-      "urls": ["https://doi.org/10.5066/P9YL58W6"],
+      "urls": [
+        "https://doi.org/10.5066/P9YL58W6"
+      ],
       "doi": "10.5066/P9YL58W6",
       "license": "Public Domain (USGS)",
       "verified": true,
@@ -306,7 +426,9 @@
       "id": "E21",
       "name": "INGENIOUS Thermal Conductivity (GDR 1390)",
       "agency": "GBCGE/SMU",
-      "urls": ["https://gdr.openei.org/submissions/1390"],
+      "urls": [
+        "https://gdr.openei.org/submissions/1390"
+      ],
       "license": "CC (see GDR page)",
       "verified": true,
       "method": "linked-from-GDR-1391"
@@ -315,7 +437,10 @@
       "id": "E22",
       "name": "GBCGE Subsurface Database Explorer and APIs",
       "agency": "GBCGE (Mlawsky & Ayling, 2020-03-15)",
-      "urls": ["https://www.osti.gov/dataexplorer/biblio/dataset/1987556", "https://doi.org/10.15121/1987556"],
+      "urls": [
+        "https://www.osti.gov/dataexplorer/biblio/dataset/1987556",
+        "https://doi.org/10.15121/1987556"
+      ],
       "doi": "10.15121/1987556",
       "license": "Public (per OSTI record)",
       "verified": true,
@@ -325,11 +450,18 @@
       "id": "E23",
       "name": "Geothermal resource favorability: features and predictions (Great Basin)",
       "agency": "USGS (Mordensky & DeAngelo, 2025-08-26)",
-      "urls": ["https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43", "https://doi.org/10.5066/P14EET2C"],
+      "urls": [
+        "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43",
+        "https://doi.org/10.5066/P14EET2C"
+      ],
       "doi": "10.5066/P14EET2C",
       "license": "Public (USGS release)",
       "companion_paper_doi": "10.1016/j.geothermics.2025.103450 (Mordensky, Burns, Lipor, DeAngelo 2025, Geothermics 133, 103450)",
-      "facts": ["Point data for 16 input features + favorability percentiles P05-P95 from 1,200 realizations", "Attached zip 1.22 GB", "Note: reference-solution author John Lipor is co-author of companion paper"],
+      "facts": [
+        "Point data for 16 input features + favorability percentiles P05-P95 from 1,200 realizations",
+        "Attached zip 1.22 GB",
+        "Note: reference-solution author John Lipor is co-author of companion paper"
+      ],
       "verified": true,
       "method": "fetch_page"
     },
@@ -337,7 +469,9 @@
       "id": "E24",
       "name": "EarthMRI geoscience data portal",
       "agency": "USGS Mineral Resources",
-      "urls": ["https://mrdata.usgs.gov/earthmri/"],
+      "urls": [
+        "https://mrdata.usgs.gov/earthmri/"
+      ],
       "license": "Public Domain",
       "verified": true,
       "method": "fetch_page"
@@ -346,7 +480,9 @@
       "id": "E25",
       "name": "EarthMRI technical overview (Day, W., 2020, FS 2020-3055)",
       "agency": "USGS",
-      "urls": ["https://pubs.usgs.gov/publication/fs20203055"],
+      "urls": [
+        "https://pubs.usgs.gov/publication/fs20203055"
+      ],
       "doi": "10.3133/fs20203055",
       "license": "Public Domain",
       "verified": true,
@@ -356,9 +492,15 @@
       "id": "E26",
       "name": "Isostatic residual gravity anomaly grid (conterminous US)",
       "agency": "USGS (Kucks, R.P., 1999)",
-      "urls": ["https://mrdata.usgs.gov/metadata/usgraviso.html", "https://mrdata.usgs.gov/gravity/isostatic/"],
+      "urls": [
+        "https://mrdata.usgs.gov/metadata/usgraviso.html",
+        "https://mrdata.usgs.gov/gravity/isostatic/"
+      ],
       "license": "Public Domain (Access_Constraints: None, Use_Constraints: None)",
-      "facts": ["Bouguer reduction density 2.67 g/cc; ~1M onshore + ~800k offshore values", "usgraviso.faq.html previously cited - replaced with verified metadata page usgraviso.html"],
+      "facts": [
+        "Bouguer reduction density 2.67 g/cc; ~1M onshore + ~800k offshore values",
+        "usgraviso.faq.html previously cited - replaced with verified metadata page usgraviso.html"
+      ],
       "verified": true,
       "method": "web_search"
     },
@@ -366,38 +508,264 @@
       "id": "E28",
       "name": "Geosoft Viewer (free reader for GeoDAWN .grd/.map/.gdb)",
       "agency": "Seequent",
-      "urls": ["https://www.seequent.com/"],
+      "urls": [
+        "https://www.seequent.com/"
+      ],
       "license": "Proprietary freeware viewer",
       "verified": true,
       "method": "named-in-ScienceBase-summary ('free downloadable Geosoft Viewer available at https://www.seequent.com/')"
     }
   ],
   "literature_verified": [
-    {"id": "L1", "name": "Matteo et al 2021, Automatic fault mapping in remote optical images and topographic data with deep learning, JGR Solid Earth 126, e2020JB021269", "url": "https://doi.org/10.1029/2020JB021269", "doi": "10.1029/2020JB021269", "verified": true, "method": "listed-on-competition-about-page"},
-    {"id": "L2", "name": "Hermant et al 2025, Using deep learning to map Quaternary faults in Western USA, 50th Stanford Geothermal Workshop", "url": "https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf", "verified": true, "method": "listed-on-competition-about-page"},
-    {"id": "L3", "name": "Lei et al 2025, 3D fault detection method using TransVNet, Front. Earth Sci. 13:1635344 (published 08 Aug 2025)", "url": "https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1635344/full", "doi": "10.3389/feart.2025.1635344", "verified": true, "method": "web_search", "correction": "earlier 'Dec 27 2025' date was wrong"},
-    {"id": "L4", "name": "Dalton et al 2025, Geo-SegNet: contrastive learning enhanced U-net for geomaterial segmentation, Computers & Geosciences", "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026", "verified": true, "method": "web_search", "correction": "scope is micro-CT geomaterial/pore segmentation - not fault mapping; description corrected"},
-    {"id": "L5", "name": "Zhong et al 2024, A Frangi filter aided deep learning approach for palaeochannel recognition, GJI 236(3):1526-1544", "url": "https://doi.org/10.1093/gji/ggad491", "doi": "10.1093/gji/ggad491", "verified": true, "method": "web_search", "correction": "online 22 Dec 2023, issue year 2024 - citation corrected"},
-    {"id": "L6", "name": "Guo D, Yang X, Peng P, Zhu L, He H, 2025, The intelligent fault identification method based on multi-source information fusion and deep learning, Sci Rep 15:6643 (erratum Sci Rep 15:14821, 28 Apr 2025)", "url": "https://www.nature.com/articles/s41598-025-90823-5", "doi": "10.1038/s41598-025-90823-5", "pmc": "PMC11850705", "verified": true, "method": "web_search"},
-    {"id": "L7", "name": "Chukwu et al 2024, Unsupervised machine learning and depth clusters of Euler deconvolution of magnetic data, Exploration Geophysics 55(3):223-245", "url": "https://doi.org/10.1080/08123985.2023.2299475", "doi": "10.1080/08123985.2023.2299475", "verified": true, "method": "web_search", "correction": "journal is Exploration Geophysics (not generic 'Tandfonline'), year 2024 online (accepted 21 Dec 2023)"},
-    {"id": "L8", "name": "Wang Z & AlRegib G 2014, Fault detection in seismic datasets using Hough transform, ICASSP 2014, pp. 2372-2376", "url": "https://ieeexplore.ieee.org/document/6854024/", "doi": "10.1109/ICASSP.2014.6854024", "free_pdf": "http://dihana.cps.unizar.es/proceedings/ICASSP/2014/papers/p2391-wang.pdf", "verified": true, "method": "web_search", "correction": "gatech wpmucdn mirror removed (unverified); unizar mirror + IEEE verified"},
-    {"id": "L9", "name": "Hassan H & Goussev S 2019, Deep learning approach to automatic detection of faults and fractures from magnetic data using CNN, GeoConvention 2019", "url": "https://geoconvention.com/wp-content/uploads/abstracts/2019/GC2019_313_Deep_learning_approach_to_automatic_detection_of_faults_and_fractures_CNN.pdf", "verified": true, "method": "web_search"},
-    {"id": "L10", "name": "Bai et al 2024, Joint gravity and magnetic inversion using CNNs deep learning, Remote Sensing 16(7):1115", "url": "https://www.mdpi.com/2072-4292/16/7/1115", "doi": "10.3390/rs16071115", "verified": true, "method": "web_search"},
-    {"id": "L11", "name": "Rafiq et al 2025, Integrated structural analysis for geothermal exploration, MethodsX 14:103189, PMC11834046", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/", "doi": "10.1016/j.mex.2025.103189", "verified": true, "method": "web_search"},
-    {"id": "L12", "name": "Guo et al 2021, 3D geological structure inversion from Noddy-generated magnetic data using deep learning methods, Computers & Geosciences 149:104701", "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169", "doi": "10.1016/j.cageo.2021.104701", "verified": true, "method": "web_search"},
-    {"id": "L13", "name": "Jessell et al 2022, Into the Noddyverse: a massive data store of 3D geological models for machine learning and inversion applications, ESSD 14:381-", "url": "https://essd.copernicus.org/articles/14/381/2022/", "doi": "10.5194/essd-14-381-2022", "verified": true, "method": "web_search"},
-    {"id": "L14", "name": "Feng, Hu, Zhao, Ai 2025, Geothermal detection study using remote sensing data by combining machine learning and deep learning: case study of Huanggang City (J. Applied Geophysics)", "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902", "verified": true, "method": "web_search", "facts": ["MUnet F1 90.91%, GDA 2.82%", "RF-MUnet F1 92.47%, GDA 1.94%"]},
-    {"id": "L15", "name": "Florsch et al 2022, Magnetic anomalies characterization: deep learning and explainability, Computers & Geosciences 169:105227", "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765", "doi": "10.1016/j.cageo.2022.105227", "verified": true, "method": "web_search"},
-    {"id": "L16", "name": "Sun, Ran, Xue et al 2026, U-Net-based human-in-the-loop semi-supervised iterative approach to vectorizing linear features on archived geological maps, Earth Sci Inform 19:173", "url": "https://link.springer.com/article/10.1007/s12145-026-02224-5", "doi": "10.1007/s12145-026-02224-5", "verified": true, "method": "web_search", "facts": ["GWSU-Net", "19 maps, 32,582 patches of 128x128", "F1 0.8634 faults / 0.8504 boundaries on independent test"]},
-    {"id": "L17", "name": "GEM Strain Rate Model v2.1 (GSRM v2.1), Kreemer et al", "url": "https://gsrm2.unavco.org/", "reference_doi": "10.1002/2014GC005407 (Kreemer, Blewitt, Klein 2014, G-cubed 15:3849-3889)", "verified": true, "method": "web_search"},
-    {"id": "L18", "name": "Hammond, Kreemer, Blewitt 2024, Robust imaging of fault slip rates in the Walker Lane and western Great Basin from GPS data, JGR Solid Earth 129, e2023JB028044", "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044", "doi": "10.1029/2023JB028044", "verified": true, "method": "web_search"},
-    {"id": "L19", "name": "Faulds & Henry 2008, Tectonic influences on the spatial and temporal evolution of the Walker Lane, Arizona Geological Society Digest 22, p. 437-470", "url": "https://nbmg.unr.edu/staff/faulds/33_AGS22_Faulds_and_Henry_(Walker_Lane)_final.pdf", "verified": true, "method": "fetch_page", "facts": ["WL-ECSZ accommodates ~20% of Pacific-North America dextral motion", "GPS geodetic strain rates average ~10 mm/yr across WL-ECSZ"]}
+    {
+      "id": "L1",
+      "name": "Matteo et al 2021, Automatic fault mapping in remote optical images and topographic data with deep learning, JGR Solid Earth 126, e2020JB021269",
+      "url": "https://doi.org/10.1029/2020JB021269",
+      "doi": "10.1029/2020JB021269",
+      "verified": true,
+      "method": "listed-on-competition-about-page"
+    },
+    {
+      "id": "L2",
+      "name": "Hermant et al 2025, Using deep learning to map Quaternary faults in Western USA, 50th Stanford Geothermal Workshop",
+      "url": "https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf",
+      "verified": true,
+      "method": "listed-on-competition-about-page"
+    },
+    {
+      "id": "L3",
+      "name": "Lei et al 2025, 3D fault detection method using TransVNet, Front. Earth Sci. 13:1635344 (published 08 Aug 2025)",
+      "url": "https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1635344/full",
+      "doi": "10.3389/feart.2025.1635344",
+      "verified": true,
+      "method": "web_search",
+      "correction": "earlier 'Dec 27 2025' date was wrong"
+    },
+    {
+      "id": "L4",
+      "name": "Dalton et al 2025, Geo-SegNet: contrastive learning enhanced U-net for geomaterial segmentation, Computers & Geosciences",
+      "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026",
+      "verified": true,
+      "method": "web_search",
+      "correction": "scope is micro-CT geomaterial/pore segmentation - not fault mapping; description corrected"
+    },
+    {
+      "id": "L5",
+      "name": "Zhong et al 2024, A Frangi filter aided deep learning approach for palaeochannel recognition, GJI 236(3):1526-1544",
+      "url": "https://doi.org/10.1093/gji/ggad491",
+      "doi": "10.1093/gji/ggad491",
+      "verified": true,
+      "method": "web_search",
+      "correction": "online 22 Dec 2023, issue year 2024 - citation corrected"
+    },
+    {
+      "id": "L6",
+      "name": "Guo D, Yang X, Peng P, Zhu L, He H, 2025, The intelligent fault identification method based on multi-source information fusion and deep learning, Sci Rep 15:6643 (erratum Sci Rep 15:14821, 28 Apr 2025)",
+      "url": "https://www.nature.com/articles/s41598-025-90823-5",
+      "doi": "10.1038/s41598-025-90823-5",
+      "pmc": "PMC11850705",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L7",
+      "name": "Chukwu et al 2024, Unsupervised machine learning and depth clusters of Euler deconvolution of magnetic data, Exploration Geophysics 55(3):223-245",
+      "url": "https://doi.org/10.1080/08123985.2023.2299475",
+      "doi": "10.1080/08123985.2023.2299475",
+      "verified": true,
+      "method": "web_search",
+      "correction": "journal is Exploration Geophysics (not generic 'Tandfonline'), year 2024 online (accepted 21 Dec 2023)"
+    },
+    {
+      "id": "L8",
+      "name": "Wang Z & AlRegib G 2014, Fault detection in seismic datasets using Hough transform, ICASSP 2014, pp. 2372-2376",
+      "url": "https://ieeexplore.ieee.org/document/6854024/",
+      "doi": "10.1109/ICASSP.2014.6854024",
+      "free_pdf": "http://dihana.cps.unizar.es/proceedings/ICASSP/2014/papers/p2391-wang.pdf",
+      "verified": true,
+      "method": "web_search",
+      "correction": "gatech wpmucdn mirror removed (unverified); unizar mirror + IEEE verified"
+    },
+    {
+      "id": "L9",
+      "name": "Hassan H & Goussev S 2019, Deep learning approach to automatic detection of faults and fractures from magnetic data using CNN, GeoConvention 2019",
+      "url": "https://geoconvention.com/wp-content/uploads/abstracts/2019/GC2019_313_Deep_learning_approach_to_automatic_detection_of_faults_and_fractures_CNN.pdf",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L10",
+      "name": "Bai et al 2024, Joint gravity and magnetic inversion using CNNs deep learning, Remote Sensing 16(7):1115",
+      "url": "https://www.mdpi.com/2072-4292/16/7/1115",
+      "doi": "10.3390/rs16071115",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L11",
+      "name": "Rafiq et al 2025, Integrated structural analysis for geothermal exploration, MethodsX 14:103189, PMC11834046",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/",
+      "doi": "10.1016/j.mex.2025.103189",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L12",
+      "name": "Guo et al 2021, 3D geological structure inversion from Noddy-generated magnetic data using deep learning methods, Computers & Geosciences 149:104701",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
+      "doi": "10.1016/j.cageo.2021.104701",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L13",
+      "name": "Jessell et al 2022, Into the Noddyverse: a massive data store of 3D geological models for machine learning and inversion applications, ESSD 14:381-",
+      "url": "https://essd.copernicus.org/articles/14/381/2022/",
+      "doi": "10.5194/essd-14-381-2022",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L14",
+      "name": "Feng, Hu, Zhao, Ai 2025, Geothermal detection study using remote sensing data by combining machine learning and deep learning: case study of Huanggang City (J. Applied Geophysics)",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902",
+      "verified": true,
+      "method": "web_search",
+      "facts": [
+        "MUnet F1 90.91%, GDA 2.82%",
+        "RF-MUnet F1 92.47%, GDA 1.94%"
+      ]
+    },
+    {
+      "id": "L15",
+      "name": "Florsch et al 2022, Magnetic anomalies characterization: deep learning and explainability, Computers & Geosciences 169:105227",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765",
+      "doi": "10.1016/j.cageo.2022.105227",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L16",
+      "name": "Sun, Ran, Xue et al 2026, U-Net-based human-in-the-loop semi-supervised iterative approach to vectorizing linear features on archived geological maps, Earth Sci Inform 19:173",
+      "url": "https://link.springer.com/article/10.1007/s12145-026-02224-5",
+      "doi": "10.1007/s12145-026-02224-5",
+      "verified": true,
+      "method": "web_search",
+      "facts": [
+        "GWSU-Net",
+        "19 maps, 32,582 patches of 128x128",
+        "F1 0.8634 faults / 0.8504 boundaries on independent test"
+      ]
+    },
+    {
+      "id": "L17",
+      "name": "GEM Strain Rate Model v2.1 (GSRM v2.1), Kreemer et al",
+      "url": "https://gsrm2.unavco.org/",
+      "reference_doi": "10.1002/2014GC005407 (Kreemer, Blewitt, Klein 2014, G-cubed 15:3849-3889)",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L18",
+      "name": "Hammond, Kreemer, Blewitt 2024, Robust imaging of fault slip rates in the Walker Lane and western Great Basin from GPS data, JGR Solid Earth 129, e2023JB028044",
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044",
+      "doi": "10.1029/2023JB028044",
+      "verified": true,
+      "method": "web_search"
+    },
+    {
+      "id": "L19",
+      "name": "Faulds & Henry 2008, Tectonic influences on the spatial and temporal evolution of the Walker Lane, Arizona Geological Society Digest 22, p. 437-470",
+      "url": "https://nbmg.unr.edu/staff/faulds/33_AGS22_Faulds_and_Henry_(Walker_Lane)_final.pdf",
+      "verified": true,
+      "method": "fetch_page",
+      "facts": [
+        "WL-ECSZ accommodates ~20% of Pacific-North America dextral motion",
+        "GPS geodetic strain rates average ~10 mm/yr across WL-ECSZ"
+      ]
+    }
   ],
   "removed_after_review": [
-    {"id": "X1", "url": "https://pubs.usgs.gov/pp/1720/downloads/pdf/p1720D.pdf", "reason": "Could not verify this exact PDF exists; RTP attribution replaced with Baranov & Naudy 1964 as cited in verified USGS literature"},
-    {"id": "X2", "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145", "reason": "Search shows this DOI has a different title than previously described ('steady contemporary deformation'); removed to avoid mislabeling; replaced by verified L18"},
-    {"id": "X3", "url": "https://geodataviewer.com/datasets/dem/ned-3dep-usgs/", "reason": "Third-party, non-official; superseded by official 3DEP links"},
-    {"id": "X4", "url": "https://ngmdb.usgs.gov/emri/", "reason": "Not verified; official EarthMRI portal is https://mrdata.usgs.gov/earthmri/"},
-    {"id": "X5", "url": "https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files", "reason": "Exact URL not verified; KML availability confirmed via USGS FAQ page and qfaults.kmz on ScienceBase"}
-  ]
+    {
+      "id": "X1",
+      "url": "https://pubs.usgs.gov/pp/1720/downloads/pdf/p1720D.pdf",
+      "reason": "Could not verify this exact PDF exists; RTP attribution replaced with Baranov & Naudy 1964 as cited in verified USGS literature"
+    },
+    {
+      "id": "X2",
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
+      "reason": "Search shows this DOI has a different title than previously described ('steady contemporary deformation'); removed to avoid mislabeling; replaced by verified L18"
+    },
+    {
+      "id": "X3",
+      "url": "https://geodataviewer.com/datasets/dem/ned-3dep-usgs/",
+      "reason": "Third-party, non-official; superseded by official 3DEP links"
+    },
+    {
+      "id": "X4",
+      "url": "https://ngmdb.usgs.gov/emri/",
+      "reason": "Not verified; official EarthMRI portal is https://mrdata.usgs.gov/earthmri/"
+    },
+    {
+      "id": "X5",
+      "url": "https://www.usgs.gov/programs/earthquake-hazards/google-earthtmkml-files",
+      "reason": "Exact URL not verified; KML availability confirmed via USGS FAQ page and qfaults.kmz on ScienceBase"
+    }
+  ],
+  "data_acquisition_2026_09_12": {
+    "summary": "Dropbox mirrors of the competition data tab were fetched through the platform fetcher (sandbox egress allowlist blocks direct TLS to non-git hosts).",
+    "results": {
+      "GEMS_96647.pdf": "identity verified against canonical NLR PDF (redirect resolved to uc1e5a971f0f01d2561eedee33fc.dl.dropboxusercontent.com)",
+      "Digital-elevation-model-links-JSON.pdf": "partial capture (chunk 1/13) \u2014 Dropbox st signature expired mid-fetch; 35 unique DEM tile URLs extracted mechanically into data/dem_links.json with 6 S3 spot checks (1,316 MB confirmed); original JSON hosted at drivendata-prod.s3.amazonaws.com per PDF title",
+      "example_submission.tif / existing_faults.tif / gems-geodawn-numerical-features.tif": "not downloadable in sandbox (binary + egress allowlist); use scripts/download_competition_data.sh"
+    },
+    "new_verified_source": {
+      "id": "E29",
+      "name": "USGS TNM staged products bucket (prd-tnm.s3.amazonaws.com)",
+      "role": "hosts the 3DEP 1m DEM tiles referenced by the competition DEM-links file",
+      "projects": [
+        "CA_SierraNevada_B22",
+        "NV_WestCentral_EarthMRI_2020_D20",
+        "NV_Humboldt_2021_D21"
+      ],
+      "spot_checks": [
+        {
+          "tile": "USGS_1M_10_x75y441_CA_SierraNevada_B22.tif",
+          "bytes": 238657987,
+          "etag": "40af28674a3ffb56512bebba59914cf0-46"
+        },
+        {
+          "tile": "USGS_1M_10_x75y442_NV_WestCentral_EarthMRI_2020_D20.tif",
+          "bytes": 208488258,
+          "etag": "5da90763a80dcd914ead99eeead3523e",
+          "note": "mismatched-path variant returned key_count=0 \u2014 proves canonical URL rule"
+        },
+        {
+          "tile": "USGS_1M_11_x26y449_NV_Humboldt_2021_D21.tif",
+          "bytes": 90967138,
+          "etag": "a6a000fbc287aabeac8a5695843f6f0f"
+        },
+        {
+          "tile": "USGS_1M_11_x27y443_NV_WestCentral_EarthMRI_2020_D20.tif",
+          "bytes": 376446112,
+          "etag": "748dc44573f44f1cc5fab6d35c8b06e5-72"
+        },
+        {
+          "tile": "USGS_1M_11_x24y442_CA_SierraNevada_B22.tif",
+          "bytes": 137528564,
+          "etag": "374f509a4a866aea011973941d4c65c5"
+        },
+        {
+          "tile": "USGS_1M_11_x27y430_NV_WestCentral_EarthMRI_2020_D20.tif",
+          "bytes": 264004305,
+          "etag": "e18cef183f7abc80c6c50f17664156e7-51"
+        }
+      ]
+    },
+    "competition_json_irregularities": [
+      "duplicate rows (same tile up to 5x)",
+      "path/filename project mismatches (canonical = filename project; S3-proven)",
+      "PDF print host garbling (prdtnm / prd.tnm / prd- tnm)"
+    ]
+  }
 }
