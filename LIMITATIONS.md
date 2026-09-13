@@ -196,3 +196,14 @@ for the repo owner:
    **Settings &rarr; Pages &rarr; Source: GitHub Actions** (recommended; the workflow already uploads `docs/`),
    or remove the `deploy` job and let Jekyll build the repo root. Nothing in the repo can settle this
    without the setting change.
+
+## 4. What the deployed-page check caught (2026-09-13, after PR #5)
+
+`docs/index.html` still described the metric as using a "7×7 max filter" — stale text from before the
+scorer was rewritten to enumerate the 29 offsets inside the Euclidean radius. It survived because a
+mid-session `git checkout -- docs/index.html` (used to undo a *different* bad edit) silently reverted
+that paragraph too, and `audit_docs.py` has no way to know a prose sentence is wrong: it checks that
+cited paths exist, that tables equal their artifacts, that links resolve and that hosts are catalogued.
+Lesson recorded: after any bulk revert, re-read the whole affected page — and prefer reading the
+**deployed** page over the local file, which is exactly how this was found. Fixed in the follow-up
+commit; the numeric claims in the same area are pinned by `test_line_geometry_dti_values` (20/20 tests).
