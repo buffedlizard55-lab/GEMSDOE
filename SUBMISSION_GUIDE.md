@@ -107,7 +107,7 @@ See reference solution for example: https://github.com/drivendataorg/gems-prize-
 
 - Sample submission: user-provided Dropbox mirror (`example_submission.tif`) verified reachable 2026-09-12; binary not fetched in sandbox (egress allowlist) — `scripts/download_competition_data.sh` fetches it; dummy fallback in `scripts/generate_dummy_submission.py`
 - Training features file naming: problem page says `training_features.tif`, reference solution says `numeric_features.tif`, mirror file is `gems-geodawn-numerical-features.tif` — all three handled in `src/dataset.py`
-- 1m DEM links: RESOLVED 2026-09-12 — links point at official USGS bucket `prd-tnm.s3.amazonaws.com` (verified); partial capture of the links file yielded 35 tiles / 6 S3-verified (`data/dem_links.json`); full authoritative list via `python scripts/download_dem_tiles.py --complete-listing`; tiles are 90–380 MB each. Competition JSON itself contains irregularities (duplicate rows, path≠filename project rows — the filename project is canonical, S3-proven; garbled hosts in the PDF print)
+- 1m DEM links: RESOLVED 2026-09-12 — links point at official USGS bucket `prd-tnm.s3.amazonaws.com` (verified); partial capture of the links file yielded 35 tiles / 6 S3-verified (artefact not committed at the time; regenerate with `python scripts/fetch_dem_links_pdf.py`); full authoritative list via `python scripts/download_dem_tiles.py --complete-listing`; tiles are 90–380 MB each. Competition JSON itself contains irregularities (duplicate rows, path≠filename project rows — the filename project is canonical, S3-proven; garbled hosts in the PDF print)
 - Rules PDF submission cadence: see flagged discrepancy atop §3 (3/week per PDF vs earlier 2/7-days instruction)
 
 ## 9. No Hallucinations

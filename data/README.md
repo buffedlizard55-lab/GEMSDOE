@@ -2,7 +2,8 @@
 
 | File | Status | Where |
 |---|---|---|
-| `1m_DEM_links` (JSON in PDF) | ✅ **PARTIALLY CAPTURED** (chunk 1/13; Dropbox `st` signature expired mid-fetch) — 35 unique DEM tile URLs extracted, 6 S3-verified (1,316 MB of tiles confirmed with exact sizes/ETags) | `data/dem_links.json`, evidence in `data/evidence/` |
+| `1m_DEM_links` (JSON in PDF) | ⚠️ **ARTIFACT LOST — REGENERATE** — an earlier session extracted 35 tile URLs (6 S3-verified, 1,316 MB) into `data/dem_links.json` + `data/evidence/`, but `data/*` was gitignored so the files were never committed and did not survive the sandbox. `.gitignore` now allow-lists `data/dem_links.json` and `data/evidence/**`. Regenerate: `python scripts/fetch_dem_links_pdf.py` (Dropbox mirror, title confirmed 2026-09-12 as "Digital elevation model links JSON.pdf"; body not extractable from this sandbox) or enumerate the USGS bucket directly: `python scripts/download_dem_tiles.py --complete-listing` |
+| **irregularity (found in review 2026-09-12)** | Six doc lines (docs/index.html, docs/references.md, docs/submission.html, SUBMISSION_GUIDE.md, docs/data.html, this file) cited `data/dem_links.json` as if it existed in the repo. Corrected: the claim is now "regenerate with X". **Lesson applied:** audit artefacts must be committed or not cited. |
 | `GEMS_96647.pdf` (rules mirror) | ✅ **IDENTITY VERIFIED** — fetched via platform; content matches canonical `https://www.nlr.gov/docs/fy26osti/96647.pdf` (not duplicated here; canonical already verified) | fetch log: `data/evidence/dropbox_fetch_log.md` |
 | `gems-geodawn-numerical-features.tif` | ❌ **NOT DOWNLOADED** — sandbox egress allowlist blocks Dropbox/S3; binary too large for text fetch | run `bash scripts/download_competition_data.sh` on any unrestricted machine |
 | `existing_faults.tif` (labels) | ❌ NOT DOWNLOADED — same | same |
@@ -14,27 +15,36 @@ Irregularities found inside the competition DEM-links JSON (documented, S3-prove
 
 ---
 
-## Reconstructed public-source dataset (2026-09-12) — NOT official competition data
+## Reconstructed public-source dataset — rebuilt 2026-09-12 (late session, fresh sandbox)
 
-`reconstructed/` holds a REAL (non-synthetic) dataset built from the official public sources the
-competition derives from, because the official files cannot enter this sandbox (egress allowlist;
-fresh curl matrix in LIMITATIONS.md §1). Builder: `scripts/build_reconstruction_dataset.py`;
-full provenance incl. SHA256 of every input: `reconstructed/provenance.json`.
+`reconstructed/` was lost when the sandbox reset (it is gitignored: 18 MB of rasters). It is reproducible in one
+command, provided the pinned upstream tree is present:
 
-- `recon_training_features.tif` — 16 bands, float32, **EPSG:32611, 100 m**, 489×667 px
-  (GeoDAWN survey 22103 area1: dem, rtp, tmi, tmi_vg, tmi_hg, upcont_tmi150, tc, k, th, u, thk, uk, uth
-  + derived dem_detrended, dem_slope + INGENIOUS dependent-earthquake rate density; band→official-source
-  mapping inside the file tags and provenance.json)
-- `recon_labels.tif` — quaternary faults (INGENIOUS regional shapefile, 22,118 features) rasterized
-  at 100 m, all_touched; 1.42 % positive pixels
-- `recon_sample_submission.tif` — zeros (total fault absence format template)
-- Sources: github.com/jklinck/geothermal_research (unofficial aggregator of official USGS/INGENIOUS
-  data; underlying data USGS public domain, DOI 10.5066/P93LGLVQ / 10.5066/P9BCVRCK, INGENIOUS
-  DOI 10.15121/1881483). ⚠️ Repo carries no license — only the upstream-licensed DATA files were used.
+```bash
+# 1. fetch the pinned public-source tree (codeload works even where raw.githubusercontent does not)
+curl -sSL -o /tmp/gr.tar.gz https://codeload.github.com/jklinck/geothermal_research/tar.gz/refs/heads/main
+mkdir -p data/external/jklinck && tar xzf /tmp/gr.tar.gz -C data/external/jklinck --strip-components=1 \
+  geothermal_research-main/GeoDAWN_tiffs geothermal_research-main/faults_quaternary_INGENIOUS_regional_data \
+  geothermal_research-main/seismicity_INGENIOUS_regional_data
+echo "56d78de7a989c12e2dce50cd65a4095df57030d2 2026-06-25T06:18:00Z (codeload tarball, fetched 2026-09-12)" \
+  > data/external/jklinck_pinned_commit.txt
+# 2. build (2 s, CPU)
+python scripts/build_reconstruction_dataset.py
+```
 
-**Caveat (flagged):** different bands/processing/extent than the official competition files. Valid
-for pipeline verification and external-data pretraining; leaderboard submissions require the official
-data tab files.
+Measured output of the rebuild performed on 2026-09-12 (from `reconstructed/provenance.json`, regenerated):
+16 bands, EPSG:32611, 100 m, 489x667 px; per-band valid fraction 74.0-74.7 %; labels 4 630 fault px = 1.42 %;
+`recon_training_features.tif` sha256 `5a5b926197ae6d1c…`, `recon_labels.tif` `6c0c249e76a64f1b…`,
+`recon_sample_submission.tif` `4acf720f6c2c73a3…`; source tarball sha256 `f78b96a36fd5e814…`.
+
+Pipeline run on it (all four stages, CPU, 2 vCPU): `src.train` (2 MC splits x 4 epochs, MobileNetV2/UNet,
+`pretrained: false`) -> `src.inference` -> `scripts/validate_submission.py` **PASSED** (CRS/resolution/dtype/range/
+grid/transform) -> metric scoring; plus `scripts/measure_submission_variants.py` (the shaping table in
+`docs/results.html`) and `scripts/run_ab_loss_experiment.sh` (loss A/B).
+
+NOT official competition data. Caveat (flagged): different bands/processing/extent than the official
+competition files — valid for pipeline verification and external-data pretraining; leaderboard submissions require
+the official data-tab files (`bash scripts/download_competition_data.sh`).
 
 ## End-to-end pipeline verification (2026-09-12, CPU)
 

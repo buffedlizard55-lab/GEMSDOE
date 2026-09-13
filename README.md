@@ -49,6 +49,12 @@
 
 ## 2. Limitations & Required Access (as requested)
 
+### Session update 2026-09-12 (late) — verified in a *fresh* sandbox
+- Environment rebuilt from PyPI inside the sandbox (numpy/rasterio/scikit-image/scipy/torch/smp/torchvision/geopandas all import; exact pins in `requirements.verified.txt`).
+- **Real public data can enter the sandbox** through the GitHub route (only `github.com`, `codeload.github.com`, `api.github.com`, `pypi.org`, `files.pythonhosted.org` pass the egress allowlist): the GeoDAWN 22103 area-1 rasters + INGENIOUS QFaults + INGENIOUS seismicity were fetched from a pinned commit of `jklinck/geothermal_research` and the full train → inference → validate → score pipeline was executed on them.
+- Everything quantitative in this repo now has a measurement behind it: **`docs/results.html`** (metric == brute-force transcription of the official formulas, 19-test suite, shaping experiment, 3-arm loss A/B). Fabricated "expected DTI" tables were **deleted**.
+- New: differentiable transcription of the competition metric as the training loss (`src/losses.py`), metric-derived submission shaping (`src/submission_optim.py`), memory-safe full-raster scorer, leak-free patching, persisted normalisation stats, manifest-driven inference.
+
 ### Current Limitations in this Sandbox
 - **No DrivenData authentication:** Cannot download `training_features.tif`, `labels.tif`, `sample_submission.tif`, `1m_DEM_links.csv` from https://www.drivendata.org/competitions/306/competition-doe-gems/data/ without login. Code is built to work once user places data in `data/`.
 - **No GPU / limited CPU:** Training large segmentation models (U-Net, SegFormer) ideally needs GPU (CUDA or Apple MPS). Environment here is CPU-only Python 3.11.2, no torch installed initially.
@@ -99,28 +105,55 @@ All entries have official verified links for manual review. See also `docs/data_
 ### Our Improvements (implemented in `src/`)
 
 #### A. Data Engineering
-- **Robust normalization:** per-channel nan-aware clipping (2-98 percentile) + standardization, not just [0,1] min-max.
-- **External DEM pipeline:** Download 1m DEM tiles, resample to 100m, compute:
-  - Slope, aspect, curvature (profile & plan), Topographic Position Index (TPI), Terrain Ruggedness Index (TRI), hillshade, detrended elevation via Gaussian filter.
-  - These augment provided features; official source: USGS 3DEP.
-- **Patching:** Overlapping patches (train_step=32) vs non-overlap test, filter patches with fault presence + valid elevation, plus hard-negative mining.
-- **Augmentation:** RandomResizedCrop (0.5-1.0), flips, rotations, elastic, Gaussian noise, brightness/contrast per channel.
+- **Normalization (`src/dataset.py:fit_norm_stats/apply_norm_stats`):** per channel, NaN-aware 1–99 percentile
+  clip → robust z-score → [0,1]. The reference solution's plain min–max over the whole raster (its cell 5) is
+  not robust to the heavy-tailed magnetic/gravity bands; `norm_mode: minmax` stays available for A/B. Statistics
+  are written to `outputs/norm_stats.json` at train time and re-loaded at inference, so reproduction does not
+  depend on chance (rules §3.5).
+- **External DEM pipeline (`src/external_data.py` + `scripts/download_dem_tiles.py`):** resample 1 m 3DEP tiles to
+  100 m and derive slope, aspect, profile/plan curvature, TPI, TRI, hillshade, detrended elevation. Code and
+  config are in place; the tile hosts are unreachable from this sandbox, so this is the one improvement in this
+  list that is **not yet measured** — flagged rather than claimed.
+- **Patching (`make_patches`):** test windows are chosen first and zeroed in the global raster *before* training
+  windows are cut (no CV leakage; regression-tested); train windows need ≥3 fault pixels, and `neg_fraction`
+  (0.35) of empty windows is kept so the model learns the background — this is deliberate empty-window sampling,
+  not mined hard negatives, and the repo says so. Patch 256 with `train_step=128` (2× overlap) vs the
+  reference's non-overlapping 128 — km-scale lineaments need the wider context.
+- **Augmentation (`FaultDataset`, label-consistent numpy):** random crop (scale 0.75–1.0, re-padded rather than
+  resized because a 1-px-wide trace is destroyed by resampling), horizontal flip, vertical flip, k×90° rotation,
+  Gaussian noise σ=0.01 — applied identically to features, labels and the FP-weight map. The rotation set is
+  exactly the set our TTA inverts. (No elastic warp or brightness/contrast jitter: those were listed here before
+  they were implemented, and photometric jitter on already-normalised geophysics is of doubtful value.)
 
 #### B. Model Architecture
 - **Encoders:** EfficientNet-B3/B5, ResNet-50, MIT-B2 (SegFormer) pretrained on ImageNet.
 - **Decoders:** UNet++, DeepLabV3+, SegFormer, UPerNet.
-- **Loss:** TverskyLoss (α=0.2, β=0.8) + Focal Tversky + Dice + BCE combo. Weighted to match metric.
-- **Training:** 
-  - MC cross-validation: 10 splits, 70/30, stratified by fault density.
-  - Mixed precision, AdamW, OneCycleLR (init 1e-4), early stopping on distance-weighted Tversky.
-  - Batch 32, patch 256 (larger context than 128).
-- **Inference:** Sliding window with 50% overlap + Gaussian blending, Test-Time Augmentation (8 flips/rotations), ensemble averaging across MC splits and architectures.
+- **Loss:** `0.3·BCE + 0.5·(1 − DTI_surrogate) + 0.2·focal-Tversky`. The DW term is a differentiable
+  transcription of the official metric (29-offset triangular kernel, R=3 px, α=0.2, β=0.8) and is asserted
+  equal to `1 − DTI` of the scorer in the test suite — the reference solution's pixel-wise Tversky actively
+  fights the R=300 m tolerance the committee put into scoring.
+- **Submission shaping (measured, not guessed):** FP<sub>w</sub> is a *sum over area* while |G| counts only fault
+  pixels, and TP<sub>w</sub> is a *max over the R-neighbourhood* → hard floor (zero, don't shrink) +
+  distance-R dominating thinning, tuned by pooled held-out search and stored in `outputs/manifest.json`.
+- **Training:** 10 MC splits (70/30 by test *windows*, not stratified k-fold), AdamW init lr 1e-4 with
+  OneCycleLR (peak 10×), batch 16, patch 256, AMP on CUDA, early-stopping patience 10, and **model selection on
+  shaped held-out DTI** (the quantity scored), logged per epoch as `DTI_raw=` and `DTI_shaped=`.
+- **Inference:** sliding window at `overlap: 0.75` with Gaussian blending, 8-way TTA (4 rotations × flip, each
+  inverted exactly), ensemble over splits × architectures with optional DTI-softmax weights; the submission stays a
+  probability raster (`threshold: null`) because the metric consumes soft values.
 
-#### C. Post-Processing for Final Round (Discover New Faults)
-- **Thresholding:** Low threshold (0.1-0.2) to maximize recall (β=0.8).
-- **Morphology:** Skeletonization, dilation, closing to connect fault segments.
-- **Line enhancement:** Frangi filter, Hough transform for linear continuity.
-- **False positive control:** Mask with slope & curvature thresholds (faults often correlate with topographic lineaments).
+#### C. Post-processing for the final round (discover new faults)
+- **Shaping, tuned not guessed:** floor `t0` + distance-R dominating thinning, searched jointly on pooled
+  held-out windows during training and stored in `outputs/manifest.json` (`src/submission_optim.py`); measured
+  2.8× on a CPU smoke model (`docs/results.html` §3).
+- **Continuity (config `postprocess`, all optional and off-by-default where unproven):** Frangi vesselness
+  enhancement (weight 0.35, scales 1–10), morphological closing (3×3), `min_fault_length: 5` px connected-component
+  filter. Skeletonization is `false` until it is validated on held-out windows — a skeleton can *lose* DTI when the
+  label is a thick band, which is a measured result (`test_thinning_wide_band_onto_a_narrow_fault_raises_dti`), not
+  an opinion.
+- **Deliberately not implemented:** a Hough-transform line detector and slope/curvature masks to veto false
+  positives. Both are plausible, neither is verified against this metric, and rules §3.2 asks for code we can
+  defend; they are recorded as ideas in `SUGGESTIONS.md` instead of shipped as claims.
 
 #### D. Metric Implementation
 - Exact reproduction of distance-weighted Tversky with triangular kernel R=300m in `src/metrics.py`, using scipy distance transforms for efficiency.
@@ -130,9 +163,18 @@ All entries have official verified links for manual review. See also `docs/data_
 - All external data from table above, public domain.
 - We never use private test labels.
 
-### Expected Gains (clearly labeled estimates — not verified facts)
-- Reference baseline: untested in this environment; expected lower than a tuned ensemble (single U-Net, 5 epochs, no TTA/ensembling — per cloned notebook).
-- Our ensemble + external DEM + TTA: **target** 0.65+ DTI in local MC cross-validation. There is no public history for this new competition, so no leaderboard correlation is claimed; the public LB will be the first real signal (3 submissions/week budget).
+### Measured gains (not a leaderboard prediction)
+- Reference-style objective (plain pixel-wise Tversky, the loss its notebook actually uses): measured **0.0659**
+  shaped held-out DTI in our 3-arm comparison, vs 0.0913 for the metric-aligned objective — same data, seeds,
+  budget and post-processing, so the gap is attributable to the objective, not to the harness. What we cannot
+  say from that is anything about absolute leaderboard position: the reference model was never run on the official
+  rasters here (its data is login-gated), and our runs use `pretrained: false` because the weight host is blocked.
+- **We publish no expected leaderboard DTI** — there is no public history for this new competition, so such a
+  number would be invented. What we publish is measured on real public data and reproducible
+  (`docs/results.html`): submission shaping alone moved held-out DTI from **0.0437 → 0.1210** on a 4-epoch CPU
+  smoke model, and a 3-arm loss comparison gave 0.0913 (metric-aligned combined) / 0.0838 (pure DW-Tversky) /
+  0.0659 (the reference's plain Tversky). The public leaderboard is the first unbiased signal
+  (3 submissions/week max — rules PDF §3.4).
 
 ---
 
@@ -157,18 +199,49 @@ GEMSDOE/
 │   ├── train.py
 │   ├── inference.py
 │   ├── postprocess.py
+│   ├── submission_optim.py   # metric-derived floor + dominating-set thinning
 │   └── external_data.py
+├── tests/test_metric.py      # 19 falsifiable checks of every claim in this repo
 ├── configs/
-│   └── config.yaml
+│   ├── config.yaml           # leaderboard config (GPU + official data)
+│   └── config_recon_cpu.yaml # CPU smoke config on reconstructed public data
 ├── scripts/
-│   ├── download_external.sh
-│   └── prepare_data.py
-├── requirements.txt
+│   ├── audit_docs.py                  # documentation audit gate (runs in CI before deploy)
+│   ├── build_reconstruction_dataset.py# public-source -> GeoTIFF stack for pipeline verification
+│   ├── build_dem_links.py             # DEM tile list from the competition links file
+│   ├── download_competition_data.sh   # run where DrivenData login works
+│   ├── download_dem_tiles.py          # 3DEP 1 m tiles (S3 listing or the links file)
+│   ├── download_external.sh           # INGENIOUS / QFaults subsets
+│   ├── fetch_dem_links_pdf.py         # regenerate data/dem_links.json + evidence
+│   ├── generate_dummy_submission.py   # format-valid placeholder for pipeline tests
+│   ├── measure_submission_variants.py  # the shaping table in docs/results.html
+│   ├── prepare_data.py                # pre-flight CRS/resolution/bounds checks (exit != 0 on failure)
+│   ├── run_ab_loss_experiment.sh      # loss A/B used for the docs table
+│   └── validate_submission.py         # submission format validator (exit 1 = broken)
+├── requirements.txt            # ranges
+├── requirements.verified.txt   # exact versions installed + import-verified
 ├── environment.yml
-└── .github/workflows/pages.yml
+├── docs/                       # GitHub Pages site (index, methodology, data, results, ...)
+└── .github/workflows/pages.yml # audit gate -> deploy
 ```
 
 ---
+
+## 5b. What actually runs today (measured, 2026-09-12)
+
+```bash
+pip install -r requirements.txt            # exact verified pins: requirements.verified.txt
+python src/metrics.py --self-test          # 8 checks: scorer == literal formula transcription
+python tests/test_metric.py                # 19/19 pass
+python scripts/build_reconstruction_dataset.py        # needs the pinned public-source tree (see data/README.md)
+python -m src.train     --config configs/config_recon_cpu.yaml
+python -m src.inference --config configs/config_recon_cpu.yaml --out outputs_recon/submission.tif
+python scripts/validate_submission.py --pred outputs_recon/submission.tif \
+       --sample data/reconstructed/recon_sample_submission.tif \
+       --train data/reconstructed/recon_training_features.tif     # exit 0 = format-valid
+python scripts/measure_submission_variants.py --config configs/config_recon_cpu.yaml
+bash scripts/run_ab_loss_experiment.sh
+```
 
 ## 6. Quickstart (once you have DrivenData data)
 
