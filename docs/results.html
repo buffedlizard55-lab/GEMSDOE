@@ -68,8 +68,8 @@
   </section>
 
   <section id="tests" class="card">
-    <h2>2. Test suite &mdash; 19 checks, each falsifying a repo claim</h2>
-    <p><code>python tests/test_metric.py</code> (no pytest needed) &rarr; <strong>19/19 passed</strong>, 2026-09-12 (re-run after the final commit of the session).</p>
+    <h2>2. Test suite &mdash; 20 checks, each falsifying a repo claim</h2>
+    <p><code>python tests/test_metric.py</code> (no pytest needed) &rarr; <strong>20/20 passed</strong>, re-run 2026-09-13 in a rebuilt sandbox with a fresh venv.</p>
     <table>
       <tr><th>Test</th><th>What it pins down</th></tr>
       <tr><td><code>test_metric_equals_brute_force_definition</code></td><td>fast scorer == literal formula transcription</td></tr>
@@ -90,6 +90,7 @@
       <tr><td><code>test_marginal_rule_predict_only_within_R</code></td><td>the k &gt; &alpha;&middot;DTI marginal rule, numerically</td></tr>
       <tr><td><code>test_submission_writing_helpers</code></td><td><code>scripts/validate_submission.py</code> passes on a spec-conformant file</td></tr>
       <tr><td><code>test_manifest_is_written_by_training</code></td><td>regression for a refactor that silently stopped writing <code>manifest.json</code> (found by this very test)</td></tr>
+      <tr><td><code>test_line_geometry_dti_values</code></td><td>every number in the &ldquo;how the metric behaves&rdquo; table on the methodology page (1.0000 / 0.6667 / 0.3333 / 0.0000 for 0-3 px offsets, 0.7143 for a 5-px band) &mdash; added after that paragraph was found to be quoting values the code never produced</td></tr>
       <tr><td><code>test_postprocess_version_shims_behave_identically</code></td><td>scikit-image renamed <code>square</code>&rarr;<code>footprint_rectangle</code> and <code>min_size</code>&rarr;<code>max_size</code>; the shims must be bit-identical, otherwise post-processing silently changes the submitted mask (a bare <code>except:</code> here used to return the <em>unfiltered</em> mask)</td></tr>
     </table>
   </section>
@@ -231,6 +232,10 @@ python -m src.metrics --pred ... --true ...</pre>
 
   <section id="audit" class="card">
     <h2>7. Documentation is audited by a script, not by reading alone</h2>
+    <p class="small">Five checks now, all stdlib: file references &rarr; catalog lint &rarr; published tables
+    equal their artifacts &rarr; site links resolve on the deployed tree &rarr; URL hygiene. Each was
+    falsification-tested (inject a wrong number or a broken link and the gate must fail), because a guard
+    that cannot fail is decoration.</p>
     <p>Two defects found during this review were of a class that prose review misses: docs cited
     <code>data/dem_links.json</code> and <code>data/evidence/dem_links_pdf_chunk0.txt</code>, which
     <code>.gitignore</code> (<code>data/*</code>, allow-listing only <code>README.md</code>) had kept out of
@@ -251,7 +256,12 @@ python -m src.metrics --pred ... --true ...</pre>
           <code>VERIFIED INDIRECTLY</code> rather than reading like a direct check &mdash; 11 rows were relabelled
           that way, and a link to a page the sandbox cannot reach is stated as such;</li>
       <li>every linked host must appear in the catalog, the bibliography, or the documented
-          <code>CONTEXT_HOSTS</code> table with a reason.</li>
+          <code>CONTEXT_HOSTS</code> table with a reason;</li>
+      <li>links inside the site must resolve on the deployed tree: Pages publishes <code>docs/</code> as
+          the site root, so <code>href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/README.md"</code> and <code>href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/references.md"</code> both
+          404 (the first escapes the artifact, the second is raw markdown the artifact does not render).
+          19 repo-root and 11 docs-local markdown links were repointed to the repository on GitHub, and
+          the check verifies each such blob URL names a file that really exists.</li>
     </ul>
     <pre>python scripts/audit_docs.py        # exit 1 = a doc claim is not backed by a file or an audit row</pre>
     <p class="small">This is the concrete answer to &ldquo;verify line by line, no hallucinations&rdquo;: the

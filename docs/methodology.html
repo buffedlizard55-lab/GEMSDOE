@@ -125,7 +125,7 @@ FP_w = Σ_x p(x)[1-max_g k(d)]
 FN_w = Σ_g [1-max_{x:d≤R} p(x)k(d)]
 DTI = TP_w/(TP_w+αFP_w+βFN_w+ε)
 α=0.2 β=0.8</pre>
-    <p>Uses scipy distance_transform_edt for FP weighting and view_as_windows 7×7 max filter for TP/FN. Tested: perfect line → 0.91 DTI, shifted 1px → 0.61 DTI (distance weighting tolerates misalignment), empty → 0.0.</p>
+    <p>Uses the 29 offsets with Euclidean radius ≤ R=3 px and <code>distance_transform_edt</code> for the FP weight (see <code>docs/index.html#metric</code>). Measured on a 40×40 grid with a 20-px 1-px-wide line as ground truth, and <code>α=0.2, β=0.8</code> — the values below are asserted by <code>tests/test_metric.py::test_line_geometry_dti_values</code>, not quoted from memory:</p><ul><li>exact match → <strong>1.0000</strong> (TP<sub>w</sub>=20=|G|, no FP, no FN)</li><li>offset 1 px → <strong>0.6667</strong> = 2/3, exactly <code>k(1)</code></li><li>offset 2 px → <strong>0.3333</strong> = 1/3 = <code>k(2)</code></li><li>offset 3 px → <strong>0.0000</strong>, because <code>k(3)=0</code>: at R=300 m a 3-px miss earns nothing, so the tolerance is <em>within</em> 3 px, not <em>up to</em> 3 px</li><li>5-px band over the line → <strong>0.7143</strong> (full recall, TP=20; the 40 extra px cost FP<sub>w</sub>=40, so 20/(20+0.2·40) — thick predictions are affordable but not free)</li><li>all-zero prediction → 0.0</li></ul><p class="small">An earlier revision of this paragraph claimed &quot;perfect line → 0.91, shifted 1 px → 0.61&quot;; those numbers were not produced by this code (a perfect match is 1.00) and are replaced by the measured table.</p>
   </section>
 
   <section class="card">

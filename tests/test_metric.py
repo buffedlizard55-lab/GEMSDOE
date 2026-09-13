@@ -394,6 +394,42 @@ def test_postprocess_version_shims_behave_identically():
     assert filter_small_faults(blobs, min_length=3).sum() == 13   # 4-px blob kept at 3
 
 
+def test_line_geometry_dti_values():
+    """Pins the numbers in docs/methodology.html's 'how the metric behaves' table.
+
+    A 20-px, 1-px-wide line is the ground truth; alpha=0.2, beta=0.8.  These are the values the
+    documentation quotes, so they are asserted here instead of being quoted from memory - an
+    earlier revision of that paragraph (0.91 / 0.61) had never been produced by this code.
+    """
+    H = W = 40
+    gt = np.zeros((H, W), dtype=bool)
+    gt[10:30, 20] = True
+    cases = {0: 1.0, 1: 2 / 3, 2: 1 / 3, 3: 0.0, 4: 0.0}
+    for off, want in cases.items():
+        pred = np.zeros((H, W), dtype=bool)
+        if off == 0:
+            pred[:] = gt
+        else:
+            pred[10:30, 20 + off] = True
+        got = compute_distance_weighted_tversky(pred.astype(np.float32), gt)
+        assert abs(got - want) < 1e-4, f"offset {off} px: DTI={got:.4f}, expected {want:.4f}"
+    # a 5-px band: full recall, and 40 extra px at weights (1-k) -> FP_w = 40
+    band = np.zeros((H, W), dtype=bool)
+    band[10:30, 18:23] = True
+    dti, (tp, fp, fn) = compute_distance_weighted_tversky(
+        band.astype(np.float32), gt, return_components=True)
+    assert abs(tp - 20.0) < 1e-6 and abs(fn) < 1e-9, (tp, fn)
+    assert abs(fp - 40.0) < 1e-6, fp
+    assert abs(dti - 20 / (20 + 0.2 * 40)) < 1e-6, dti
+    # the tolerance is *within* R, not *up to* R: k vanishes exactly at d = R
+    offs = {(dy, dx): k for dy, dx, k in kernel_offsets(3)}
+    assert abs(offs[(0, 1)] - 2 / 3) < 1e-12          # 1 px off keeps 2/3 of the credit
+    assert offs[(0, 3)] == 0.0                        # 3 px off keeps nothing
+    assert (0, 4) not in offs and (3, 3) not in offs  # outside the Euclidean radius
+    # nothing predicted at all -> 0, and it must not be NaN
+    assert compute_distance_weighted_tversky(np.zeros((H, W), np.float32), gt) == 0.0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     fails = 0

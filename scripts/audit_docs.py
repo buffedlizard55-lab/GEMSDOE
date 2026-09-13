@@ -20,7 +20,11 @@ Four checks
    must equal the artifacts that produced them (outputs_recon/submission_variants.json,
    outputs_ab/*/manifest.json, outputs_recon/inference_summary.json).  Skipped with a note on a
    fresh machine where no run has happened yet, because those files are gitignored by design.
-4. URL HYGIENE      - no link in docs/**.html or *.md points at a host we never fetched
+4. PUBLISHED LINKS - links inside docs/*.html must resolve on the deployed site: no `../`
+   escapes, no raw `.md` inside the site root, every docs/ target present, and every GitHub
+   blob URL pointing at a path that really exists in the repo (the site is published from the
+   docs/ directory, so anything relative that leaves it 404s).
+5. URL HYGIENE     - no link in docs/**.html or *.md points at a host we never fetched
    (allow-list derived from the catalog's official_link column), and no http:// links to
    hosts that are known to serve https.
 """
@@ -333,13 +337,52 @@ def check_tables(verbose: bool) -> list[str]:
     return problems
 
 
+
+# ---- 5. links inside the published site must resolve there ---------------------------
+# Pages publishes the `docs/` directory as the whole site, so a relative link that leaves docs/
+# (../README.md) resolves outside the deployed tree and 404s.  Repo files that belong to the code
+# rather than the site are therefore linked as absolute GitHub blob URLs - which this check then
+# verifies really exist in the repo, so a repoint cannot quietly create a dangling link.
+BLOB_PREFIX = "https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/"
+
+
+def check_published_links(verbose: bool) -> list[str]:
+    problems: list[str] = []
+    for f in sorted((ROOT / "docs").glob("*.html")):
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        for href in set(re.findall(r'href="([^"#]+?)(?:#[^"]*)?"', text)):
+            if href.startswith(("http://", "https://", "mailto:", "data:")):
+                if href.startswith(BLOB_PREFIX):
+                    rel = href[len(BLOB_PREFIX):]
+                    if not (ROOT / rel).exists():
+                        problems.append(f"{f.name}: blob link points at {rel}, which is not in the repo")
+                    elif verbose:
+                        print(f"  ok   {f.name} -> blob {rel}")
+                continue
+            if href.startswith("../") or href.startswith("/"):
+                problems.append(f"{f.name}: href={href!r} leaves the published root (docs/ is the "
+                                f"site) - link it as {BLOB_PREFIX}<path> instead")
+                continue
+            if href.endswith(".md"):
+                problems.append(f"{f.name}: href={href!r} points at raw markdown inside the site; "
+                                f"link the repo copy via GitHub or a docs/*.html page")
+                continue
+            if not (f.parent / href).exists():
+                problems.append(f"{f.name}: href={href!r} is not in docs/ (would 404 on the site)")
+            elif verbose:
+                print(f"  ok   {f.name} -> {href}")
+    return problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--verbose", action="store_true")
     a = ap.parse_args()
     all_problems = []
     for name, fn in (("file references", check_file_refs), ("data catalog", check_catalog),
-                     ("url hygiene", check_urls), ("published tables vs artifacts", check_tables)):
+                     ("published tables vs artifacts", check_tables),
+                     ("published link targets", check_published_links),
+                     ("url hygiene", check_urls)):
         print(f"== {name} ==")
         pr = fn(a.verbose)
         for x in pr:
@@ -351,8 +394,9 @@ def main() -> int:
         return 1
     print(f"  ({len(WARNINGS)} uncatalogued-host link(s) listed above for human review; not "
           "failures - context links are allowed outside the data catalog)")
-    print("\nPASS: no cited-but-missing artefacts, catalog internally consistent, "
-          "all documented hosts are in the audit table.")
+    print("\nPASS: no cited-but-missing artefacts, catalog internally consistent, published "
+          "tables equal their artifacts, every site link resolves, and all documented hosts "
+          "are in the audit table.")
     return 0
 
 
