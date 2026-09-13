@@ -18,7 +18,7 @@
     </div>
   </div>
 </header>
-<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#submission" class="active">Submission</a></div></nav>
+<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#submission" class="active">Submission</a><a href="results.html">Measured Results</a></div></nav>
 <main class="container">
   <section class="card">
     <h2>What to Submit — Verified from Problem Page</h2>
@@ -115,7 +115,7 @@ python scripts/validate_submission.py --pred submission.tif --sample data/sample
       <li><strong>Submission cadence discrepancy:</strong> earlier project instruction said 2 per 7 days; rules PDF §3.4 (re-verified verbatim 2026-09-12) says <em>"up to three per week"</em> — PDF/website authoritative; see SUBMISSION_GUIDE.md §3 for the full flag.</li>
       <li>Sample submission: Dropbox mirror (<code>example_submission.tif</code>) verified reachable 2026-09-12 but binary not fetchable in sandbox (egress allowlist) — use <code>scripts/download_competition_data.sh</code>; dummy fallback in <code>scripts/generate_dummy_submission.py</code></li>
       <li>Training features naming: problem page says training_features.tif, reference solution says numeric_features.tif, mirror file is gems-geodawn-numerical-features.tif — all three handled in src/dataset.py</li>
-      <li>1m DEM links: RESOLVED 2026-09-12 — point at official USGS bucket prd-tnm.s3.amazonaws.com (verified via S3 listing); 35 tiles captured / 6 S3-verified in data/dem_links.json; full list via <code>scripts/download_dem_tiles.py --complete-listing</code>; competition JSON itself has duplicate rows + path/filename project mismatches (filename project is canonical — S3-proven)</li>
+      <li>1m DEM links: RESOLVED 2026-09-12 — point at official USGS bucket prd-tnm.s3.amazonaws.com (verified via S3 listing); 35 tiles captured / 6 S3-verified (capture lost - not committed; regenerate with scripts/fetch_dem_links_pdf.py); full list via <code>scripts/download_dem_tiles.py --complete-listing</code>; competition JSON itself has duplicate rows + path/filename project mismatches (filename project is canonical — S3-proven)</li>
       <li>Rules PDF host: canonical www.nlr.gov; docs.nlr.gov verified serving identical document 2026-09-12 (title + TOC match)</li>
     </ul>
   </section>

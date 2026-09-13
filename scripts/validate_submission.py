@@ -86,6 +86,15 @@ def validate(pred_path, sample_path=None, training_features_path=None):
                 else:
                     print(f"  ✓ Size matches training_features")
 
+        # spec: "data outside the bounds is null or nan" -> NaN coverage should be sane
+        nan_frac = float(np.isnan(data).mean())
+        print(f"  i NaN fraction {100 * nan_frac:.2f}% (NaN is expected outside the GeoDAWN footprint)")
+        if nan_frac > 0.9:
+            errors.append(f"{100*nan_frac:.1f}% NaN - almost nothing to score")
+        finite = data[np.isfinite(data)]
+        if finite.size and float(finite.max()) == 0.0:
+            print("  ⚠ all finite values are 0: this is the total-fault-absence template, not a prediction")
+
         if errors:
             print("\n❌ Validation FAILED:")
             for e in errors:
@@ -97,9 +106,11 @@ def validate(pred_path, sample_path=None, training_features_path=None):
             return True
 
 if __name__ == "__main__":
+    import sys
     parser = argparse.ArgumentParser()
     parser.add_argument("--pred", required=True, help="predicted GeoTIFF")
     parser.add_argument("--sample", default="data/sample_submission.tif", help="sample submission")
     parser.add_argument("--train", default="data/training_features.tif", help="training features")
     args = parser.parse_args()
-    validate(args.pred, args.sample, args.train)
+    # exit status matters: this gates CI and any scripted submission pipeline
+    sys.exit(0 if validate(args.pred, args.sample, args.train) else 1)

@@ -462,7 +462,7 @@
 - [ ] **Post-processing:** `src/postprocess.py` — Frangi filter line enhancement, morphological closing, low threshold 0.15 for high recall (β=0.8)
 - [ ] **Validation:** `scripts/validate_submission.py` checks CRS, res, bounds, dtype, range — tested and passes
 - [ ] **Dummy submission:** `scripts/generate_dummy_submission.py` creates valid GeoTIFF for testing without training data — tested and passes
-- [ ] **Data catalog:** `docs/data_catalog.csv/json` + `docs/data.html` + `docs/index.html` table — all official verified links for manual verification, no hallucinations
+- [ ] **Data catalog:** `docs/data_catalog.csv (machine-readable mirror: docs/data_catalog.json)` + `docs/data.html` + `docs/index.html` table — all official verified links for manual verification, no hallucinations
 - [ ] **Features table:** `FEATURES.md` + `docs/index.html#features` — 15 provided features with scientific meaning and official sources
 - [ ] **Submission guide:** `SUBMISSION_GUIDE.md` + `docs/submission.html` — line-by-line verified from PDF
 - [ ] **Limitations:** `LIMITATIONS.md` + `docs/index.html#limitations` — explicit limitations and required access

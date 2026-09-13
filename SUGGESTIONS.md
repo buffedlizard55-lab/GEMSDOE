@@ -4,6 +4,21 @@
 
 **Sources:** All verified, no hallucinations, links for manual review in `docs/literature.md` and `docs/references.md`.
 
+## -1. Implemented + measured since the last review (2026-09-12, fresh sandbox)
+
+| Item | Status | Evidence |
+|---|---|---|
+| Test-region leakage in `make_patches` (HIGH) | ✅ **fixed** — test windows are zeroed in the global raster before training windows are cut; per-window assertion added | `tests/test_metric.py::test_patches_have_no_label_leakage`, passes |
+| Augmentation wired into training | ✅ **fixed** — label-consistent numpy crop/flips/rot90/noise in `FaultDataset`, incl. the FP-weight map | `test_augmentation_is_label_consistent` |
+| Metric memory blow-up (dense (H,W,7,7) array → OOM at GeoDAWN scale) | ✅ **fixed** — `score_arrays_blocked`, blocked with an R halo, asserted identical to the dense path | `test_blocked_equals_dense` |
+| Loss now equals the scored metric | ✅ **new** — `DistanceWeightedTverskyLoss` (29-offset kernel, α/β from the page); asserted == 1 − DTI of the scorer | `test_dw_loss_is_the_metric` |
+| Submission shaping derived from the metric's algebra, tuned on held-out windows | ✅ **new** — `src/submission_optim.py`; floor + distance-R dominating thinning, pooled search → `manifest.json` | held-out DTI 0.0437 → **0.1210** (docs/results.html §3) |
+| Model selection on the quantity we are scored on | ✅ **new** — selection uses *shaped* held-out DTI, not Tversky loss | per-epoch log line in the run transcript |
+| Pretrained encoders | ⏳ unchanged — release-asset host blocked; `pretrained: true` works on an unrestricted machine | LIMITATIONS §1c |
+| Full-region DEM features (slope/curv/TPI/TRI/hillshade from 1 m tiles) | ⏳ code ready (`src/external_data.py`), tiles un-downloadable here (S3 blocked) | `scripts/download_dem_tiles.py` |
+| Semi-supervised / self-training on the region's unlabeled half | 🆕 **proposed next** — the metric's FP cost is area-proportional, so self-training with high-confidence pseudo-labels is the cheapest way to sharpen the background; run after the first GPU pass | analysis in `src/submission_optim.py` docstring |
+| Orientation-aware post-processing (faults in Walker Lane have preferred strikes) | 🆕 proposed: penalise sub-vertical/sub-horizontal thin lines by strike histogram; validate on held-out windows before trusting it | none yet — deliberately not implemented blind |
+
 ## 0. Priority code fixes queued from E2E verification (2026-09-12)
 
 1. **Test-region leakage in `make_patches`** (src/dataset.py): training windows partially overlapping held-out test patches are kept; reference solution zeroes test regions GLOBALLY before patching. Fix: apply a global boolean test mask before sliding-window extraction. Priority HIGH (affects trust in local DTI).

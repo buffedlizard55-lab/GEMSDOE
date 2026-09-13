@@ -1,232 +1,234 @@
-"""
-Inference for GEMS Prize: sliding window with overlap, TTA, ensemble averaging.
-Produces GeoTIFF matching submission format: EPSG:32611, 100m, float32 [0,1].
+"""Inference: sliding-window ensemble + TTA -> submission GeoTIFF in the official format.
 
-Official submission requirements: https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format
+Format requirements, verbatim from the problem page (fetched 2026-09-12):
+    - same projected CRS as the training data (UTM zone 11N, EPSG:32611)
+    - same resolution (100 m)
+    - same bounds as the training data, data outside the bounds null or nan
+    - single layer, 32-bit float, values in [0, 1] = confidence of fault presence
+  https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format
+
+Notes on choices that matter for the score
+-----------------------------------------
+* Gaussian (not box) blending across overlapping windows: box averaging puts a discontinuous
+  step at window borders, and the metric's FP term is a *sum over pixels*, so systematic
+  edge dimming in low-GT regions is a real cost.
+* TTA = 4 rotations x {identity, hflip}, each inverse-transformed before accumulation, so
+  the 8 estimates are pixel-aligned.
+* Predictions outside the valid data footprint are written as NaN, per the spec above.
+* We output probabilities (0-1), not a thresholded mask. The metric is computed on the
+  probability field: TP_w uses max_x p(x)k(d), so softening a wrong-but-nearby prediction is
+  cheaper than a hard mask, and a confident 1.0 on a true pixel costs nothing on the FP term.
 """
+
+from __future__ import annotations
 
 import argparse
-import yaml
-import numpy as np
-import torch
-import rasterio
+import json
 from pathlib import Path
-from tqdm import tqdm
-from skimage.util import view_as_windows
 
-from .dataset import load_features_and_labels, robust_normalize
+import numpy as np
+import rasterio
+import torch
+import yaml
+from scipy.ndimage import gaussian_filter
+from tqdm import tqdm
+
+from .dataset import (apply_norm_stats, band_names, fit_norm_stats, load_features_and_labels,
+                      load_norm_stats, resolve_path, FEATURE_NAME_CANDIDATES, SAMPLE_NAME_CANDIDATES)
 from .models import get_model
-from .external_data import augment_with_dem_features
 from .postprocess import postprocess_pipeline
 
-def sliding_window_inference(model, X, patch_size, overlap=0.5, batch_size=16, device="cpu", tta=True):
-    """
-    X: (H,W,C) normalized
-    Returns: (H,W) prob map
-    """
-    H, W, C = X.shape
-    stride = int(patch_size * (1 - overlap))
-    # Pad to handle edges
-    pad_h = (stride - H % stride) % stride + patch_size
-    pad_w = (stride - W % stride) % stride + patch_size
-    X_padded = np.pad(X, ((0, pad_h), (0, pad_w), (0,0)), mode='constant', constant_values=0)
-    Hp, Wp = X_padded.shape[:2]
 
-    # Create weight map for blending (gaussian)
-    # Simple uniform averaging with count
-    prob_map = np.zeros((Hp, Wp), dtype=np.float32)
-    count_map = np.zeros((Hp, Wp), dtype=np.float32)
+def _gaussian_weight(p: int, sigma_frac: float = 0.25) -> np.ndarray:
+    y, x = np.mgrid[0:p, 0:p].astype(np.float32)
+    c = (p - 1) / 2.0
+    g = np.exp(-((y - c) ** 2 + (x - c) ** 2) / (2 * (sigma_frac * p) ** 2))
+    return (g / g.max()).astype(np.float32)
 
-    # Prepare patches
-    patches = []
-    coords = []
-    for i in range(0, Hp - patch_size + 1, stride):
-        for j in range(0, Wp - patch_size + 1, stride):
-            patch = X_padded[i:i+patch_size, j:j+patch_size, :]  # (p,p,C)
-            patches.append(patch)
-            coords.append((i,j))
 
-    # Batch inference
+def _tta_variants(x: torch.Tensor, tta: bool):
+    """yields (transformed_batch, inverse_fn). x: (B,C,H,W)."""
+    yield x, lambda t: t
+    if not tta:
+        return
+    for k in (1, 2, 3):
+        yield torch.rot90(x, k, dims=[2, 3]), (lambda t, k=k: torch.rot90(t, -k, dims=[2, 3]))
+    xf = torch.flip(x, dims=[3])
+    yield xf, lambda t: torch.flip(t, dims=[3])
+    for k in (1, 2, 3):
+        yield torch.rot90(xf, k, dims=[2, 3]), (lambda t, k=k: torch.flip(torch.rot90(t, -k, dims=[2, 3]), dims=[3]))
+
+
+@torch.no_grad()
+def sliding_window_inference(model, X, patch_size, overlap=0.5, batch_size=16, device="cpu",
+                             tta=True, gaussian=True, sigma_frac=0.25):
+    """X: (H,W,C) float normalised -> (H,W) probability map."""
     model.eval()
-    all_probs = []
-    with torch.no_grad():
-        for b in range(0, len(patches), batch_size):
-            batch_patches = patches[b:b+batch_size]
-            batch_tensor = np.stack(batch_patches)  # (B,p,p,C)
-            batch_tensor = np.moveaxis(batch_tensor, -1, 1)  # (B,C,p,p)
-            batch_tensor = torch.from_numpy(batch_tensor).float().to(device)
+    H, W, C = X.shape
+    stride = max(1, int(round(patch_size * (1 - overlap))))
+    ys = list(range(0, max(1, H - patch_size + 1), stride))
+    xs = list(range(0, max(1, W - patch_size + 1), stride))
+    if ys and ys[-1] + patch_size < H:
+        ys.append(H - patch_size)
+    if xs and xs[-1] + patch_size < W:
+        xs.append(W - patch_size)
+    coords = [(y, x) for y in ys for x in xs]
 
-            # TTA: 8-way
-            if tta:
-                # Original, hflip, vflip, rot90 etc.
-                # We'll do 4 rotations + flip
-                tta_probs = []
-                for k in range(4):
-                    # rotate
-                    rot_batch = torch.rot90(batch_tensor, k, dims=[2,3])
-                    logits = model(rot_batch)
-                    probs = torch.sigmoid(logits)
-                    # rotate back
-                    probs = torch.rot90(probs, -k, dims=[2,3])
-                    tta_probs.append(probs)
+    Xp = X
+    if H < patch_size or W < patch_size:      # tiny rasters: pad once
+        Xp = np.pad(X, ((0, max(0, patch_size - H)), (0, max(0, patch_size - W)), (0, 0)))
 
-                    # hflip
-                    flip_batch = torch.flip(rot_batch, dims=[3])
-                    logits_f = model(flip_batch)
-                    probs_f = torch.sigmoid(logits_f)
-                    probs_f = torch.flip(probs_f, dims=[3])
-                    probs_f = torch.rot90(probs_f, -k, dims=[2,3])
-                    tta_probs.append(probs_f)
-                # average TTA
-                probs_avg = torch.stack(tta_probs).mean(dim=0)
-            else:
-                logits = model(batch_tensor)
-                probs_avg = torch.sigmoid(logits)
+    w_patch = _gaussian_weight(patch_size, sigma_frac) if gaussian else np.ones((patch_size, patch_size), np.float32)
+    Hp, Wp = Xp.shape[:2]
+    num = np.zeros((Hp, Wp), np.float32)
+    den = np.zeros((Hp, Wp), np.float32)
 
-            probs_np = probs_avg.cpu().numpy()  # (B,1,p,p)
-            if probs_np.shape[1] == 1:
-                probs_np = probs_np[:,0]  # (B,p,p)
-            all_probs.extend([p for p in probs_np])
+    for b0 in tqdm(range(0, len(coords), batch_size), desc="inference", disable=len(coords) <= 1):
+        blk = coords[b0:b0 + batch_size]
+        batch = np.stack([Xp[i:i + patch_size, j:j + patch_size] for (i, j) in blk])
+        batch = torch.from_numpy(np.ascontiguousarray(np.moveaxis(batch, -1, 1))).float().to(device)
+        acc = torch.zeros(batch.shape[0], 1, patch_size, patch_size, device=device)
+        n_aug = 0
+        for xt, inv in _tta_variants(batch, tta):
+            out = torch.sigmoid(model(xt))              # (B,1,p,p)
+            acc = acc + inv(out)
+            n_aug += 1
+        acc = (acc / n_aug)[:, 0].cpu().numpy()         # (B,p,p)
+        for n, (i, j) in enumerate(blk):
+            num[i:i + patch_size, j:j + patch_size] += acc[n] * w_patch
+            den[i:i + patch_size, j:j + patch_size] += w_patch
+    prob = np.where(den > 1e-6, num / np.maximum(den, 1e-6), 0.0).astype(np.float32)
+    return prob[:H, :W]
 
-    # Blend
-    for (i,j), prob in zip(coords, all_probs):
-        prob_map[i:i+patch_size, j:j+patch_size] += prob
-        count_map[i:i+patch_size, j:j+patch_size] += 1
 
-    prob_map = prob_map / np.maximum(count_map, 1)
-    # Crop to original
-    prob_map = prob_map[:H, :W]
-    return prob_map
+def R_px_infer(cfg):
+    return int(cfg["metric"]["R_meters"] // cfg["metric"]["resolution_m"])
+
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/config.yaml")
-    parser.add_argument("--model-dir", default="outputs", help="dir with .pt models")
-    parser.add_argument("--out", default="submission.tif", help="output GeoTIFF")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default="configs/config.yaml")
+    ap.add_argument("--model-dir", default=None, help="defaults to data.output_dir")
+    ap.add_argument("--out", default="submission.tif")
+    ap.add_argument("--no-tta", action="store_true")
+    ap.add_argument("--score-against", default=None, help="label GeoTIFF -> print local DTI")
+    args = ap.parse_args()
 
-    with open(args.config) as f:
-        cfg = yaml.safe_load(f)
+    cfg = yaml.safe_load(Path(args.config).read_text())
+    device = torch.device("cuda" if torch.cuda.is_available() else
+                          "mps" if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else "cpu")
+    out_dir = Path(cfg["data"]["output_dir"])
+    model_dir = Path(args.model_dir) if args.model_dir else out_dir
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    print(f"Device: {device}")
-
-    # Load features
-    X_orig, y_orig, feat_meta, label_meta, tags = load_features_and_labels(
-        cfg["data"]["feature_path"], cfg["data"]["label_path"]
-    )
-    print(f"X_orig shape {X_orig.shape}")
-
-    if cfg["data"].get("use_external_dem", False):
-        X_orig = augment_with_dem_features(X_orig, resolution=cfg["metric"]["resolution_m"])
-    X_norm = robust_normalize(X_orig)
-
-    # Find models
-    model_dir = Path(args.model_dir)
-    model_files = list(model_dir.glob("*.pt"))
-    if not model_files:
-        print(f"No models found in {model_dir}, using dummy (requires training first)")
-        return
-
-    print(f"Found {len(model_files)} models for ensemble")
-
-    # Load ensemble
-    patch_size = cfg["training"]["patch_size"]
-    overlap = cfg["inference"]["overlap"]
-    batch_size = cfg["inference"]["batch_size"]
-    tta = cfg["inference"]["tta"]
-
-    # Read ensemble summary to know arch
-    # Fallback: assume unetplusplus efficientnet-b5
-    ensemble_probs = []
-
-    for mf in model_files:
-        # Parse arch from filename if possible
-        # Format: model_mc0_unetplusplus_dti0.6.pt
-        name = mf.stem
-        arch = "unetplusplus"
-        encoder = cfg["model"]["encoder"]
-        # Try to extract
-        parts = name.split("_")
-        for p in parts:
-            if p in ["unet", "unetplusplus", "deeplabv3plus", "segformer", "fpn"]:
-                arch = p
-        if "segformer" in arch:
-            encoder = cfg["model"]["segformer_encoder"]
-
-        in_ch = X_norm.shape[-1]
-        good_ch = cfg["training"].get("good_channels")
-        if good_ch is not None:
-            in_ch = len(good_ch)
-
-        print(f"Loading {mf} arch={arch} encoder={encoder} in_ch={in_ch}")
-        model = get_model(arch=arch, encoder=encoder, in_channels=in_ch, classes=1, pretrained=False)
-        state = torch.load(mf, map_location=device)
-        model.load_state_dict(state)
-        model = model.to(device)
-
-        prob_map = sliding_window_inference(model, X_norm, patch_size=patch_size, overlap=overlap, batch_size=batch_size, device=device, tta=tta)
-        ensemble_probs.append(prob_map)
-
-    # Average ensemble
-    final_prob = np.mean(np.stack(ensemble_probs), axis=0)
-    print(f"Ensemble prob shape {final_prob.shape}, min {final_prob.min()}, max {final_prob.max()}")
-
-    # Post-process
-    final_prob_pp, binary = postprocess_pipeline(final_prob, cfg["postprocess"])
-    # For submission, we want probabilities, not binary, but with postprocessing enhanced
-    # Use cfg threshold? Submission should be prob, not binary.
-    # We'll output final_prob_pp (which includes frangi etc) as float
-    # But also ensure we respect cfg inference threshold? No, submission should be prob.
-
-    # Clip
-    final_prob_pp = np.clip(final_prob_pp, 0, 1).astype(np.float32)
-
-    # Save GeoTIFF matching sample submission
-    # Use label_meta for CRS/transform, but ensure size matches original
-    # If sample submission exists, use its meta
-    sample_path = cfg["data"]["sample_submission_path"]
-    if Path(sample_path).exists():
-        with rasterio.open(sample_path) as src:
-            out_meta = src.meta.copy()
-            out_transform = src.transform
-            out_crs = src.crs
-            out_height = src.height
-            out_width = src.width
+    X, y, fmeta, lmeta, tags = load_features_and_labels(cfg["data"].get("feature_path"),
+                                                        cfg["data"].get("label_path"),
+                                                        require_labels=bool(args.score_against))
+    stats_path = out_dir / "norm_stats.json"
+    if stats_path.exists():
+        stats = load_norm_stats(stats_path)
+        print(f"normalisation stats: {stats_path} (train-time, reused)")
     else:
-        out_meta = label_meta
-        out_transform = label_meta["transform"]
-        out_crs = label_meta["crs"]
-        out_height, out_width = y_orig.shape
+        stats = fit_norm_stats(X, tuple(cfg["data"].get("clip_percentile", (1.0, 99.0))))
+        print("WARNING: no norm_stats.json - re-fitted on this raster (only valid if the "
+              "features are identical to training-time, i.e. same GeoTIFF)")
+    Xn = apply_norm_stats(X, stats, mode=cfg["data"].get("norm_mode", "clip_zscore"))
+    valid = np.isfinite(X).any(axis=-1)                     # footprint of real data
 
-    # Ensure final_prob_pp size matches
-    # Crop/pad
-    if final_prob_pp.shape[0] != out_height or final_prob_pp.shape[1] != out_width:
-        print(f"Resizing prob map from {final_prob_pp.shape} to {(out_height, out_width)}")
-        # Simple crop
-        final_prob_pp = final_prob_pp[:out_height, :out_width]
-        # Pad if smaller
-        if final_prob_pp.shape[0] < out_height or final_prob_pp.shape[1] < out_width:
-            pad_h = out_height - final_prob_pp.shape[0]
-            pad_w = out_width - final_prob_pp.shape[1]
-            final_prob_pp = np.pad(final_prob_pp, ((0, pad_h), (0, pad_w)), mode='constant', constant_values=0)
+    manifest = {}
+    mpath = out_dir / "manifest.json"
+    if mpath.exists():
+        manifest = json.loads(mpath.read_text())
+    entries = manifest.get("models") or []
+    ckpts = sorted(model_dir.glob("*.pt"))
+    if not ckpts:
+        raise SystemExit(f"no .pt checkpoints in {model_dir}; run src/train.py first")
+    by_name = {e["file"]: e for e in entries}
 
-    out_path = args.out
-    with rasterio.open(
-        out_path,
-        "w",
-        driver="GTiff",
-        height=out_height,
-        width=out_width,
-        count=1,
-        dtype="float32",
-        crs=out_crs,
-        transform=out_transform,
-        nodata=None,
-    ) as dst:
-        dst.write(final_prob_pp, 1)
+    patch_size = cfg["training"]["patch_size"]
+    good = cfg["training"].get("good_channels")
+    maps = []
+    for ck in ckpts:
+        e = by_name.get(ck.name, {})
+        in_ch = int(e.get("in_channels") or (len(good) if good else Xn.shape[-1]))
+        arch = e.get("arch", cfg["model"]["architectures"][0])
+        enc = e.get("encoder", cfg["model"]["segformer_encoder"] if "segformer" in arch else cfg["model"]["encoder"])
+        print(f"{ck.name}: arch={arch} encoder={enc} in_ch={in_ch}")
+        model = get_model(arch=arch, encoder=enc, in_channels=in_ch, classes=1, pretrained=False).to(device)
+        model.load_state_dict(torch.load(ck, map_location=device))
+        Xin = Xn[:, :, good] if good else Xn
+        p = sliding_window_inference(model, Xin, patch_size=patch_size,
+                                      overlap=cfg["inference"]["overlap"],
+                                      batch_size=cfg["inference"]["batch_size"], device=device,
+                                      tta=(not args.no_tta) and cfg["inference"].get("tta", True),
+                                      gaussian=cfg["inference"].get("blend_mode", "gaussian") == "gaussian")
+        maps.append((p, float(e.get("dti", 0.0))))
 
-    print(f"Saved submission to {out_path}")
+    if len(maps) > 1 and cfg["inference"].get("ensemble_weights") == "dti" and all(w > 0 for _, w in maps):
+        ws = np.array([w for _, w in maps], dtype=np.float64)
+        ws = np.exp((ws - ws.max()) * 8.0); ws /= ws.sum()
+        final = sum(w * p for w, (p, _) in zip(ws, maps)).astype(np.float32)
+        print(f"DTI-weighted ensemble, weights={np.round(ws, 3).tolist()}")
+    else:
+        final = np.mean([p for p, _ in maps], axis=0).astype(np.float32)
+
+    final, _binary = postprocess_pipeline(final, cfg.get("postprocess", {}))
+
+    # metric-aware shaping (floor + distance-R dominating thinning).  Parameters come from
+    # the training manifest (calibrated on held-out windows); config can override.
+    shp = dict(manifest.get("shaping") or {})
+    shp.update({k: v for k, v in (cfg["inference"].get("submission_shaping") or {}).items() if v is not None})
+    if shp.get("t0") is not None or shp.get("enabled"):
+        from .submission_optim import optimize_submission
+        pre = float(np.nansum(final))
+        final = optimize_submission(final, R=R_px_infer(cfg), t0=float(shp.get("t0", 0.3)),
+                                    thin=bool(shp.get("thin", True)), hard=bool(shp.get("hard", True)),
+                                    gamma=float(shp.get("gamma", 1.0)))
+        print(f"submission shaping {shp}: probability mass {pre:.0f} -> {float(np.nansum(final)):.0f}")
+    final = np.clip(final, 0.0, 1.0).astype(np.float32)
+    final[~valid] = np.nan                                  # "outside the bounds is null or nan"
+
+    # ---- write with the sample submission's grid when available (authoritative template) --
+    try:
+        sample = resolve_path(cfg["data"].get("sample_submission_path"), SAMPLE_NAME_CANDIDATES)
+    except FileNotFoundError:
+        sample = None
+    if sample:
+        with rasterio.open(sample) as src:
+            h, w, crs, tr, dtype = src.height, src.width, src.crs, src.transform, src.dtypes[0]
+        print(f"grid from sample submission {sample}: {w}x{h} {crs} {dtype}")
+    else:
+        h, w = y.shape if y is not None else X.shape[:2]
+        crs, tr = (lmeta or fmeta)["crs"], (lmeta or fmeta)["transform"]
+    if final.shape != (h, w):
+        # crop/pad rather than resample: the spec demands identical bounds
+        print(f"WARNING resizing {final.shape} -> {(h, w)} (crop/pad, no resampling)")
+        buf = np.full((h, w), np.nan, np.float32)
+        hh, ww = min(h, final.shape[0]), min(w, final.shape[1])
+        buf[:hh, :ww] = final[:hh, :ww]
+        final = buf
+
+    if cfg["data"].get("use_external_dem"):
+        from .external_data import augment_with_dem_features   # noqa: F401 (documented hook)
+        print("note: DEM augmentation is applied at training time via external_data.py; "
+              "inference must use the same band stack")
+
+    opts = dict(driver="GTiff", height=h, width=w, count=1, dtype="float32",
+                crs=crs, transform=tr, nodata=None, compress="lzw", TILED="YES")
+    with rasterio.open(args.out, "w", **opts) as dst:
+        dst.write(final, 1)
+        dst.set_band_description(1, "fault-presence probability (distance-weighted Tversky submission)")
+        dst.update_tags(source="GEMSDOE ensemble", models=";".join(c.name for c in ckpts),
+                        n_models=str(len(ckpts)), tta=str(not args.no_tta))
+    print(f"wrote {args.out}  valid_px={int(np.isfinite(final).sum())}/{final.size} "
+          f"min={np.nanmin(final):.4f} max={np.nanmax(final):.4f} mean={np.nanmean(final):.4f}")
+
+    if args.score_against and y is not None:
+        from .metrics import score_arrays_blocked
+        R = int(cfg["metric"]["R_meters"] // cfg["metric"]["resolution_m"])
+        d, (tp, fp, fn) = score_arrays_blocked(np.nan_to_num(final), (y > 0.5).astype(np.float32), R_pixels=R)
+        print(f"LOCAL DTI vs training labels = {d:.4f} (TP={tp:.0f} FP={fp:.0f} FN={fn:.0f}) "
+              "- optimistic: these are the labels the model was trained on")
+
 
 if __name__ == "__main__":
     main()

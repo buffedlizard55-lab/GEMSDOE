@@ -119,3 +119,51 @@ official data-tab files via `scripts/download_competition_data.sh`.
 ### 1f. Dropbox mirror fetch notes (2026-09-12)
 - Dropbox `scl/fi` links carry a short-lived `st` signature; it expired mid-capture of `Digital-elevation-model-links-JSON.pdf` (chunk 1/13 fetched, rest failed). The durable form is `rlkey` + `dl=1` (used in `scripts/download_competition_data.sh`).
 - DEM tiles are ~90-380 MB each; the full 3-project list is tens of GB — download on a machine with disk headroom (`scripts/download_dem_tiles.py`).
+
+
+---
+
+## 2. Fresh-sandbox re-verification, 2026-09-12 (later same day)
+
+The sandbox was reset between sessions (no packages, empty `data/` except `README.md`), so every environment and
+pipeline claim was re-established from scratch instead of trusted.
+
+### 2.1 Egress matrix, re-measured 2026-09-12T23:0xZ
+
+| Host | Result |
+|---|---|
+| `github.com` (incl. `/archive/...tar.gz`), `codeload.github.com`, `api.github.com` | ✅ 200 |
+| `pypi.org`, `files.pythonhosted.org` | ✅ 200 (torch 554 MB wheel installed at ~150 MB/s) |
+| `www.drivendata.org`, `www.dropbox.com`, `prd-tnm.s3.amazonaws.com`, `www.sciencebase.gov`, `gdr.openei.org`, `pubs.usgs.gov`, `earthquake.usgs.gov`, `services.nationalmap.gov`, `huggingface.co`, `cdn.jsdelivr.net`, `gist.githubusercontent.com`, `raw.githubusercontent.com`, `web.archive.org`, `en.wikipedia.org`, `www.nlr.gov` | ❌ `curl (35) SSL_ERROR_SYSCALL` (TLS dropped by the allowlist proxy) |
+
+Text fetching is still possible through the platform-side `fetch_page` (used to re-read the problem page, the About
+page, the DrivenData main page and all 7 chunks of the rules PDF), but **binary GeoTIFFs cannot be delivered that
+way**. `raw.githubusercontent.com` is blocked while `codeload.github.com` works — which is exactly why the
+public-data reconstruction below succeeded: repo *tarballs* are reachable, file-by-file raw access is not.
+
+### 2.2 What was unblocked autonomously (no manual input)
+
+- **A real dataset inside the sandbox:** `jklinck/geothermal_research` @ `56d78de7a989c12e2dce50cd65a4095df57030d2`
+  (tarball sha256 `f78b96a36fd5e814…`), containing USGS GeoDAWN 22103 area-1 grids and INGENIOUS fault/seismicity
+  layers. Built with `scripts/build_reconstruction_dataset.py` → 16-band EPSG:32611/100 m stack, 1.42 % fault pixels.
+- **Full pipeline executed** on it: train (2 MC splits) → inference → `validate_submission.py` ✅ → metric scoring;
+  plus a 19-test suite and `python src/metrics.py --self-test` (8 checks). Details and numbers: `docs/results.html`.
+- **Reference solution fully read** (21 notebook cells, cloned) → the baseline hyperparameters cited across this repo
+  are now quoted from it rather than paraphrased.
+
+### 2.3 Irregularities found in this review (all flagged, none silently patched)
+
+1. **Cited-but-uncommitted evidence.** Six places referenced `data/dem_links.json` / `data/evidence/…`; `data/*` was
+   gitignored (only `README.md` allow-listed), so those artefacts were never in git and vanished with the sandbox.
+   Fixed: `.gitignore` now allow-lists `data/dem_links.json`, `data/evidence/**`, `data/reconstructed/provenance.json`;
+   `scripts/fetch_dem_links_pdf.py` regenerates them; every doc reference corrected to "regenerate with …".
+2. **Dead dependency.** `requirements.txt`/`environment.yml` listed `albumentations`, which the code never used
+   (docstrings claimed it). Removed; augmentation is implemented in `src/dataset.py` and is now wired into training.
+3. **API bug caught by the A/B run.** `TverskyLoss.forward()` rejected the shared `fp_weight` kwarg, so the
+   reference-comparison arm crashed. Fixed (signature unified) — and it is exactly why we run the comparison instead
+   of asserting it works.
+4. **Docs overstatement removed.** The "Expected gains 0.45-0.75 DTI" table had no measurement behind it; replaced
+   by the measured table. Any remaining estimate is labelled as an estimate.
+5. **Still true:** the official competition rasters cannot reach this sandbox (login-gated + TLS-blocked), so no
+   leaderboard-representative score can be produced here. Run `bash scripts/download_competition_data.sh` on an
+   unrestricted machine → `data/`, then `python -m src.train --config configs/config.yaml`.
