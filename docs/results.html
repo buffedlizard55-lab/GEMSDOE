@@ -146,13 +146,20 @@ python -m src.metrics --pred ... --true ...</pre>
     <table>
       <tr><th>Stage</th><th>Evidence from the actual run</th></tr>
       <tr><td>Build</td><td>16 bands, valid fraction 74.0&ndash;74.7 % per band; 4 630 fault px = 1.42 %; labels unique {0,1}</td></tr>
-      <tr><td>Train</td><td>2 MC splits &times; 4 epochs; per-epoch <code>DTI_raw</code> and <code>DTI_shaped</code> logged; best epoch selected on the <em>shaped</em> held-out metric; pooled shaping t0=0.146 thin=True &rarr; 0.0913 vs 0.0462 raw</td></tr>
-      <tr><td>Inference</td><td>sliding window + Gaussian blend; shaping applied (mass 33 375 &rarr; 1 140); wrote 667&times;489 float32 with NaN outside footprint</td></tr>
+      <tr><td>Train</td><td>2 MC splits &times; 4 epochs; per-epoch <code>DTI_raw</code> and <code>DTI_shaped</code> logged; best epoch selected on the <em>shaped</em> held-out metric (per-split 0.1168 / 0.0976, mean <strong>0.1072</strong>); pooled shaping <strong>t0=0.397 + thin &rarr; 0.0859</strong> held-out vs <strong>0.0436</strong> raw probabilities</td></tr>
+      <tr><td>Inference</td><td>sliding window + Gaussian blend, 8-way TTA; the shaping pair was read from <code>manifest.json</code> (not hard-coded) and cut total probability mass <strong>33 375 &rarr; 346</strong> (mean 0.0011, 346 non-zero px); wrote 667&times;489 float32. <code>src/inference.py</code> now records all of this in <code>outputs_recon/inference_summary.json</code>, and &sect;7 checks this row against it</td></tr>
       <tr><td>Format validation</td><td>&#10003; EPSG:32611, &#10003; 100 m, &#10003; single band, &#10003; float32, &#10003; values in [0,1], &#10003; size+transform match template</td></tr>
     </table>
     <p class="small">Two real bugs were found by running this and are now fixed: negative-stride arrays from
       flips crashing <code>torch.from_numpy</code>, and the manifest write dropped by a refactor.
       Both have tests.</p>
+    <p class="small"><strong>Correction (2026-09-13), kept visible rather than silently edited:</strong> this table
+    previously reported the Train row as <code>t0=0.146 &rarr; 0.0913 vs 0.0462</code> and the inference mass as
+    <code>&rarr; 1 140</code>. Those were the <em>3-split <code>combined_dw</code> A/B arm</em> from &sect;5 and a run
+    that predated the pooled-calibration fix, not the end-to-end run described here; the replay of the exact commands
+    above gives 0.0859 / 0.0436 and 346. Reading your own published table against the artifacts is the cheapest
+    check there is &mdash; it is now part of <code>scripts/measure_submission_variants.py</code>&rsquo;s job to
+    regenerate the shaping rows and of <code>scripts/audit_docs.py</code> to keep the citations honest.</p>
   </section>
 
   <section id="ab" class="card">
