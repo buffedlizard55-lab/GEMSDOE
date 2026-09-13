@@ -3,6 +3,7 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: ["main", "arena/**"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -33,6 +34,10 @@ jobs:
           python src/metrics.py --self-test
 
   deploy:
+    # GitHub Pages in this repo is protected so only `main` may deploy (the environment
+    # policy rejects other branches, which used to show up as a red "deploy" check on every
+    # working branch).  The audit job still runs on every branch and every PR.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: docs-audit
     environment:
       name: github-pages
