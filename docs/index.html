@@ -161,7 +161,7 @@ FN_w = Σ_{g∈G} [1 - max_{x:d(x,g)≤R} p(x) k(d(x,g))]
 DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
 
 α=0.2, β=0.8, ε small</pre>
-        <p>Implementation: <code>src/metrics.py</code> uses <code>distance_transform_edt</code> for FP weighting and 7×7 max filter for TP/FN (R=3 → window 2R+1=7).</p>
+        <p>Implementation: <code>src/metrics.py</code> enumerates the 29 integer offsets whose Euclidean distance is ≤ R and takes <code>max</code> of <code>p(x)·k(d)</code> over them for TP<sub>w</sub>/FN<sub>w</sub>; <code>distance_transform_edt</code> on the label mask supplies the FP weight <code>1 − max k</code>. A square 7×7 window is deliberately <em>not</em> used: it would credit corner pixels at d≈4.24 px, which the spec&rsquo;s radius excludes. Full rasters score in blocks with an R-pixel halo (<code>score_arrays_blocked</code>), asserted identical to the dense path, so GeoDAWN-scale scoring does not allocate O(H·W·49).</p>
       </div>
       <div>
         <h3>Scoring Example (from page)</h3>
