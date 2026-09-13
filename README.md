@@ -201,7 +201,7 @@ GEMSDOE/
 │   ├── postprocess.py
 │   ├── submission_optim.py   # metric-derived floor + dominating-set thinning
 │   └── external_data.py
-├── tests/test_metric.py      # 19 falsifiable checks of every claim in this repo
+├── tests/test_metric.py      # 20 falsifiable checks of every claim in this repo
 ├── configs/
 │   ├── config.yaml           # leaderboard config (GPU + official data)
 │   └── config_recon_cpu.yaml # CPU smoke config on reconstructed public data
@@ -232,7 +232,7 @@ GEMSDOE/
 ```bash
 pip install -r requirements.txt            # exact verified pins: requirements.verified.txt
 python src/metrics.py --self-test          # 8 checks: scorer == literal formula transcription
-python tests/test_metric.py                # 19/19 pass
+python tests/test_metric.py                # 20/20 pass
 python scripts/build_reconstruction_dataset.py        # needs the pinned public-source tree (see data/README.md)
 python -m src.train     --config configs/config_recon_cpu.yaml
 python -m src.inference --config configs/config_recon_cpu.yaml --out outputs_recon/submission.tif

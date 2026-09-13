@@ -147,7 +147,7 @@ public-data reconstruction below succeeded: repo *tarballs* are reachable, file-
   (tarball sha256 `f78b96a36fd5e814…`), containing USGS GeoDAWN 22103 area-1 grids and INGENIOUS fault/seismicity
   layers. Built with `scripts/build_reconstruction_dataset.py` → 16-band EPSG:32611/100 m stack, 1.42 % fault pixels.
 - **Full pipeline executed** on it: train (2 MC splits) → inference → `validate_submission.py` ✅ → metric scoring;
-  plus a 19-test suite and `python src/metrics.py --self-test` (8 checks). Details and numbers: `docs/results.html`.
+  plus a 20-test suite and `python src/metrics.py --self-test` (8 checks). Details and numbers: `docs/results.html`.
 - **Reference solution fully read** (21 notebook cells, cloned) → the baseline hyperparameters cited across this repo
   are now quoted from it rather than paraphrased.
 
@@ -167,3 +167,32 @@ public-data reconstruction below succeeded: repo *tarballs* are reachable, file-
 5. **Still true:** the official competition rasters cannot reach this sandbox (login-gated + TLS-blocked), so no
    leaderboard-representative score can be produced here. Run `bash scripts/download_competition_data.sh` on an
    unrestricted machine → `data/`, then `python -m src.train --config configs/config.yaml`.
+
+---
+
+## 3. Post-merge review, 2026-09-13 (after PR #3 / #4 merged)
+
+Merging was followed by reading the **published** pages against the artifacts, which found four
+documentation defects and one deployment ambiguity. All are fixed in the repo; the deployment item is
+for the repo owner:
+
+1. `docs/results.html` &sect;4 (end-to-end) quoted the &sect;5 A/B arm's shaping numbers and a pre-fix inference
+   mass. Fixed, with the correction kept visible; `src/inference.py` now writes
+   `outputs_recon/inference_summary.json` so that row is derived from a run record, and `audit_docs.py`
+   re-derives it.
+2. `docs/methodology.html` quoted "perfect line &rarr; 0.91 DTI, shifted 1 px &rarr; 0.61". The code gives
+   **1.0000** and **0.6667** (= k(1) = 2/3) and **0.0000** at 3 px; replaced by the measured table and pinned
+   by `test_line_geometry_dti_values`. Two pages also described a "7&times;7 max filter" that no longer exists
+   (it would credit corners at d&asymp;4.24 px, which the spec's *radius* excludes).
+3. 19 `href="../X.md"` links and 11 bare `href="X.md"` links 404 on the site, because Pages publishes
+   `docs/` as the site root and does not render markdown. Repointed to the repository on GitHub; the
+   audit's new link check enforces it.
+4. The audit gate grew from three checks to five (published tables vs artifacts; site link targets),
+   each falsification-tested.
+5. **Owner action, not code:** `GET /repos/&hellip;/pages` reports `build_type: legacy`, source `main`, path
+   `/`, yet the successful `deploy-pages` job means the artifact (which uploads `docs/`) is what is
+   currently live &mdash; `https://&hellip;/GEMSDOE/` now serves `docs/index.html` and `https://&hellip;/GEMSDOE/docs/...`
+   returns 404. Both builders are therefore racing on every push to `main`. Pick one: set
+   **Settings &rarr; Pages &rarr; Source: GitHub Actions** (recommended; the workflow already uploads `docs/`),
+   or remove the `deploy` job and let Jekyll build the repo root. Nothing in the repo can settle this
+   without the setting change.
