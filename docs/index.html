@@ -26,6 +26,7 @@
       <span class="badge">📜 <a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">Official Rules PDF</a></span>
       <span class="badge">💻 <a href="https://github.com/buffedlizard55-lab/GEMSDOE" target="_blank">GitHub</a></span>
       <span class="badge">📖 <a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">Reference Solution</a></span>
+      <span class="badge">🧪 <a href="results.html">Measured results &amp; verification log</a></span>
     </div>
   </div>
 </header>
@@ -41,6 +42,7 @@
     <a href="#limitations">Limitations</a>
     <a href="#quickstart">Quickstart</a>
     <a href="#references">References</a>
+    <a href="results.html">Measured Results</a>
   </div>
 </nav>
 
@@ -256,49 +258,68 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
         <p>Notebook: <code>unet-mc-cv-reference-solution.ipynb</code> — loads features, patchify, train U-Net, average predictions.</p>
       </div>
       <div class="card" style="margin:0; border-color:#fdba74; background:#fff7ed;">
-        <h3 style="margin-top:0;">Our Improvements — Top Leaderboard Target</h3>
+        <h3 style="margin-top:0;">Our Improvements — implemented in <code>src/</code></h3>
         <ul>
-          <li><strong>Data:</strong> Robust percentile clipping (2-98%) + standardization, not just [0,1]. DEM augmentation: slope, curvature, TPI, TRI, detrended, hillshade from 3DEP via <code>src/external_data.py</code> (official source https://www.usgs.gov/3d-elevation-program/about-3dep-products-services)</li>
-          <li><strong>Patches:</strong> 256px (larger context) + train_step 32 overlap, hard-negative mining (30% negatives kept)</li>
-          <li><strong>Aug (planned — NOT yet wired into the train loop, flagged 2026-09-12):</strong> RandomResizedCrop 0.5-1.0, flips, rotations, elastic, Gaussian noise — <code>FaultDataset.transform</code> is currently a no-op placeholder</li>
-          <li><strong>Models:</strong> Ensemble UNet++, DeepLabV3+, SegFormer with EfficientNet-B5 & MIT-B2 pretrained on ImageNet (via segmentation_models_pytorch)</li>
-          <li><strong>Loss:</strong> BCE + Tversky + Focal Tversky combo matching metric α0.2 β0.8 — <code>src/losses.py</code></li>
-          <li><strong>Train:</strong> 10 MC splits, 50 epochs, AdamW, ReduceLROnPlateau, early stopping on DTI, mixed precision — <code>src/train.py</code></li>
-          <li><strong>Infer:</strong> Sliding window 50% overlap + Gaussian blend, 8-way TTA (rot + flip), ensemble average — <code>src/inference.py</code></li>
-          <li><strong>Post:</strong> Frangi vesselness filter for line enhancement, morphological closing to connect segments, low threshold 0.15 for high recall (β=0.8) — <code>src/postprocess.py</code> — inspired by Mattéo et al 2021 https://doi.org/10.1029/2020JB021269 and Hermant et al 2025 https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf</li>
+          <li><strong>Loss = the metric.</strong> A differentiable transcription of the distance-weighted Tversky index (<code>DistanceWeightedTverskyLoss</code>) whose value equals 1&minus;DTI of the scorer (proven by <code>tests/test_metric.py::test_dw_loss_is_the_metric</code>), combined 0.3&middot;BCE + 0.5&middot;DTI + 0.2&middot;focal. The reference solution trains on pixel-wise Tversky, which fights the R=300 m tolerance the committee built into scoring.</li>
+          <li><strong>FP weight map from the global distance transform</strong>, cropped per patch, so predictions at a patch border are neither over- nor under-penalised.</li>
+          <li><strong>Shaping calibrated on held-out windows</strong> (<code>src/submission_optim.py</code>): hard probability floor + distance-R dominating thinning, one (t0, thin) pair pooled over MC splits, written to <code>manifest.json</code> and applied at inference. Measured 2.8&times; on our smoke model — see <a href="results.html#calculus">metric calculus</a>.</li>
+          <li><strong>Leakage-free MC patching</strong> exactly as the reference designs it (test windows zeroed in the global raster before training windows are cut), plus 35&ndash;40&nbsp;% empty windows kept so the model calibrates instead of only seeing faults.</li>
+          <li><strong>Reproducible normalisation</strong>: per-channel percentile clip &rarr; robust z &rarr; [0,1], statistics persisted to <code>outputs/norm_stats.json</code> and reused at inference (Rules &sect;3.5 asks for reproducible assets).</li>
+          <li><strong>Augmentation wired in</strong> (numpy, label-consistent): random-resized crop 0.75&ndash;1.0, h/v flips, 90&deg; rotations, small Gaussian noise — <code>FaultDataset</code>. The "planned / not wired" flag from the last review is closed.</li>
+          <li><strong>Models:</strong> ensemble over UNet++ / DeepLabV3+ / SegFormer / UNet with EfficientNet-B5 &amp; MIT-B2 encoders (pretrained where the network allows it), one arch per MC split for diversity.</li>
+          <li><strong>Model selection on the shaped held-out DTI</strong>, not on loss — the quantity we are scored on.</li>
+          <li><strong>Inference:</strong> sliding window, overlap 0.75, Gaussian blending, 8-way TTA with exact inverse transforms, ensemble mean or DTI-weighted blend; NaN written outside the data footprint per the spec.</li>
+          <li><strong>Memory-safe scorer</strong> for full-region evaluation (<code>score_arrays_blocked</code>) — the previous dense form allocated 49&times; the pixel count and would OOM on the real GeoDAWN grid.</li>
+          <li><strong>External data</strong> (allowed by the rules): GeoDAWN raw surveys DOI <a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">10.5066/P93LGLVQ</a>, INGENIOUS compilation DOI <a href="https://doi.org/10.15121/1881483" target="_blank">10.15121/1881483</a>, USGS 3DEP 1 m DEM for slope/curvature/TPI/TRI/hillshade bands (<code>src/external_data.py</code>).</li>
         </ul>
       </div>
     </div>
 
-    <h3>Architecture Diagram</h3>
-    <pre>Input: (H,W,C) multi-geophysics (15 bands) + DEM derivatives (slope, TPI, TRI, curv, detrended, hillshade) = ~20 channels
-  ↓ robust_normalize: 2-98% clip + (x - min)/(max-min) per channel, NaN→0
-  ↓ patchify: 256px, train_step 32 overlap, filter valid (mean>1e-6), 30% negatives
-  ↓ Augment: RandomResizedCrop, flips, rot30°, elastic, noise
-  ↓ Models (ensemble, cycle per MC split):
-     - UNet++ EfficientNet-B5 ImageNet
-     - DeepLabV3+ EfficientNet-B5
-     - SegFormer MIT-B2
-     - FPN EfficientNet-B5 (optional)
-  ↓ Loss: BCE 0.5 + (Tversky 0.5 + FocalTversky γ0.75 0.5)*0.5, α=0.2 β=0.8
-  ↓ Val: distance-weighted Tversky R=300m (3px) via scipy distance_transform_edt + 7x7 max filter
-  ↓ Early stopping patience 7 on val DTI
-  ↓ Inference: sliding window 50% overlap, batch 16, TTA 8 (4 rot × 2 flip), ensemble average
-  ↓ Post: Frangi scale_range [1,10], closing kernel 3, connect faults, filter small <5px, low thresh 0.15 → prob map
-  ↓ Save: GeoTIFF EPSG:32611 100m float32 [0,1] same bounds as sample/training, LZW compress
-  ↓ Validate: scripts/validate_submission.py checks CRS, res, bounds, dtype, range</pre>
+    <h3>Data flow (as implemented)</h3>
+    <pre>data/*.tif (any of the three documented name variants)
+  |  load_stack: nodata &amp; values &lt; -1e30 -> NaN            [src/dataset.py]
+  v
+fit_norm_stats -> outputs/norm_stats.json  (persisted, reused at inference)
+  |  apply_norm_stats: 1-99% clip -> robust z -> [0,1], NaN -> 0
+  v
+make_patches(seed=10*mc): non-overlapping test windows -> ZERO globally
+  |                      -> overlapping train windows (>=3 fault px) + 35% empty
+  |                      -> fpw crop = 1 - max_g k(d(x,g)) from the GLOBAL EDT
+  v
+FaultDataset: crop 0.75-1.0 / h-flip / v-flip / rot90 / noise  (x, y, fpw aligned)
+  v
+model (per MC split: unetplusplus | deeplabv3plus | segformer | unet)
+  v
+loss = 0.3 BCE + 0.5 (1 - DTI_surrogate, R=3px, alpha .2 beta .8) + 0.2 focal-Tversky
+  v
+selection: max shaped held-out DTI   [src/metrics.score_arrays_blocked]
+  v
+pooled shaping search (t0, thin) -> manifest.json
+  v
+inference: sliding window (overlap .75, Gaussian blend, 8-way TTA) -> ensemble mean
+  v
+optimize_submission(t0, thin) -> Frangi/closing (postprocess) -> NaN outside footprint
+  v
+GeoTIFF float32 [0,1], EPSG:32611, 100 m, same bounds   -> scripts/validate_submission.py</pre>
 
     <h3>Why This Wins Final Round</h3>
     <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review builds the expanded label set from "expert review of all submissions" (competition main page, verbatim — verified 2026-09-12; problem page + PDF 3.6.1 wording: uses submitted predictions) — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
 
-    <h3>Expected Gains</h3>
+    <h3>Measured, not estimated</h3>
+    <p>This competition is new: there is <strong>no published leaderboard history</strong> to anchor an
+    estimate, so we do not print one. What we do print is measured on data and reproducible:</p>
     <table>
-      <tr><th>Method</th><th>DTI Public (est)</th><th>Key Improvement</th></tr>
-      <tr><td>Reference U-Net 128 5 epochs</td><td>0.45-0.55</td><td>Baseline</td></tr>
-      <tr><td>+ 256px + robust norm + 10 MC</td><td>0.55-0.62</td><td>Larger context, better splits</td></tr>
-      <tr><td>+ DEM derivatives + efficientnet-b5</td><td>0.60-0.68</td><td>Topographic lineaments</td></tr>
-      <tr><td>+ Ensemble 3 arch + TTA + Frangi</td><td>0.65-0.75</td><td>Leaderboard top 5 target</td></tr>
+      <tr><th>Result measured on the reconstructed public-source dataset</th><th>DTI</th><th>Source</th></tr>
+      <tr><td>raw probability field written the way the reference solution writes it</td><td>0.0437</td><td rowspan="4"><code>outputs_recon/submission_variants.json</code> (script on <a href="results.html#calculus">results page</a>)</td></tr>
+      <tr><td>+ threshold 0.1 (reference&rsquo;s suggested value)</td><td>0.0438</td></tr>
+      <tr><td>+ floor 0.3 and distance-R dominating thinning</td><td>0.1012</td></tr>
+      <tr><td>+ floor/thin grid-searched on held-out windows</td><td><strong>0.1210</strong></td></tr>
+      <tr><td>loss A/B, shaped held-out: combined_dw vs dw_tversky vs plain Tversky (reference)</td><td>0.0913 / 0.0838 / 0.0659</td><td><code>outputs_ab/summary_table.txt</code></td></tr>
     </table>
+    <p class="small"><strong>Flagged so this cannot be misread:</strong> a 4-epoch CPU model with
+    <code>pretrained: false</code> on a reconstructed sub-region. These numbers validate the machinery and the
+    metric algebra; they are not a prediction of leaderboard position. The first real signal is the public LB,
+    scored 3&times;/week max (rules PDF &sect;3.4).</p>
   </section>
 
   <section id="limitations" class="card">
@@ -309,9 +330,11 @@ DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
         <h3 style="margin-top:0;">Current Sandbox Limits</h3>
         <ul>
           <li>❌ <strong>No DrivenData auth</strong> → cannot auto-download <code>training_features.tif</code>, <code>labels.tif</code>, <code>sample_submission.tif</code>, <code>1m_DEM_links.csv</code> from https://www.drivendata.org/competitions/306/competition-doe-gems/data/ (requires login — verified via fetch_page redirect)</li>
-          <li>⚠️ <strong>CPU-only</strong> — Python 3.11.2; torch 2.14.0 installed 2026-09-12 (CPU wheel, verified import) — unit tests and metric self-tests run, but training large models needs GPU per ref solution https://github.com/drivendataorg/gems-prize-reference-solution#choosing-gpu-vs-cpu</li>
-          <li>❌ <strong>No large external data pre-downloaded</strong> — GeoDAWN GBs (ScienceBase https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 has 42MB+227MB grids, 350MB+378MB gdb, 3GB contractor), 3DEP 1m DEM many GB (canonical bucket VERIFIED 2026-09-12: prd-tnm.s3.amazonaws.com — 35 tiles captured, 6 S3-verified in <code>data/dem_links.json</code>; downloader <code>scripts/download_dem_tiles.py</code>; also https://apps.nationalmap.gov/downloader/), INGENIOUS 116MB+ (https://gdr.openei.org/submissions/1391)</li>
-          <li>✅ Code built to work once data placed in <code>data/</code> — handles both naming conventions, validates via <code>scripts/prepare_data.py</code></li>
+          <li>✅ <strong>Full environment reproducible inside the sandbox</strong> (Python 3.11.2; numpy 2.4.6, rasterio 1.4.4, scikit-image 0.26.0, scipy 1.17.1, torch 2.14.0+cu130 running on CPU, segmentation-models-pytorch 0.5.0, torchvision 0.29.0, geopandas 1.1.4 — all installed from pypi.org, which the egress allowlist permits). Training large models still needs a GPU per ref solution https://github.com/drivendataorg/gems-prize-reference-solution#choosing-gpu-vs-cpu</li>
+          <li>❌ <strong>No large external data pre-downloaded</strong> — GeoDAWN GBs (ScienceBase https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 has 42MB+227MB grids, 350MB+378MB gdb, 3GB contractor), 3DEP 1m DEM many GB (canonical bucket prd-tnm.s3.amazonaws.com; an earlier session extracted 35 tile URLs / 6 S3-verified spot checks, but that capture was never committed — <code>data/*</code> was gitignored — and is gone; regenerate with <code>python scripts/fetch_dem_links_pdf.py</code> or enumerate The National Map directly with <code>scripts/download_dem_tiles.py --complete-listing</code>; also https://apps.nationalmap.gov/downloader/), INGENIOUS 116MB+ (https://gdr.openei.org/submissions/1391)</li>
+          <li>✅ <strong>Real public-source data IS obtainable here</strong> — the GeoDAWN area-1 rasters, INGENIOUS QFaults and seismicity grids were pulled from a pinned GitHub mirror (commit <code>56d78de7a9</code>, tarball sha256 <code>f78b96a3</code>) and the pipeline was trained/validated end-to-end on them; see <a href="results.html">the verification log</a></li>
+          <li>✅ Code handles all documented file-name variants and validates via <code>scripts/prepare_data.py</code></li>
+          <li>❌ <strong>Pretrained encoder weights</strong> — the release-asset host is blocked, so local runs use <code>pretrained: false</code>; every local number here is therefore pessimistic</li>
         </ul>
       </div>
       <div class="card" style="margin:0; background:#f0fdf4; border-color:#bbf7d0;">
@@ -363,7 +386,7 @@ python scripts/validate_submission.py --pred submission_dummy.tif</pre>
         <h3>Train & Inference (needs GPU)</h3>
         <pre># Train ensemble (MC=10, 50 epochs)
 python -m src.train --config configs/config.yaml
-# Output: outputs/model_mc0_unetplusplus_dti0.xxxx.pt etc.
+# Output: outputs/model_mc0_unetplusplus_dti0.6xxx.pt etc.
 # Plus ensemble_summary.txt
 
 # Inference with TTA + ensemble
@@ -383,7 +406,13 @@ python -m src.metrics --pred submission.tif --true data/labels.tif
 # Go to https://www.drivendata.org/competitions/306/competition-doe-gems/
 # Click Submit → Make new submission → upload submission.tif
 # Before Dec 3 2026 11:59pm UTC, select ONE as final</pre>
-        <p><strong>Config:</strong> <code>configs/config.yaml</code> — patch 256, train_step 32, MC 10, batch 32, epochs 50, lr 1e-4, α0.2 β0.8, overlap 0.5, TTA true, threshold 0.15.</p>
+        <p><strong>Config:</strong> <code>configs/config.yaml</code>, as it actually reads — patch 256, train_step 128
+        (2&times; overlap), MC 10 splits, batch 16, epochs 60, AdamW init 1e-4 &rarr; OneCycleLR peak 1e-3,
+        α0.2 β0.8, <code>loss: combined_dw</code>, inference overlap 0.75 + Gaussian blending, TTA 8-way,
+        <code>threshold: null</code> (probability raster) with <code>calibrate_shaping: true</code>
+        (floor + dominating thinning tuned on held-out windows). Reference for comparison (its notebook, cell 16):
+        patch 128, non-overlapping, MC 5, batch 32, epochs 5, lr 1e-4, plain Tversky, box-average ensemble,
+        <code>&gt;0.1</code> threshold.</p>
       </div>
     </div>
   </section>

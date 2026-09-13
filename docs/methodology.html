@@ -17,7 +17,7 @@
     </div>
   </div>
 </header>
-<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#method" class="active">Method</a></div></nav>
+<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#method" class="active">Method</a><a href="results.html">Measured Results</a></div></nav>
 <main class="container">
   <section class="card">
     <h2>Why Reference Solution is Insufficient</h2>
@@ -25,15 +25,25 @@
     <ul>
       <li>Single U-Net, 5 MC splits, patch 128, 5 epochs, basic [0,1] min-max norm</li>
       <li>No external DEM, no TTA, no ensemble, no post-processing, no robust norm</li>
-      <li>DTI of reference: unmeasured here (clearly labeled estimate — no verified public baseline exists for this new competition)</li>
+      <li>No distance weighting in the loss, no submission shaping, and no scoring code at all: the notebook tracks only <code>TverskyLoss</code> values. The <strong>distance-weighted Tversky index</strong> is described on the problem page but is not implemented anywhere in the reference repo (verified by reading every cell of <code>unet-mc-cv-reference-solution.ipynb</code>, 21 cells, cloned 2026-09-12)</li>
+      <li>Cosmetics that matter: it writes <code>predicted_faults_example.tif</code> without NaN outside the valid footprint and without clipping to [0,1] (cell 19 copies crs/transform only)</li>
     </ul>
-    <p>Our tuned ensemble targets 0.65+ DTI in local Monte Carlo cross-validation (estimate; public LB via 3 submissions/week will be the first real signal).</p>
+    <p><strong>We do not publish an expected DTI.</strong> There is no public history for this competition to
+    calibrate against, so any such number would be invented. What we publish instead is measured on real public
+    data and reproducible: <a href="results.html">the verification log</a> (metric equivalence tests, the shaping
+    experiment worth 2.8× on a smoke model, and a 3-arm loss A/B). The public leaderboard
+    (3 submissions/week max, rules §3.4) is the first unbiased signal.</p>
   </section>
 
   <section class="card">
     <h2>Data Engineering — Verified Sources</h2>
-    <h3>Robust Normalization</h3>
-    <p>Per-channel NaN-aware clipping 2-98 percentile + min-max to [0,1] or standardization, not just min-max. Handles outliers in mag, gravity, conductivity. Implemented in <code>src/dataset.py:robust_normalize()</code>.</p>
+    <h3>Normalization (stats persisted, so train == inference == reproduction)</h3>
+    <p>Per channel: 1–99 percentile clip → robust z-score → [0,1], NaN→0. The reference solution's plain
+    min–max over the whole raster (<code>(X - nanmin)/(nanmax - nanmin)</code>, cell 5) is not robust to the
+    heavy-tailed magnetic/gravity bands; we keep <code>mode: minmax</code> available for A/B. Statistics are
+    written to <code>outputs/norm_stats.json</code> at train time and re-loaded at inference
+    (<code>fit_norm_stats</code> / <code>apply_norm_stats</code> in <code>src/dataset.py</code>) — required by
+    rules §3.5 ("sufficiently reproduce the winning results").</p>
     
     <h3>External DEM Features from 3DEP</h3>
     <p>Official source: USGS 3DEP https://www.usgs.gov/3d-elevation-program/about-3dep-products-services + Downloader https://apps.nationalmap.gov/downloader/ + LidarExplorer https://apps.nationalmap.gov/lidar-explorer/ + AWS https://registry.opendata.aws/usgs-lidar/</p>
@@ -49,10 +59,24 @@
     <p>Implemented in <code>src/external_data.py</code>. These augment provided features; faults often correlate with topographic lineaments.</p>
 
     <h3>Patching</h3>
-    <p>Overlapping training patches (train_step 32) vs non-overlap test, filter patches with fault presence + valid elevation, hard-negative mining (keep 30% negatives). Patch size 256 vs 128 in reference → larger context for fault continuity. Implemented in <code>src/dataset.py:make_patches()</code>.</p>
+    <p>Reference design (cells 11–12): cut non-overlapping test windows, <strong>zero them in the global
+    raster</strong>, then re-patchify with a smaller train step — we keep that order of operations exactly, because
+    the previous version of this repo kept training windows that partially overlapped test labels (CV optimism;
+    flagged in review, now fixed and pinned by <code>test_patches_have_no_label_leakage</code>).</p>
+    <ul>
+      <li>train windows need ≥3 fault pixels; empty windows kept at <code>neg_fraction</code> (0.35–0.4) so the model learns the background — the reference trains only on fault-bearing windows, which is why its outputs are diffuse</li>
+      <li><strong>per-patch FP weight map</strong> = 1 − max_g k(d(x,g)), cropped from the <em>global</em> EDT, so a prediction at a patch border is neither rewarded nor punished by the crop</li>
+      <li>patch 256 (config) vs 128 in reference: faults here are km-scale lineaments and need wider context</li>
+    </ul>
+    <p>Implemented in <code>src/dataset.py:make_patches()</code>.</p>
 
     <h3>Augmentation</h3>
-    <p>RandomResizedCrop 0.5-1.0 ratio 0.75-1.33, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation 30°, elastic, Gaussian noise, brightness/contrast per channel. Via torchvision transforms v2.</p>
+    <p>Implemented in <code>src/dataset.py:FaultDataset</code> (numpy, applied identically to x, y and the FP-weight
+    map, so alignment is guaranteed and no torchvision dependency is needed): random crop 0.75–1.0 with
+    re-padding (crop rather than resize, because a fault trace is 1 px wide at 100 m and resampling erases it),
+    horizontal flip, vertical flip, k×90° rotation, Gaussian noise σ=0.01. The reference uses
+    <code>v2.RandomResizedCrop + RandomHorizontalFlip + RandomVerticalFlip + RandomRotation(30)</code> —
+    the same family, and our rotation set is exactly the set our TTA inverts.</p>
   </section>
 
   <section class="card">
@@ -61,8 +85,12 @@
     <ul>
       <li><strong>Encoders:</strong> EfficientNet-B3/B5, ResNet-50, MIT-B2 (SegFormer) pretrained on ImageNet</li>
       <li><strong>Decoders:</strong> UNet++, DeepLabV3+, SegFormer, FPN</li>
-      <li><strong>Loss:</strong> TverskyLoss α0.2 β0.8 + Focal Tversky γ0.75 + BCE combo — <code>src/losses.py</code> — weighted to match metric (FN penalized 4× FP)</li>
-      <li><strong>Training:</strong> MC CV 10 splits 70/30 stratified by fault density, mixed precision, AdamW lr 1e-4 weight_decay 1e-4, OneCycleLR/ReduceLROnPlateau, early stopping patience 7 on DTI</li>
+      <li><strong>Loss:</strong> 0.3 BCE + 0.5 (1 − DTI_surrogate) + 0.2 focal-Tversky. The DW term is a
+          differentiable transcription of the official metric (R=3 px kernel, α=0.2, β=0.8) and is asserted
+          equal to 1 − DTI of the scorer by <code>tests/test_metric.py::test_dw_loss_is_the_metric</code>
+          — <code>src/losses.py</code></li>
+      <li><strong>Training:</strong> 10 MC splits (70/30), AdamW lr 1e-4 → OneCycleLR peak 1e-3, batch 16, 60 epochs, AMP on CUDA, model selection on <em>shaped</em> held-out DTI, one architecture per split; artefacts and the calibrated shaping pair land in <code>outputs/manifest.json</code></li>
+      <li><strong>Submission shaping:</strong> floor + distance-R dominating thinning, parameters searched on pooled held-out windows (<code>src/submission_optim.py</code>) — the FP term is an area sum, so this is worth more than any architecture change we measured</li>
       <li><strong>Inference:</strong> Sliding window 50% overlap + Gaussian blending, TTA 8 flips/rotations, ensemble averaging across MC splits and architectures — <code>src/inference.py</code></li>
     </ul>
     <p>Why ensemble? Different architectures capture different fault scales: UNet++ for fine details, DeepLabV3+ for multi-scale context (atrous), SegFormer for global attention.</p>

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Measured Results &amp; Verification Log — GEMSDOE</title>
+<link rel="stylesheet" href="style.css">
+<meta name="description" content="Every quantitative claim in this repository, with the command that produced it: metric verification, test suite, end-to-end pipeline run, and the measured metric-calculus result.">
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>Measured Results &amp; Verification Log</h1>
+    <p class="subtitle">No number on this site is asserted without the command that produced it. Reproduce with the commands shown.</p>
+    <div class="badges">
+      <span class="badge"><a href="index.html">&larr; Back to Main</a></span>
+      <span class="badge"><a href="https://github.com/buffedlizard55-lab/GEMSDOE" target="_blank">Repository</a></span>
+      <span class="badge"><a href="data_catalog.csv">Per-link audit table</a></span>
+    </div>
+  </div>
+</header>
+
+<nav><div class="container">
+  <a href="#metric">Metric verification</a>
+  <a href="#tests">Test suite</a>
+  <a href="#calculus">Metric calculus</a>
+  <a href="#e2e">End-to-end run</a>
+  <a href="#ab">Loss A/B</a>
+  <a href="#data">Data provenance</a>
+  <a href="#audit">Docs audit</a>
+  <a href="#env">Environment &amp; limits</a>
+</div></nav>
+
+<main class="container">
+
+  <div class="alert">
+    <strong>Scope of the numbers below.</strong> They were produced inside the development sandbox
+    (2 vCPU, no GPU, allowlisted egress) on the <em>reconstructed public-source dataset</em>
+    (USGS GeoDAWN 22103 area&nbsp;1 + INGENIOUS QFaults + INGENIOUS seismicity), <u>not</u> on the
+    official login-gated competition rasters. They therefore validate <strong>the machinery and the
+    metric mathematics</strong> &mdash; not leaderboard quality. A 4-epoch CPU model is a plumbing test.
+  </div>
+
+  <section id="metric" class="card">
+    <h2>1. Metric implementation vs. the official definition</h2>
+    <p>The scorer in <code>src/metrics.py</code> transcribes
+      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric" target="_blank">the four formulas on the problem page</a>
+      (<code>k(d)=max(1-d/R,0)</code>, R=300 m = 3 px; <code>TP_w</code>, <code>FP_w</code>, <code>FN_w</code>,
+      <code>DTI = TP_w/(TP_w+&alpha;FP_w+&beta;FN_w+&epsilon;)</code>, &alpha;=0.2, &beta;=0.8). Verification is
+      <em>implementation-independent</em>: a second, deliberately naive transcription
+      (<code>_brute_force_dti</code>, literal double loops over |G|&times;|P|) is compared to the fast one.</p>
+    <table>
+      <tr><th>Check</th><th>Command</th><th>Result</th></tr>
+      <tr><td>Fast == brute force on 6 random + 3 structured rasters</td><td><code>python src/metrics.py --self-test</code></td><td>agree to &lt;1e-9</td></tr>
+      <tr><td>Memory-safe blocked scorer == dense scorer</td><td>same, check [2]</td><td>DTI identical (0.209663 on the test raster)</td></tr>
+      <tr><td>Official worked example arithmetic: TP=3.00, FP=1.89, FN=2.00 &rarr; page says 0.60</td><td>same, check [3]</td><td><code>3/(3+0.2&middot;1.89+0.8&middot;2.00) = 0.6027</code> &rarr; rounds to <strong>0.60</strong> &#10003;</td></tr>
+      <tr><td>Structural identity <code>TP_w + FN_w = |G|</code></td><td>same, check [5]</td><td>exact</td></tr>
+      <tr><td>Kernel spot values + radius filter (29 offsets in a d&le;3 disc)</td><td>same, check [8]</td><td>k(0)=1, k(1)=2/3, k(&radic;8)=1-&radic;8/3, k(3)=0, (0,4)&notin;kernel</td></tr>
+      <tr><td>Raster search for the page's example grid</td><td>same, check [4]</td><td><strong>not reproduced</strong>: the pixel grid is a PNG on
+        <code>drivendata-public-assets.s3.amazonaws.com</code>, which this sandbox cannot reach. Flagged, not guessed.
+        A configuration with FP_w=2.00 was found that also yields exactly 0.60, i.e. consistent with the printed value.</td></tr>
+    </table>
+    <p><strong>Hand-derived cross-check</strong> (also in the suite): 20-pixel vertical GT line, prediction 2 px
+      parallel to it &rarr; every GT pixel earns k=1&minus;2/3, so TP<sub>w</sub>=20/3, FP<sub>w</sub>=FN<sub>w</sub>=40/3 and
+      DTI = 1/(1+0.2&middot;2+0.8&middot;2) = <strong>1/3</strong>. Code returns 0.3333333317; the 1.7e-9 residual is
+      exactly the <code>&epsilon;</code> in the denominator. Note the problem page does not specify &epsilon;
+      (flagged irregularity &mdash; our default 1e-7 changes scores by &lt;1e-6).</p>
+  </section>
+
+  <section id="tests" class="card">
+    <h2>2. Test suite &mdash; 19 checks, each falsifying a repo claim</h2>
+    <p><code>python tests/test_metric.py</code> (no pytest needed) &rarr; <strong>19/19 passed</strong>, 2026-09-12 (re-run after the final commit of the session).</p>
+    <table>
+      <tr><th>Test</th><th>What it pins down</th></tr>
+      <tr><td><code>test_metric_equals_brute_force_definition</code></td><td>fast scorer == literal formula transcription</td></tr>
+      <tr><td><code>test_blocked_equals_dense</code></td><td>the full-raster path is exact, not an approximation (fixes a 49&times; memory blow-up that OOM'd at GeoDAWN scale)</td></tr>
+      <tr><td><code>test_official_worked_example_arithmetic</code></td><td>our reading of the DTI formula reproduces the page's 0.60</td></tr>
+      <tr><td><code>test_tp_plus_fn_equals_number_of_gt_pixels</code></td><td>the identity the calibration analysis relies on</td></tr>
+      <tr><td><code>test_kernel_values_and_radius</code></td><td>triangular kernel, Euclidean radius, 29 offsets</td></tr>
+      <tr><td><code>test_recall_is_worth_four_times_precision</code></td><td>&alpha;/&beta; asymmetry direction (FP-heavy map beats FN-heavy map)</td></tr>
+      <tr><td><code>test_within_R_offsets_are_credited_but_beyond_R_are_not</code></td><td>credit dies at exactly d&gt;3 px; the 1/3 case above</td></tr>
+      <tr><td><code>test_nan_outside_and_out_of_range_are_handled</code></td><td>spec says "null or nan outside the bounds" &rarr; must not poison the score</td></tr>
+      <tr><td><code>test_dw_loss_is_the_metric</code></td><td>the differentiable loss equals 1&minus;DTI of the numpy scorer (mean over batch), gradients finite &amp; non-zero</td></tr>
+      <tr><td><code>test_fp_weight_map_definition</code></td><td>0 on GT, 1/3 one px away, 1 beyond R</td></tr>
+      <tr><td><code>test_patches_have_no_label_leakage</code></td><td>test windows are zeroed in the global raster before training windows are cut (per-window assertion, closes the bug flagged in the previous review)</td></tr>
+      <tr><td><code>test_augmentation_is_label_consistent</code></td><td>crop / flips / rot-90 keep x, y and the FP-weight map aligned</td></tr>
+      <tr><td><code>test_norm_stats_roundtrip</code></td><td>deterministic, persisted normalisation (Rules &sect;3.5 reproducibility)</td></tr>
+      <tr><td><code>test_floor_reduces_fp_mass_without_losing_credit</code></td><td>shaping claim (1)</td></tr>
+      <tr><td><code>test_thinning_wide_band_onto_a_narrow_fault_raises_dti</code></td><td>shaping claim (2), incl. the counter-case for thick GT</td></tr>
+      <tr><td><code>test_marginal_rule_predict_only_within_R</code></td><td>the k &gt; &alpha;&middot;DTI marginal rule, numerically</td></tr>
+      <tr><td><code>test_submission_writing_helpers</code></td><td><code>scripts/validate_submission.py</code> passes on a spec-conformant file</td></tr>
+      <tr><td><code>test_manifest_is_written_by_training</code></td><td>regression for a refactor that silently stopped writing <code>manifest.json</code> (found by this very test)</td></tr>
+      <tr><td><code>test_postprocess_version_shims_behave_identically</code></td><td>scikit-image renamed <code>square</code>&rarr;<code>footprint_rectangle</code> and <code>min_size</code>&rarr;<code>max_size</code>; the shims must be bit-identical, otherwise post-processing silently changes the submitted mask (a bare <code>except:</code> here used to return the <em>unfiltered</em> mask)</td></tr>
+    </table>
+  </section>
+
+  <section id="calculus" class="card">
+    <h2>3. Metric calculus &mdash; the algebra that decides submission shape</h2>
+    <p>From the official formulas, three consequences follow that the reference solution does not exploit
+      (it writes raw probabilities; its own cell 17 only hints "it may be advantageous to threshold").</p>
+    <ol>
+      <li><strong>FP<sub>w</sub> is a sum over area, |G| is a count of line pixels.</strong>
+        Faults are ~1.4&nbsp;% of pixels in the public-source reconstruction, so diffuse probability fields are
+        destroyed: <code>DTI &le; TP_w/(0.2&middot;FP_w)</code>. Measured: a mean-p=0.20 field over 326&nbsp;kpx
+        gave FP<sub>w</sub>=32&nbsp;872 against |G|=968 &rarr; DTI 0.044.</li>
+      <li><strong>TP<sub>w</sub> is a MAX over the R-neighborhood.</strong> One p=1 pixel within 3 px of a ground-truth
+        pixel earns essentially all the credit that pixel can earn; the 4&ndash;12 parallel pixels of the same
+        corridor add nothing to TP while each adds 0.2(1&minus;k) to FP. &rarr; <em>thin the prediction, do not dilute it.</em></li>
+      <li><strong>Marginal rule.</strong> Adding probability v at pixel x (when it becomes the argmax for some g)
+        changes DTI by <code>v(k&middot;D &minus; 0.2&middot;N)/D&sup2;</code>, so it pays iff <code>k &gt; &alpha;&middot;DTI</code>.
+        At DTI=0.6 that is d &lt; 2.64 px; beyond R=3 px it never pays unless the pixel truly is GT.
+        &rarr; a "just-in-case halo" around an already-covered fault is pure cost; a corridor <em>toward</em>
+        a suspected-but-unlabelled fault is nearly free. This is the lever for the Final Round
+        (expert review rewards genuine new discoveries, &sect;3.6 of the rules PDF).</li>
+    </ol>
+    <p>Consequence implemented in <code>src/submission_optim.py</code>: hard floor (zero, not shrink) +
+      distance-R dominating thinning, with the single (t0, thin) pair chosen by <em>pooled held-out</em> search
+      during training and stored in <code>manifest.json</code> for inference.</p>
+    <h3>Measured on held-out Monte-Carlo windows (never on training labels)</h3>
+    <table>
+      <tr><th>Submission variant</th><th>DTI</th><th>FP<sub>w</sub></th><th>probability mass</th><th>% px &gt; 0</th></tr>
+      <tr><td>raw probabilities (reference-style)</td><td>0.0437</td><td>32 872</td><td>33 751</td><td>33.4 %</td></tr>
+      <tr><td>threshold at 0.1 (reference's suggested value)</td><td>0.0438</td><td>105 648</td><td>108 296</td><td>33.2 %</td></tr>
+      <tr><td>floor 0.3, no thinning</td><td>0.0531</td><td>65 149</td><td>66 908</td><td>20.5 %</td></tr>
+      <tr><td><strong>floor 0.3 + dominating thin</strong></td><td><strong>0.1012</strong></td><td>9 540</td><td>9 791</td><td>3.0 %</td></tr>
+      <tr><td>floor 0.5 + dominating thin</td><td>0.0719</td><td>785</td><td>855</td><td>0.26 %</td></tr>
+      <tr><td>soft floor 0.3, &gamma;=2 (shrink instead of zero)</td><td>0.0166</td><td>856</td><td>893</td><td>20.5 %</td></tr>
+      <tr><td><strong>grid-searched (t0=0.40, thin)</strong></td><td><strong>0.1210</strong></td><td>&mdash;</td><td>5 137</td><td>&mdash;</td></tr>
+    </table>
+    <p class="small">Source: <code>scripts/measure_submission_variants.py</code> &rarr;
+      <code>outputs_recon/submission_variants.json</code>. Reading: shaping is worth
+      <strong>2.8&times;</strong> on the same weights; plain thresholding at 0.1 is worth nothing; and shrinking
+      instead of zeroing is <em>worse than doing nothing</em> (it cuts TP credit as fast as FP mass).
+      The optimum moves with model quality, which is why t0 is searched per training run and not hard-coded.</p>
+  </section>
+
+  <section id="e2e" class="card">
+    <h2>4. End-to-end pipeline run (real data, CPU)</h2>
+    <pre>python scripts/build_reconstruction_dataset.py     # 16-band stack + labels, EPSG:32611, 100 m
+python -m src.train    --config configs/config_recon_cpu.yaml --override training.mc_splits=2
+python -m src.inference --config configs/config_recon_cpu.yaml --out outputs_recon/submission.tif
+python scripts/validate_submission.py --pred outputs_recon/submission.tif \
+       --sample data/reconstructed/recon_sample_submission.tif \
+       --train data/reconstructed/recon_training_features.tif
+python -m src.metrics --pred ... --true ...</pre>
+    <table>
+      <tr><th>Stage</th><th>Evidence from the actual run</th></tr>
+      <tr><td>Build</td><td>16 bands, valid fraction 74.0&ndash;74.7 % per band; 4 630 fault px = 1.42 %; labels unique {0,1}</td></tr>
+      <tr><td>Train</td><td>2 MC splits &times; 4 epochs; per-epoch <code>DTI_raw</code> and <code>DTI_shaped</code> logged; best epoch selected on the <em>shaped</em> held-out metric; pooled shaping t0=0.146 thin=True &rarr; 0.0913 vs 0.0462 raw</td></tr>
+      <tr><td>Inference</td><td>sliding window + Gaussian blend; shaping applied (mass 33 375 &rarr; 1 140); wrote 667&times;489 float32 with NaN outside footprint</td></tr>
+      <tr><td>Format validation</td><td>&#10003; EPSG:32611, &#10003; 100 m, &#10003; single band, &#10003; float32, &#10003; values in [0,1], &#10003; size+transform match template</td></tr>
+    </table>
+    <p class="small">Two real bugs were found by running this and are now fixed: negative-stride arrays from
+      flips crashing <code>torch.from_numpy</code>, and the manifest write dropped by a refactor.
+      Both have tests.</p>
+  </section>
+
+  <section id="ab" class="card">
+    <h2>5. Loss A/B experiment</h2>
+    <p>Same data, same seeds, same budget (3 MC splits &times; 4 epochs, UNet/MobileNetV2, no pretraining),
+      only the objective changes. Metric = pooled <em>held-out</em> DTI after shaping.
+      Command: <code>bash scripts/run_ab_loss_experiment.sh</code> &rarr; <code>outputs_ab/summary.txt</code>.</p>
+    <table id="ab-table">
+      <tr><th>Loss</th><th>held-out DTI, shaped</th><th>held-out DTI, raw</th><th>shaping found</th><th>per-split best shaped DTI</th></tr>
+      <tr><td><code>combined_dw</code> = 0.3&middot;BCE + 0.5&middot;(1&minus;DTI) + 0.2&middot;focal-Tversky &mdash; <strong>repo default</strong></td>
+          <td><strong>0.0913</strong></td><td>0.0462</td><td>t0=0.146, thin</td><td>0.1168 / 0.0976 / 0.1215</td></tr>
+      <tr><td><code>dw_tversky</code> = pure differentiable competition metric</td>
+          <td>0.0838</td><td>0.0394</td><td>t0=0.334, thin</td><td>0.1176 / 0.1049 / 0.1229</td></tr>
+      <tr><td><code>plain_tversky</code> = the reference solution's criterion</td>
+          <td>0.0659</td><td>0.0427</td><td>t0=0.271, thin</td><td>0.0736 / 0.1047 / 0.1175</td></tr>
+    </table>
+    <p>Reading: at this budget the metric-aligned objectives beat the reference's pixel-wise Tversky on the
+      <em>shaped</em> held-out metric (+38&nbsp;% and +27&nbsp;% relative; <code>dw_tversky</code> wins two of three
+      individual splits, so the ordering is not stable). Shaping helps every arm
+      (+97&nbsp;% / +113&nbsp;% / +54&nbsp;% relative to its own raw field), which is the robust part of the result.</p>
+    <p class="small"><strong>How far to trust this:</strong> 4-epoch CPU MobileNetV2/UNet on a reconstructed
+      sub-region with <code>pretrained: false</code> (weight downloads are blocked here) cannot settle an architecture
+      or loss ranking; treat the ordering as directional and the shaping gain as the transferable finding.
+      The experiment is re-runnable on the official data with <code>scripts/run_ab_loss_experiment.sh</code>, and
+      this table is regenerated from <code>outputs_ab/*/manifest.json</code> (<code>summary_table.txt</code>).
+      Any claim elsewhere in this repo of the form "X is better than Y" that is not a row in this table has been
+      removed. A crash found by this very run (plain Tversky path rejected the shared <code>fp_weight</code>
+      kwarg) is fixed and covered by the test suite.</p>
+  </section>
+
+  <section id="data" class="card">
+    <h2>6. Data provenance actually obtained (and what is still blocked)</h2>
+    <table>
+      <tr><th>Item</th><th>Source &amp; verification</th><th>SHA-256 (first 16)</th></tr>
+      <tr><td>Source tree <code>jklinck/geothermal_research</code></td><td><a href="https://github.com/jklinck/geothermal_research" target="_blank">github.com/jklinck/geothermal_research</a>, pinned commit <code>56d78de7a989c12e2dce50cd65a4095df57030d2</code> (2026-06-25, read from api.github.com); its README states INGENIOUS via <a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a> and GeoDAWN via <a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">USGS ScienceBase</a></td><td><code>f78b96a36fd5e814</code> (390 MB tarball)</td></tr>
+      <tr><td>GeoDAWN survey 22103 area 1 rasters (13 bands, EPSG:32611, 50 m, nodata &minus;999999)</td><td>inside that tree; upstream USGS DOI <a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">10.5066/P93LGLVQ</a> &mdash; the same DOI cited in footnote 3 of the official rules PDF</td><td><code>d26a81902df32de8</code> (dem), <code>6fb634623dce993b</code> (tmi)</td></tr>
+      <tr><td>INGENIOUS quaternary faults (label source)</td><td>upstream <a href="https://doi.org/10.15121/1881483" target="_blank">10.15121/1881483</a>, cited in footnote 4 of the rules PDF as the origin of the competition's training labels</td><td>in <code>data/reconstructed/provenance.json</code></td></tr>
+      <tr><td>Built stack / labels / template</td><td><code>data/reconstructed/</code>, every input hashed in <code>provenance.json</code></td><td><code>5a5b926197ae6d1c</code> / <code>6c0c249e76a64f1b</code> / <code>4acf720f6c2c73a3</code></td></tr>
+    </table>
+    <div class="alert warn">
+      <strong>Still blocked &mdash; the only real blocker to a leaderboard run.</strong>
+      The official <code>training_features.tif</code> / <code>labels.tif</code> / <code>sample_submission.tif</code> /
+      <code>1m_DEM_links.csv</code> require a logged-in DrivenData account, and every re-test on 2026-09-12 shows
+      TLS to <code>drivendata.org</code>, <code>dropbox.com</code>, <code>prd-tnm.s3.amazonaws.com</code>,
+      <code>sciencebase.gov</code>, <code>gdr.openei.org</code>, <code>raw.githubusercontent.com</code>,
+      <code>huggingface.co</code> and <code>web.archive.org</code> failing with
+      <code>SSL_ERROR_SYSCALL</code> (curl exit 35). Reachable: <code>github.com</code>, <code>codeload.github.com</code>,
+      <code>api.github.com</code>, <code>pypi.org</code>, <code>files.pythonhosted.org</code>.
+      GitHub code search over five distinctive filenames returns <strong>0 hits</strong>, so no public mirror exists.
+      Fix: run <code>bash scripts/download_competition_data.sh</code> on any unrestricted machine into <code>data/</code>,
+      then <code>python scripts/prepare_data.py</code>.
+    </div>
+  </section>
+
+  <section id="audit" class="card">
+    <h2>7. Documentation is audited by a script, not by reading alone</h2>
+    <p>Two defects found during this review were of a class that prose review misses: docs cited
+    <code>data/dem_links.json</code> and <code>data/evidence/dem_links_pdf_chunk0.txt</code>, which
+    <code>.gitignore</code> (<code>data/*</code>, allow-listing only <code>README.md</code>) had kept out of
+    the repository, so the links pointed at nothing; and a citation in the catalog carried a wrong page range
+    (<em>Into the Noddyverse</em> is ESSD 14, <strong>381&ndash;392</strong>, not 381&ndash;416 &mdash;
+    <a href="https://doi.org/10.5194/essd-14-381-2022">10.5194/essd-14-381-2022</a>, re-read on the publisher
+    page 2026-09-12).</p>
+    <p><code>scripts/audit_docs.py</code> (stdlib only) now checks this mechanically, and it gates the Pages
+    deploy in <code>.github/workflows/pages.yml</code>:</p>
+    <ul>
+      <li>every <code>data/…</code>, <code>docs/…</code>, <code>src/…</code>, <code>scripts/…</code>,
+          <code>outputs/…</code> path cited in any <code>*.md</code> or <code>docs/*.html</code> must exist,
+          or be produced by a command named in the script&rsquo;s <code>GENERATED</code> table (so
+          <code>data/labels.tif</code> may be cited as &ldquo;download first&rdquo;, but a citation with no
+          producing command fails the build);</li>
+      <li>the data catalog must have unique ids and, per row, an https link, a verification method, an
+          in-past date, and a result &ge;10 chars; a row whose method is <em>linked-from&hellip;</em> must say
+          <code>VERIFIED INDIRECTLY</code> rather than reading like a direct check &mdash; 11 rows were relabelled
+          that way, and a link to a page the sandbox cannot reach is stated as such;</li>
+      <li>every linked host must appear in the catalog, the bibliography, or the documented
+          <code>CONTEXT_HOSTS</code> table with a reason.</li>
+    </ul>
+    <pre>python scripts/audit_docs.py        # exit 1 = a doc claim is not backed by a file or an audit row</pre>
+    <p class="small">This is the concrete answer to &ldquo;verify line by line, no hallucinations&rdquo;: the
+    claims are now checked by code on every push, not only by a reader once.</p>
+  </section>
+
+  <section id="env" class="card">
+    <h2>8. Environment, limits and what we need</h2>
+    <table>
+      <tr><th>Need</th><th>Status here</th><th>Why it matters</th></tr>
+      <tr><td>GPU</td><td>&#10008; CPU only, 2 vCPU / 3 GB RAM</td><td>config target is 256-px patches &times; batch 16 &times; 60 epochs &times; 10 splits; the reference solution itself recommends CUDA 12.6/13.0 or Apple MPS</td></tr>
+      <tr><td>Pretrained encoders</td><td>&#10008; release-asset host blocked</td><td><code>pretrained: true</code> works on an unrestricted machine; here runs use <code>pretrained: false</code>, which understates every local number on this page</td></tr>
+      <tr><td>Official competition rasters</td><td>&#10008; login + egress</td><td>see &sect;6</td></tr>
+      <tr><td>1 m DEM tiles (USGS 3DEP)</td><td>&#10008; S3 blocked</td><td><code>scripts/download_dem_tiles.py</code> enumerates the authoritative list from The National Map on an unrestricted machine</td></tr>
+      <tr><td>Python environment</td><td>&#10003; built from PyPI in-sandbox: numpy 2.4.6, rasterio 1.4.4, scikit-image 0.26.0, scipy 1.17.1, torch 2.14.0+cu130 (CPU), segmentation-models-pytorch 0.5.0, torchvision 0.29.0, geopandas 1.1.4</td><td>proves <code>requirements.txt</code>/<code>environment.yml</code> are consistent with what the code imports</td></tr>
+      <tr><td>DrivenData submission</td><td>&#10008; account needed</td><td>3 submissions/week (rules PDF &sect;3.4); one final submission selected before the deadline (&sect;3.5)</td></tr>
+    </table>
+    <p class="small"><strong>Generative-AI disclosure (rules &sect;3.2 requires it in the finalist narrative):</strong>
+      code, documentation and this page in this repository were produced with an AI coding agent; every factual
+      claim is either (i) a quotation from a linked official page/PDF, (ii) a number printed by a command shown
+      on this page, or (iii) explicitly marked as an estimate.</p>
+  </section>
+
+</main>
+<footer><div class="container">GEMSDOE &mdash; verification log, regenerated 2026-09-12. See <a href="data_catalog.csv">data_catalog.csv</a> for the per-link audit table.</div></footer>
+</body>
+</html>
