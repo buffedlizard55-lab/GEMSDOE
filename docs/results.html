@@ -170,9 +170,24 @@ python -m src.metrics --pred ... --true ...</pre>
           <td>0.0659</td><td>0.0427</td><td>t0=0.271, thin</td><td>0.0736 / 0.1047 / 0.1175</td></tr>
     </table>
     <p>Reading: at this budget the metric-aligned objectives beat the reference's pixel-wise Tversky on the
-      <em>shaped</em> held-out metric (+38&nbsp;% and +27&nbsp;% relative; <code>dw_tversky</code> wins two of three
-      individual splits, so the ordering is not stable). Shaping helps every arm
+      <em>shaped</em> held-out metric (+38&nbsp;% and +27&nbsp;% relative). Shaping helps every arm
       (+97&nbsp;% / +113&nbsp;% / +54&nbsp;% relative to its own raw field), which is the robust part of the result.</p>
+    <div class="alert"><strong>Two columns, two different questions &mdash; read them separately.</strong>
+      <code>dw_tversky</code> is ahead in <em>all three</em> per-split values
+      (0.1176&gt;0.1168, 0.1049&gt;0.0976, 0.1229&gt;0.1215) yet loses the pooled column
+      (0.0838 vs 0.0913). That is not a contradiction: the per-split column is each split's own best-epoch
+      selection value, whereas the pooled number comes from a <em>single</em> floor/thin pair searched jointly over
+      all splits' windows (t0=0.146 for <code>combined_dw</code>, t0=0.334 for <code>dw_tversky</code>), and a
+      calibration that transfers across splits is what the leaderboard needs. So the honest summary is:
+      <u>both DW arms beat the reference criterion; which DW arm wins depends on whether you evaluate per split or
+      with one pooled submission transform</u> &mdash; not settled at this budget.
+      <span class="small">(An earlier revision of this paragraph said <code>dw_tversky</code> "wins two of three
+      splits"; that was wrong against the artifacts and is corrected here.)</span></div>
+    <p class="small"><strong>Independent reproduction (2026-09-13):</strong> the whole experiment was re-run in a
+      rebuilt sandbox and a freshly created venv, from the pinned upstream tarball
+      (sha256 <code>f78b96a3&hellip;</code>, re-verified bit-identical). Every value in this table and in the
+      shaping table reproduced exactly, including the per-split triples, and the built stack reproduced the recorded
+      per-file hashes (features <code>5a5b926197ae6d1c&hellip;</code>).</p>
     <p class="small"><strong>How far to trust this:</strong> 4-epoch CPU MobileNetV2/UNet on a reconstructed
       sub-region with <code>pretrained: false</code> (weight downloads are blocked here) cannot settle an architecture
       or loss ranking; treat the ordering as directional and the shaping gain as the transferable finding.

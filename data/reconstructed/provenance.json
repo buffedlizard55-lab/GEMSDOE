@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-12 23:03:24",
+  "generated": "2026-09-13 03:37:47",
   "note": "RECONSTRUCTED dataset - NOT official competition files",
   "grid": {
     "crs": "EPSG:32611",
@@ -16,7 +16,7 @@
     ]
   },
   "source_repo": "https://github.com/jklinck/geothermal_research",
-  "source_commit": "56d78de7a989c12e2dce50cd65a4095df57030d2 2026-06-25T06:18:00Z (codeload tarball, fetched 2026-09-12)",
+  "source_commit": "56d78de7a989c12e2dce50cd65a4095df57030d2 2026-06-25T06:18:00Z (codeload tarball, fetched 2026-09-13)",
   "inputs": {
     "22103_dem_a1.tif": {
       "sha256": "d26a81902df32de8a0b9f2622d6fa9423b4313ef773bfe770e28af8e485b9fee",
