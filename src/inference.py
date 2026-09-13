@@ -177,9 +177,10 @@ def main():
     # the training manifest (calibrated on held-out windows); config can override.
     shp = dict(manifest.get("shaping") or {})
     shp.update({k: v for k, v in (cfg["inference"].get("submission_shaping") or {}).items() if v is not None})
+    pre_mass = float(np.nansum(final))          # machine-checkable record for the docs table
     if shp.get("t0") is not None or shp.get("enabled"):
         from .submission_optim import optimize_submission
-        pre = float(np.nansum(final))
+        pre = pre_mass
         final = optimize_submission(final, R=R_px_infer(cfg), t0=float(shp.get("t0", 0.3)),
                                     thin=bool(shp.get("thin", True)), hard=bool(shp.get("hard", True)),
                                     gamma=float(shp.get("gamma", 1.0)))
@@ -221,6 +222,29 @@ def main():
                         n_models=str(len(ckpts)), tta=str(not args.no_tta))
     print(f"wrote {args.out}  valid_px={int(np.isfinite(final).sum())}/{final.size} "
           f"min={np.nanmin(final):.4f} max={np.nanmax(final):.4f} mean={np.nanmean(final):.4f}")
+
+    # Run summary next to the submission: docs/results.html quotes these numbers, and
+    # scripts/audit_docs.py re-derives that row from this file so a stale claim fails CI.
+    summary = {
+        "out": str(args.out),
+        "grid": {"width": int(w), "height": int(h), "crs": str(crs)},
+        "shaping_applied": bool(shp.get("t0") is not None or shp.get("enabled")),
+        "shaping": {k: shp.get(k) for k in ("t0", "thin", "hard", "gamma")},
+        "prob_mass_pre_shaping": round(pre_mass, 1),
+        "prob_mass_post_shaping": round(float(np.nansum(final)), 1),
+        "nonzero_px": int(np.count_nonzero(np.nan_to_num(final))),
+        "finite_px": int(np.isfinite(final).sum()),
+        "total_px": int(final.size),
+        "mean": round(float(np.nanmean(final)), 6),
+        "min": round(float(np.nanmin(final)), 6),
+        "max": round(float(np.nanmax(final)), 6),
+        "n_models": len(ckpts), "models": [c.name for c in ckpts],
+        "tta": bool(not args.no_tta),
+    }
+    spath = Path(args.out).with_name("inference_summary.json")
+    spath.write_text(json.dumps(summary, indent=1))
+    print(f"wrote {spath}  (mass {summary['prob_mass_pre_shaping']:.0f} -> "
+          f"{summary['prob_mass_post_shaping']:.0f})")
 
     if args.score_against and y is not None:
         from .metrics import score_arrays_blocked
