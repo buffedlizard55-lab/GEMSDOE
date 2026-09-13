@@ -341,18 +341,29 @@ def test_marginal_rule_predict_only_within_R():
 
 
 def test_manifest_is_written_by_training(tmp_path=None):
-    """Regression: manifest.json (models + calibrated shaping) must exist after a run -
-    inference depends on it, and an earlier refactor silently dropped its write."""
-    out = ROOT / "outputs_recon"
-    if not (out / "manifest.json").exists():
-        import pytest
-        pytest.skip("no outputs_recon run yet (run: python -m src.train --config configs/config_recon_cpu.yaml)")
-    m = json.loads((out / "manifest.json").read_text())
-    assert m["models"], "manifest has no model entries"
-    assert all("arch" in e and "encoder" in e and "in_channels" in e for e in m["models"])
-    assert "R_pixels" in m and m["n_bands"] > 0
-    if "shaping" in m:
-        assert 0.0 <= m["shaping"]["t0"] <= 1.0 and isinstance(m["shaping"]["thin"], bool)
+    """Regression: training must write manifest.json (models + calibrated shaping) and inference
+    must read it.  An earlier refactor silently dropped the write, so inference reused a stale
+    shaping dict - which is why this is checked at the source level, not only on artifacts
+    (artifacts are gitignored and may not exist on a fresh machine)."""
+    import re as _re
+    src_train = (ROOT / "src" / "train.py").read_text()
+    src_infer = (ROOT / "src" / "inference.py").read_text()
+    assert _re.search(r"manifest\.json", src_train), "src/train.py no longer names manifest.json"
+    # the write itself (currently `(out_dir/"manifest.json").write_text(json.dumps(manifest,...))`)
+    assert _re.search(r"json\.dumps?\(\s*manifest", src_train), \
+        "src/train.py builds a manifest but no longer dumps it - the silent-drop regression"
+    assert "manifest.json" in src_infer or "MANIFEST" in src_infer.upper(), \
+        "src/inference.py no longer reads the manifest, so calibrated shaping would be ignored"
+    for key in ("R_pixels", "band_names", "models", "feature_grid"):
+        assert f'"{key}"' in src_train or key in src_train, f"manifest lost the {key} field"
+    out = ROOT / "outputs_recon" / "manifest.json"
+    if out.exists():                       # if a run is present, its contents must be valid too
+        m = json.loads(out.read_text())
+        assert m["models"], "manifest has no model entries"
+        assert all("arch" in e and "encoder" in e and "in_channels" in e for e in m["models"])
+        assert "R_pixels" in m and m["n_bands"] > 0
+        if "shaping" in m:
+            assert 0.0 <= m["shaping"]["t0"] <= 1.0 and isinstance(m["shaping"]["thin"], bool)
 
 
 def test_postprocess_version_shims_behave_identically():

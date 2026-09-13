@@ -52,6 +52,7 @@ GENERATED = {
     "data/reconstructed/recon_sample_submission.tif": "scripts/build_reconstruction_dataset.py",
     "submission.tif": "src/inference.py",
     "outputs/submission.tif": "src/inference.py",
+    "data/external": "scripts/download_external.sh (and scripts/build_reconstruction_dataset.py)",
     "data/external/jklinck": "scripts/download_external.sh",
 }
 
