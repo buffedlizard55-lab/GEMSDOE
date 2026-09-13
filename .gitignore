@@ -13,6 +13,13 @@ build/
 venv/
 data/*
 !data/README.md
+# audit trail stays in git (small text/json only - never the rasters)
+!data/dem_links.json
+!data/evidence/
+!data/evidence/**
+!data/reconstructed/
+!data/reconstructed/provenance.json
+!data/*.md
 outputs/
 outputs_recon/
 outputs_*/

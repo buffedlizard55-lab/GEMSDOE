@@ -2,7 +2,7 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches: ["arena/01a0972f-gemsdoe", "arena/01a096f7-gemsdoe", "main"]
+    branches: ["main", "arena/**"]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Stdlib-only gate: documentation must not cite artefacts that do not exist, the audit
+  # table must stay internally consistent, and the code must compile.  Pages will not deploy
+  # if this fails - see scripts/audit_docs.py for what it checks and why.
+  docs-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Audit docs + data catalog
+        run: python scripts/audit_docs.py
+      - name: Byte-compile the pipeline
+        run: python -m compileall -q src scripts tests
+      - name: Metric self-test (needs numpy/scipy/rasterio)
+        run: |
+          python -m pip install --quiet numpy scipy rasterio scikit-image
+          python src/metrics.py --self-test
+
   deploy:
+    needs: docs-audit
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

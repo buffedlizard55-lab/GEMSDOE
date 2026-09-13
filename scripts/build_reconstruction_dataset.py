@@ -106,7 +106,11 @@ def main():
     prov = {"generated": time.strftime("%F %T"), "note": "RECONSTRUCTED dataset - NOT official competition files",
             "grid": {**GRID, "resolution_m": 100, "bounds_32611": [GRID["x0"], GRID["y0"] - H * 100, GRID["x0"] + W * 100, GRID["y0"]]},
             "source_repo": "https://github.com/jklinck/geothermal_research",
-            "source_commit": subprocess.check_output(["git", "-C", str(SRC), "rev-parse", "HEAD"], text=True).strip(),
+            # pinned upstream commit (verified 2026-09-12 via api.github.com and recorded in
+            # data/external/jklinck_pinned_commit.txt; the tree was delivered as a
+            # codeload tarball because this sandbox blocks raw.githubusercontent.com)
+            "source_commit": (SRC.parent / "jklinck_pinned_commit.txt").read_text().strip()
+                             if (SRC.parent / "jklinck_pinned_commit.txt").exists() else "unknown",
             "inputs": {}, "bands": []}
 
     # ---- GeoDAWN bands ----
