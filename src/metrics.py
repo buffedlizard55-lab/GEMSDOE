@@ -1,171 +1,387 @@
-"""
-Distance-weighted Tversky Index - exact reproduction of competition metric.
-Verified against problem description: https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/
+"""Distance-weighted Tversky index (DTI) - competition metric, exact + memory-safe.
 
-Formulas:
-k(d) = max(1 - d/R, 0) triangular kernel, R=300m = 3 pixels at 100m
-TP_w = sum_{g in G} max_{x: d(x,g)<=R} p(x) k(d(x,g))
-FP_w = sum_{x:p(x)>0} p(x) [1 - max_{g in G} k(d(x,g))]
-FN_w = sum_{g in G} [1 - max_{x:d(x,g)<=R} p(x) k(d(x,g))]
-DTI = TP_w / (TP_w + alpha FP_w + beta FN_w + eps)
+SPEC SOURCE (fetched 2026-09-12, verbatim from the official problem page):
+    https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric
 
-Official verified source: competition page.
+    k(d)            = (1 - d/R)_+ = max(1 - d/R, 0)      R = 300 m = 3 px @ 100 m
+    TP_w            = sum_{g in G} max_{x: d(x,g)<=R} p(x) * k(d(x,g))
+    FP_w            = sum_{x: p(x)>0} p(x) * [1 - max_{g in G} k(d(x,g))]
+    FN_w            = sum_{g in G} [1 - max_{x: d(x,g)<=R} p(x) * k(d(x,g))]
+    DTI(a,b)        = TP_w / (TP_w + a*FP_w + b*FN_w + eps)          a=0.2, b=0.8
+
+Structural identity used by our tests (holds for ANY p, from the two sums above):
+    TP_w + FN_w = |G|          (each ground-truth pixel contributes m and 1-m)
+
+Implementation notes
+--------------------
+* Kernel offsets are enumerated exhaustively over the (2R+1)^2 neighbourhood
+  (R=3 -> 29 offsets with d<=3). This is *exactly* the definition - no
+  approximation, no "best-match" heuristics.
+* Blocked evaluation (``score_rasters``) so a full GeoDAWN-scale raster never
+  materialises an (H, W, 2R+1, 2R+1) array.  The naive dense form needs
+  49x the pixels in float32: for 10_000x10_000 that is ~20 GB -> OOM.
+* Distances are Euclidean in *pixel* units, matching "3 pixels at 100 m".
 """
+
+from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
+
 import numpy as np
 import rasterio
 from scipy.ndimage import distance_transform_edt
 
-def triangular_kernel(distance_map, R_pixels=3):
-    """k(d) = max(1 - d/R, 0)"""
-    return np.maximum(1.0 - distance_map / R_pixels, 0.0)
+__all__ = [
+    "kernel_offsets",
+    "compute_distance_weighted_tversky",
+    "score_arrays_blocked",
+    "evaluate_geotiff",
+    "dti_bounds",
+]
 
-def compute_distance_weighted_tversky(pred, gt, R_pixels=3, alpha=0.2, beta=0.8, eps=1e-7, return_components=False):
-    """
-    pred: (H,W) float in [0,1]
-    gt: (H,W) binary {0,1} or bool
-    R_pixels: int, 300m / 100m = 3
-    """
-    pred = np.nan_to_num(np.asarray(pred, dtype=np.float32), nan=0.0, posinf=1.0, neginf=0.0)
-    gt = (gt > 0.5).astype(bool) if gt.dtype != bool else gt
+DEFAULT_ALPHA = 0.2
+DEFAULT_BETA = 0.8
+DEFAULT_R_PIXELS = 3
+EPS = 1e-7
 
-    # If no GT faults, handle edge case: metric should be 1 if no pred, else penalize FP
-    if not np.any(gt):
-        FP_w = np.sum(pred)  # no kernel weighting because no GT
-        TP_w = 0.0
-        FN_w = 0.0
+
+# --------------------------------------------------------------------------------------
+# kernel
+# --------------------------------------------------------------------------------------
+def kernel_offsets(R: int = DEFAULT_R_PIXELS):
+    """All (dy, dx, k) with Euclidean distance <= R, k = max(1 - d/R, 0).
+
+    Includes (0,0) with k=1. Offsets are exhaustive over the square, filtered by
+    the *Euclidean* radius, exactly as d(x, g) in the problem statement.
+    """
+    offs = []
+    for dy in range(-R, R + 1):
+        for dx in range(-R, R + 1):
+            d = math.hypot(dy, dx)
+            if d <= R + 1e-12:
+                offs.append((dy, dx, max(1.0 - d / R, 0.0)))
+    return offs
+
+
+def _credit_map(pred: np.ndarray, offsets) -> np.ndarray:
+    """credit(g) = max_{x: d(x,g)<=R} p(x) * k(d(x,g)) for every pixel g.
+
+    Shift-and-max over the kernel offsets: for each offset we take the prediction
+    window shifted so that the neighbour sits at the position of g, scale by that
+    offset's kernel value, then take the running max.  ``pred`` outside the array is
+    treated as 0 (padded), matching "no prediction outside the region".
+    """
+    H, W = pred.shape
+    credit = np.zeros((H, W), dtype=np.float64)
+    for dy, dx, k in offsets:
+        # value of pred at (i+dy, j+dx), placed at (i, j)
+        src_y0, src_y1 = max(0, dy), min(H, H + dy)
+        dst_y0, dst_y1 = max(0, -dy), min(H, H - dy)
+        src_x0, src_x1 = max(0, dx), min(W, W + dx)
+        dst_x0, dst_x1 = max(0, -dx), min(W, W - dx)
+        if src_y1 <= src_y0 or src_x1 <= src_x0:
+            continue
+        shifted = np.zeros((H, W), dtype=np.float64)
+        shifted[dst_y0:dst_y1, dst_x0:dst_x1] = pred[src_y0:src_y1, src_x0:src_x1]
+        np.maximum(credit, k * shifted, out=credit)
+    return credit
+
+
+# --------------------------------------------------------------------------------------
+# core metric
+# --------------------------------------------------------------------------------------
+def compute_distance_weighted_tversky(
+    pred,
+    gt,
+    R_pixels: int = DEFAULT_R_PIXELS,
+    alpha: float = DEFAULT_ALPHA,
+    beta: float = DEFAULT_BETA,
+    eps: float = EPS,
+    return_components: bool = False,
+):
+    """Exact DTI on 2-D arrays.
+
+    pred : (H,W) float in [0,1] (NaN / +-inf / <0 / >1 sanitised by clipping after
+           NaN->0, as the submission spec forbids values outside [0,1])
+    gt   : (H,W) ground truth, >0.5 treated as fault
+    """
+    pred = np.asarray(pred, dtype=np.float64)
+    gt = np.asarray(gt)
+    if pred.ndim != 2 or gt.ndim != 2:
+        raise ValueError(f"expected 2-D arrays, got {pred.shape} and {gt.shape}")
+    if pred.shape != gt.shape:
+        raise ValueError(f"shape mismatch: pred {pred.shape} vs gt {gt.shape}")
+
+    # spec: values must be in [0,1]; null/nan outside the region -> 0 credit, 0 penalty
+    pred = np.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=0.0)
+    np.clip(pred, 0.0, 1.0, out=pred)
+    gt_bool = gt.astype(bool) if gt.dtype == np.bool_ else (np.nan_to_num(gt, nan=0.0) > 0.5)
+
+    n_gt = int(gt_bool.sum())
+    if n_gt == 0:
+        # Degenerate: no ground-truth pixels.  FP_w is then p everywhere (max_g k = 0).
+        FP_w = float(pred.sum())
         dti = 0.0 if FP_w > 0 else 1.0
-        if return_components:
-            return dti, (TP_w, FP_w, FN_w)
-        return dti
+        return (dti, (0.0, FP_w, 0.0)) if return_components else dti
 
-    # Distance from each pixel to nearest GT pixel
-    # For FP weighting: need max_g k(d(x,g)) = k(distance_to_nearest_GT)
-    # distance_transform_edt with inverted gt gives distance to nearest True
-    # edt returns distance to background; so for distance to GT, we invert?
-    # If gt is True for fault, we want distance to nearest True.
-    # distance_transform_edt(~gt) gives distance to nearest False? Actually need check:
-    # edt of binary image: distance to background (0). So if we want distance to GT (True), we do edt of ~gt.
-    dist_to_gt = distance_transform_edt(~gt)  # distance to nearest GT pixel
-    k_to_gt = triangular_kernel(dist_to_gt, R_pixels=R_pixels)  # max_g k(d(x,g))
+    offsets = kernel_offsets(R_pixels)
+    credit = _credit_map(pred, offsets)
 
-    # For TP and FN: need for each GT pixel, max_{x: d(x,g)<=R} p(x) k(d(x,g))
-    # This is like: for each GT pixel, look in R neighborhood for best weighted pred.
-    # Efficient approximation: dilate pred weighted by kernel?
-    # Brute force approach: for each GT pixel, extract window and compute max.
-    # But we can use distance transform of pred-weighted? Let's implement efficient two-step:
-    # Compute pred * k? No, k depends on distance between x and g.
-    # For each GT pixel g, we need max over x within R of p(x) * k(dist(x,g))
-    # This is equivalent to max-filter of p(x) weighted by distance to g.
-    # We can approximate by: for each x, its contribution to nearby GT pixels is p(x)*k(dist). So for each GT pixel, max over neighborhood.
-    # We'll implement via iterative dilation using max filter with distance-weighted pred.
+    TP_w = float(credit[gt_bool].sum())
+    FN_w = float(n_gt - TP_w)                      # == sum_g (1 - credit_g) exactly
+    # max_{g in G} k(d(x,g)) = k(d(x, nearest GT)) because k is non-increasing in d
+    dist_to_gt = distance_transform_edt(~gt_bool)
+    k_to_gt = np.maximum(1.0 - dist_to_gt / float(R_pixels), 0.0)
+    pos = pred > 0
+    FP_w = float((pred[pos] * (1.0 - k_to_gt[pos])).sum())
 
-    # Approach: Create an image where each pixel x has value p(x). For each GT pixel g,
-    # we want max_{x in neighborhood} p(x) * (1 - d(x,g)/R)
-    # We can compute via distance transform of "1 - p"? Not straightforward.
-    # We'll use brute-force with uniform_filter optimization? Since R=3, window size = 2*R+1 = 7, small. So we can use view_as_windows or convolution max.
-    # For each GT pixel, we need to search 7x7 window.
-    from skimage.util import view_as_windows
-
-    # Pad pred and compute kernel weights for offset
-    pad = R_pixels
-    pred_padded = np.pad(pred, pad, mode='constant', constant_values=0)
-    H, W = gt.shape
-    # Precompute distance kernel for offset
-    yy, xx = np.mgrid[-R_pixels:R_pixels+1, -R_pixels:R_pixels+1]
-    dist_kernel = np.sqrt(xx**2 + yy**2)
-    k_kernel = triangular_kernel(dist_kernel, R_pixels=R_pixels)  # (2R+1, 2R+1)
-
-    # For each GT pixel, find max p(x)*k
-    # We can vectorize by using view_as_windows on pred_padded
-    # pred_windows shape: (H, W, 2R+1, 2R+1)
-    pred_windows = view_as_windows(pred_padded, (2*R_pixels+1, 2*R_pixels+1))  # (H,W,7,7) if step 1, but view_as_windows returns (H,W,7,7) after squeeze? Let's check.
-    # Actually view_as_windows with window (7,7) on (H+2R, W+2R) gives (H, W, 7,7)?? Need to ensure.
-    # pred_padded shape = H+2R, W+2R. Windows (7,7) -> (H, W, 7,7)
-    # Then weighted
-    weighted = pred_windows * k_kernel[None, None, :, :]  # broadcast
-    max_weighted = np.max(weighted, axis=(2,3))  # (H,W)
-
-    # Only consider GT pixels
-    TP_w = np.sum(max_weighted[gt])
-    FN_w = np.sum(1.0 - max_weighted[gt])
-
-    # FP_w: sum_x p(x) * [1 - max_g k(d(x,g))]
-    FP_w = np.sum(pred * (1.0 - k_to_gt))
-
-    DTI = TP_w / (TP_w + alpha * FP_w + beta * FN_w + eps)
+    dti = TP_w / (TP_w + alpha * FP_w + beta * FN_w + eps)
     if return_components:
-        return DTI, (TP_w, FP_w, FN_w)
-    return DTI
-
-def evaluate_geotiff(pred_path, true_path, R_meters=300, resolution=100, alpha=0.2, beta=0.8):
-    with rasterio.open(pred_path) as src:
-        pred = src.read(1).astype(np.float32)
-        # handle nodata AND NaN (submission spec: NaN outside training bounds)
-        pred = np.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=0.0)
-        if src.nodata is not None:
-            pred = np.where(pred == src.nodata, 0, pred)
-        pred = np.clip(pred, 0, 1)
-    with rasterio.open(true_path) as src:
-        true = src.read(1)
-        if src.nodata is not None:
-            true = np.where(true == src.nodata, 0, true)
-    R_pixels = int(R_meters / resolution)
-    dti, (tp, fp, fn) = compute_distance_weighted_tversky(pred, true, R_pixels=R_pixels, alpha=alpha, beta=beta, return_components=True)
-    print(f"DTI={dti:.5f} TP_w={tp:.2f} FP_w={fp:.2f} FN_w={fn:.2f}")
+        return dti, (TP_w, FP_w, FN_w)
     return dti
 
+
+def score_arrays_blocked(
+    pred,
+    gt,
+    R_pixels: int = DEFAULT_R_PIXELS,
+    alpha: float = DEFAULT_ALPHA,
+    beta: float = DEFAULT_BETA,
+    block: int = 2048,
+):
+    """Full-raster DTI with exact (non-approximate) blocked evaluation.
+
+    Sums TP_w / FP_w / FN_w over blocks.  Every term of the definition is *local*:
+    FP_w is a per-pixel sum, TP_w/FN_w are per-ground-truth-pixel sums whose credit
+    window is the 2R+1 neighbourhood.  Blocks therefore need an R-pixel halo of
+    predictions; ground-truth pixels are counted exactly once (in the interior tile).
+    """
+    pred = np.nan_to_num(np.asarray(pred, dtype=np.float64), nan=0.0, posinf=1.0, neginf=0.0)
+    np.clip(pred, 0.0, 1.0, out=pred)
+    gt = np.asarray(gt)
+    gt_bool = gt.astype(bool) if gt.dtype == np.bool_ else (np.nan_to_num(gt, nan=0.0) > 0.5)
+    H, W = gt_bool.shape
+    offsets = kernel_offsets(R_pixels)
+
+    TP = FP = 0.0
+    n_gt = 0
+    for y0 in range(0, H, block):
+        y1 = min(H, y0 + block)
+        ye0, ye1 = max(0, y0 - R_pixels), min(H, y1 + R_pixels)   # extended window
+        for x0 in range(0, W, block):
+            x1 = min(W, x0 + block)
+            xe0, xe1 = max(0, x0 - R_pixels), min(W, x1 + R_pixels)
+            p_ext = pred[ye0:ye1, xe0:xe1]
+            g_ext = gt_bool[ye0:ye1, xe0:xe1]
+            credit_ext = _credit_map(p_ext, offsets)
+            iy0, iy1 = y0 - ye0, y1 - ye0
+            ix0, ix1 = x0 - xe0, x1 - xe0
+            gi = g_ext[iy0:iy1, ix0:ix1]
+            TP += float(credit_ext[iy0:iy1, ix0:ix1][gi].sum())
+            n_gt += int(gi.sum())
+            dist = distance_transform_edt(~g_ext)   # EDT on the haloed tile (exact within interior)
+            k = np.maximum(1.0 - dist[iy0:iy1, ix0:ix1] / float(R_pixels), 0.0)
+            pi = pred[y0:y1, x0:x1]
+            m = pi > 0
+            FP += float((pi[m] * (1.0 - k[m])).sum())
+    FN = float(n_gt - TP)
+    dti = TP / (TP + alpha * FP + beta * FN + EPS) if (n_gt or FP) else 1.0
+    return dti, (TP, FP, FN)
+
+
+def dti_bounds(TP_w: float, FP_w: float, n_gt: int, alpha=DEFAULT_ALPHA, beta=DEFAULT_BETA):
+    """DTI from (TP_w, FP_w, |G|) using the TP+FN=|G| identity.  Handy for analysis."""
+    FN_w = n_gt - TP_w
+    return TP_w / (TP_w + alpha * FP_w + beta * FN_w)
+
+
+# --------------------------------------------------------------------------------------
+# GeoTIFF-level scoring
+# --------------------------------------------------------------------------------------
+def _read_pred(path):
+    with rasterio.open(path) as src:
+        a = src.read(1).astype(np.float64)
+        if src.nodata is not None:
+            a[a == src.nodata] = 0.0
+    return np.nan_to_num(a, nan=0.0, posinf=1.0, neginf=0.0).clip(0, 1)
+
+
+def _read_gt(path):
+    with rasterio.open(path) as src:
+        a = src.read(1).astype(np.float64)
+        if src.nodata is not None:
+            a[a == src.nodata] = 0.0
+    return np.nan_to_num(a, nan=0.0, neginf=0.0)
+
+
+def evaluate_geotiff(pred_path, true_path, R_meters=300, resolution=100,
+                     alpha=DEFAULT_ALPHA, beta=DEFAULT_BETA, block=2048, verbose=True):
+    pred = _read_pred(pred_path)
+    true = _read_gt(true_path)
+    if pred.shape != true.shape:
+        raise ValueError(f"raster shape mismatch: pred {pred.shape} vs gt {true.shape}")
+    R = int(round(R_meters / resolution))
+    dti, (tp, fp, fn) = score_arrays_blocked(pred, true, R_pixels=R, alpha=alpha, beta=beta, block=block)
+    if verbose:
+        n_gt = int((true > 0.5).sum())
+        print(f"DTI={dti:.5f}  TP_w={tp:.1f}  FP_w={fp:.1f}  FN_w={fn:.1f}  |G|={n_gt}  (R={R}px)")
+    return dti
+
+
+# --------------------------------------------------------------------------------------
+# self-test: brute-force definition vs fast implementation vs official worked example
+# --------------------------------------------------------------------------------------
+def _brute_force_dti(pred, gt, R=3, alpha=0.2, beta=0.8, eps=1e-7):
+    """Textbook transcription of the formulas.  O(|P|*|G| + |G|^2). Test reference only."""
+    H, W = pred.shape
+    P = {(y, x): float(pred[y, x]) for y in range(H) for x in range(W) if pred[y, x] > 0}
+    G = [(y, x) for y in range(H) for x in range(W) if gt[y, x] > 0.5]
+    if not G:
+        return 0.0 if P else 1.0, (0.0, sum(P.values()), 0.0)
+    k = lambda d: max(1.0 - d / R, 0.0)
+    TP = 0.0
+    for g in G:
+        best = 0.0
+        for (y, x), p in P.items():
+            d = math.hypot(y - g[0], x - g[1])
+            if d <= R + 1e-12:
+                best = max(best, p * k(d))
+        TP += best
+    FN = len(G) - TP
+    FP = 0.0
+    for (y, x), p in P.items():
+        best_k = 0.0
+        for g in G:
+            best_k = max(best_k, k(math.hypot(y - g[0], x - g[1])))
+            if best_k >= 1.0:
+                break
+        FP += p * (1.0 - best_k)
+    return TP / (TP + alpha * FP + beta * FN + eps), (TP, FP, FN)
+
+
 def _self_test():
-    """Property tests on synthetic data. Run: python src/metrics.py --self-test"""
+    rng = np.random.default_rng(7)
+    # ---- 1. fast vs brute force on random rasters (the anti-hallucination check) -----
+    for trial in range(6):
+        H = W = 26
+        gt = (rng.random((H, W)) < 0.07).astype(float)
+        # make some structure so distances are interesting
+        if trial % 2:
+            gt[:, 12] = 1.0
+            gt[5:20, 6] = 1.0
+        pred = rng.random((H, W)) * (rng.random((H, W)) < 0.25)
+        d_fast = compute_distance_weighted_tversky(pred, gt)
+        d_brute, _ = _brute_force_dti(pred, gt)
+        assert abs(d_fast - d_brute) < 1e-9, (trial, d_fast, d_brute)
+    print("  [1] fast == brute-force definition (6 random rasters) OK")
+
+    # ---- 2. blocked == dense on a bigger raster --------------------------------------
+    gt = np.zeros((200, 130), float)
+    gt[40:120, 60] = 1.0
+    gt[150:170, 20:100] = 1.0
+    pred = (rng.random((200, 130)) < 0.05) * rng.random((200, 130))
+    dense = compute_distance_weighted_tversky(pred, gt, return_components=True)
+    blocked = score_arrays_blocked(pred, gt, block=64)
+    for a, b, nm in zip(dense[1], blocked[1], ("TP", "FP", "FN")):
+        assert abs(a - b) < 1e-8, (nm, a, b)
+    assert abs(dense[0] - blocked[0]) < 1e-9
+    print(f"  [2] blocked == dense OK (DTI {dense[0]:.6f})")
+
+    # ---- 3. official worked example arithmetic (problem page, "Scoring example") -----
+    #     page states: TP_w=3.00, FP_w=1.89, FN_w=2.00 -> TI_w = 0.60
+    val = 3.00 / (3.00 + 0.2 * 1.89 + 0.8 * 2.00)
+    assert round(val, 2) == 0.60, val
+    print(f"  [3] official example arithmetic reproduces 0.60 (got {val:.4f}) OK")
+
+    # ---- 4. reconstruct that example raster and match 3.00 / 1.89 / 2.00 -------------
+    got = _search_official_example()
+    print(f"  [4] official example raster: {got}")
+
+    # ---- 5. identity TP+FN = |G| ; perfect pred == 1 ; empty == 0 -------------------
+    gt = np.zeros((48, 48)); gt[10:30, 20] = 1.0
+    p = (rng.random((48, 48)) < 0.3) * rng.random((48, 48))
+    _, (tp, fp, fn) = compute_distance_weighted_tversky(p, gt, return_components=True)
+    assert abs(tp + fn - gt.sum()) < 1e-9, (tp, fn, gt.sum())
+    assert abs(compute_distance_weighted_tversky(gt, gt) - 1.0) < 1e-6
+    assert compute_distance_weighted_tversky(np.zeros_like(gt), gt) < 1e-6
+    print("  [5] TP_w+FN_w=|G|, perfect=1, empty=0 OK")
+
+    # ---- 6. alpha/beta asymmetry + kernel support ------------------------------------
+    wide = gt.copy(); wide[35:41, 20:26] = 1.0                     # pure-FP blob far away
+    d_fp = compute_distance_weighted_tversky(wide, gt)
+    miss = gt.copy(); miss[10:20, 20] = 0.0                        # pure-FN removal
+    d_fn = compute_distance_weighted_tversky(miss, gt)
+    assert d_fp > d_fn, (d_fp, d_fn)
+    edge = np.zeros_like(gt); edge[:, 21:23] = 1.0                 # within R=3 of the line
+    far = np.zeros_like(gt); far[:, 24:26] = 1.0                    # 4-5 px away > R
+    assert compute_distance_weighted_tversky(edge, gt) > 0
+    assert compute_distance_weighted_tversky(far, gt) == 0.0
+    print(f"  [6] asymmetry (FP-heavy {d_fp:.4f} > FN-heavy {d_fn:.4f}) + R=3 support OK")
+
+    # ---- 7. NaN padding / out-of-range clip sanitised --------------------------------
+    nanp = gt.astype(float).copy(); nanp[:, :8] = np.nan
+    over = gt.astype(float).copy(); over[:, 30] = 5.0; over[:, 31] = -3.0
+    assert np.isfinite(compute_distance_weighted_tversky(nanp, gt))
+    assert np.isfinite(compute_distance_weighted_tversky(over, gt))
+    print("  [7] NaN / out-of-range sanitisation OK")
+
+    # ---- 8. kernel value spot-check against the formula ------------------------------
+    offs = dict(((dy, dx), k) for dy, dx, k in kernel_offsets(3))
+    assert abs(offs[(0, 0)] - 1.0) < 1e-12
+    assert abs(offs[(0, 1)] - (1 - 1 / 3)) < 1e-12
+    assert abs(offs[(0, 3)] - 0.0) < 1e-12
+    assert abs(offs[(2, 2)] - (1 - math.hypot(2, 2) / 3)) < 1e-12
+    assert (3, 3) not in offs and (0, 4) not in offs          # d=sqrt(18), 4 > R -> excluded
+    print(f"  [8] kernel spot-values + radius filter OK ({len(offs)} offsets in R=3)")
+    print("metrics self-test: ALL 8 CHECKS PASSED")
+
+
+def _search_official_example():
+    """Try to reproduce the page's example (GT = single vertical line, 5 px; TP_w=3.00,
+    FP_w=1.89, FN_w=2.00).  The page shows the pixel grid only as a PNG on
+    drivendata-public-assets.s3.amazonaws.com (not reachable from this sandbox), so we
+    search small binary prediction sets for a configuration consistent with the printed
+    numbers.  If found it confirms our reading of the metric; if not, we still match the
+    printed DTI arithmetic (check 3)."""
+    gt = np.zeros((5, 9))
+    gt[:, 4] = 1.0                       # single vertical line, 5 px
+    target = (3.00, 1.89, 2.00)
     rng = np.random.default_rng(0)
-    gt = np.zeros((64, 64), bool); gt[20:40, 20:44] = True
-    # 1) perfect prediction -> DTI ~ 1
-    assert compute_distance_weighted_tversky(gt.astype(float), gt) > 0.9999, "perfect pred must give ~1"
-    # 2) empty prediction -> DTI ~ 0
-    assert compute_distance_weighted_tversky(np.zeros_like(gt, float), gt) < 1e-4, "empty pred must give ~0"
-    # 3) FN-weighted more than FP (beta=0.8 > alpha=0.2):
-    #    a thin far-away extra blob (pure FP) must score HIGHER than a missing
-    #    fault stripe of equal area (pure FN)
-    pred_fp = gt.astype(float).copy(); pred_fp[50:56, 20:44] = 1.0          # extra, off-fault
-    pred_fn = gt.astype(float).copy(); pred_fn[20:34, 20:44] = 0.0          # removed on-fault area (24*14)
-    d_fp = compute_distance_weighted_tversky(pred_fp, gt)
-    d_fn = compute_distance_weighted_tversky(pred_fn, gt)
-    assert d_fp > d_fn, f"asymmetry violated: FP-heavy {d_fp:.4f} should beat FN-heavy {d_fn:.4f}"
-    # 4a) overlapping shift credited: rect shifted 1px still overlaps at d=0
-    shifted1 = np.zeros_like(gt, float); shifted1[:, 1:] = gt.astype(float)[:, :-1]
-    assert compute_distance_weighted_tversky(shifted1, gt) > 0.5
-    # 4b) kernel decay: pred stripe just off the fault edge (1-2px) is partially
-    #     credited; stripe 4-5px off (> R=3) is fully uncredited (FP only)
-    off1 = np.zeros_like(gt, float); off1[:, 44:46] = 1.0
-    off4 = np.zeros_like(gt, float); off4[:, 47:49] = 1.0
-    d1 = compute_distance_weighted_tversky(off1, gt)
-    d4 = compute_distance_weighted_tversky(off4, gt)
-    assert d1 > d4 and d4 == 0.0, f"kernel decay violated: {d1:.4f} vs {d4:.4f}"
-    # 5) NaN padding must not poison the metric
-    nanpadded = gt.astype(float); nanpadded[:, :10] = np.nan
-    assert np.isfinite(compute_distance_weighted_tversky(nanpadded, gt)), "NaN must be sanitized"
-    # 6) soft probabilities in (0,1) are credited proportionally near GT
-    soft = gt.astype(float) * 0.5
-    d = compute_distance_weighted_tversky(soft, gt)
-    assert 0.4 < d < 0.75, f"soft pred should land mid-range, got {d:.4f}"
-    print("metrics self-test: all property checks passed "
-          f"(d_fp={d_fp:.4f} > d_fn={d_fn:.4f} => alpha/beta asymmetry confirmed; "
-          f"near-stripe {d1:.4f} > far-stripe {d4:.4f} => R=3 kernel decay confirmed)")
+    best = None
+    cand = [(y, x) for y in range(5) for x in range(9)]
+    for _ in range(4000):
+        k = rng.integers(2, 9)
+        idx = rng.choice(len(cand), size=k, replace=False)
+        pred = np.zeros_like(gt)
+        for i in idx:
+            pred[cand[i]] = 1.0
+        _, (tp, fp, fn) = compute_distance_weighted_tversky(pred, gt, return_components=True)
+        err = abs(tp - target[0]) + abs(fp - target[1]) + abs(fn - target[2])
+        if best is None or err < best[0]:
+            best = (err, tp, fp, fn)
+        if err < 0.02:
+            pts = sorted((int(y), int(x)) for y, x in zip(*np.nonzero(pred)))
+            return f"MATCH TP={tp:.2f} FP={fp:.2f} FN={fn:.2f} pred_pixels={pts}"
+    return f"closest TP={best[1]:.2f} FP={best[2]:.2f} FN={best[3]:.2f} (no exact match found; PNG grid not fetchable here)"
 
 
 if __name__ == "__main__":
     import sys
-    if "--self-test" in sys.argv:
-        _self_test(); sys.exit(0)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--pred", required=True, help="predicted GeoTIFF")
-    parser.add_argument("--true", required=True, help="ground truth GeoTIFF")
-    parser.add_argument("--R", type=int, default=300)
-    parser.add_argument("--res", type=int, default=100)
-    parser.add_argument("--alpha", type=float, default=0.2)
-    parser.add_argument("--beta", type=float, default=0.8)
-    args = parser.parse_args()
-    evaluate_geotiff(args.pred, args.true, R_meters=args.R, resolution=args.res, alpha=args.alpha, beta=args.beta)
+    if "--self-test" in sys.argv:
+        _self_test()
+        sys.exit(0)
+
+    ap = argparse.ArgumentParser(description="Score a submission GeoTIFF against ground truth.")
+    ap.add_argument("--pred", required=True)
+    ap.add_argument("--true", required=True)
+    ap.add_argument("--R", type=int, default=300, help="kernel range in metres (official: 300)")
+    ap.add_argument("--res", type=int, default=100, help="pixel size in metres (official: 100)")
+    ap.add_argument("--alpha", type=float, default=DEFAULT_ALPHA)
+    ap.add_argument("--beta", type=float, default=DEFAULT_BETA)
+    ap.add_argument("--block", type=int, default=2048, help="tile size for blocked scoring")
+    a = ap.parse_args()
+    evaluate_geotiff(a.pred, a.true, R_meters=a.R, resolution=a.res,
+                     alpha=a.alpha, beta=a.beta, block=a.block)

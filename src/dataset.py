@@ -1,255 +1,355 @@
-"""
-Dataset utilities for GEMS Prize.
-Handles:
-- Loading training_features.tif / numeric_features.tif and labels.tif
-- Nan-aware normalization
-- Patchify / unpatchify (adapted from reference solution MIT)
-- Augmentation
-- External DEM features
+"""Dataset utilities for the GEMS Prize.
 
-Official sources verified:
-- USGS GeoDAWN: https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7
-- USGS 3DEP: https://www.usgs.gov/3d-elevation-program/about-3dep-products-services
+Responsibilities
+----------------
+* load the competition GeoTIFF stack(s) (all documented name variants are accepted; see
+  data/README.md - the problem page, the reference solution and the Dropbox mirrors each
+  use a different file name)
+* normalisation with *persisted* statistics (train and inference must use the same numbers;
+  Official Rules 3.5 requires assets that "sufficiently reproduce the winning results")
+* patching that follows the reference solution's anti-leakage design: test windows are cut
+  out of the global raster FIRST, zeroed globally, and only then are (overlapping) training
+  windows sampled - so no training window can read a test label
+* augmentation (flips / 90-degree rotations / noise) applied identically to x, y and the
+  false-positive weight map
+* per-patch precomputation of the metric's FP weight map (1 - max_g k(d(x,g))), cropped from
+  the GLOBAL distance transform so predictions at a patch border are not over-penalised
+
+Verified sources
+----------------
+- reference solution (patchify/unpatchify + global zeroing idea):
+  https://github.com/drivendataorg/gems-prize-reference-solution  (cells 9-12)
+- feature/label description + CRS/resolution:
+  https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#datasets
 """
 
+from __future__ import annotations
+
+import json
+import math
 import os
 from pathlib import Path
-from typing import Tuple, Union, List
+from typing import List, Optional, Sequence, Tuple
+
 import numpy as np
 import rasterio
-from skimage.util import view_as_windows
-import torch
 from torch.utils.data import Dataset
 
-Imsize = Union[Tuple[int, int], Tuple[int, int, int]]
+FEATURE_NAME_CANDIDATES = (
+    "training_features.tif",              # problem page
+    "numeric_features.tif",               # reference solution
+    "gems-geodawn-numerical-features.tif",  # Dropbox mirror on the data tab
+    "features.tif",
+)
+LABEL_NAME_CANDIDATES = ("labels.tif", "existing_faults.tif", "faults.tif")   # page / mirror / -
+SAMPLE_NAME_CANDIDATES = ("sample_submission.tif", "example_submission.tif")
 
-def patchify(image: np.ndarray, patch_size: Imsize, step: int = 1) -> np.ndarray:
-    return view_as_windows(image, patch_size, step)
 
-def _unpatchify2d(patches, imsize):
-    # patches: (n_h, n_w, h, w) -> (H,W)
-    n_h, n_w, h, w = patches.shape
-    H, W = imsize
-    # Check divisible
-    assert H % h == 0 and W % w == 0 or True
-    # Reconstruct
-    # Using reshape and transpose
-    # First, combine
-    out = np.zeros(imsize, dtype=patches.dtype)
-    # step = h for non-overlap, but we assume step==patch for unpatchify
-    # If overlapping, need averaging - handled elsewhere
-    for i in range(n_h):
-        for j in range(n_w):
-            out[i*h:(i+1)*h, j*w:(j+1)*w] = patches[i, j]
+def resolve_path(explicit: Optional[str], candidates: Sequence[str], subdirs=("", "reconstructed")) -> str:
+    """Return first existing path among `explicit` then `<dir>/<candidate>` for dir in subdirs."""
+    if explicit:
+        if os.path.exists(explicit):
+            return explicit
+        base = Path(explicit).name
+        for d in subdirs:
+            p = Path("data") / d / base if d else Path("data") / base
+            if p.exists():
+                return str(p)
+    for d in subdirs:
+        for c in candidates:
+            p = (Path("data") / d / c) if d else (Path("data") / c)
+            if p.exists():
+                return str(p)
+    # reconstructed variants
+    for d in subdirs:
+        for c in candidates:
+            p = (Path("data") / d / f"recon_{c}") if d else None
+            if p and p.exists():
+                return str(p)
+    raise FileNotFoundError(
+        f"none of {list(candidates)} found under data/ (checked subdirs {list(subdirs)}). "
+        "Run: bash scripts/download_competition_data.sh"
+    )
+
+
+# --------------------------------------------------------------------------------------
+# loading
+# --------------------------------------------------------------------------------------
+def load_stack(path: str) -> Tuple[np.ndarray, dict, List[dict]]:
+    """-> (H,W,C) float32 array with nodata->NaN, meta dict, per-band tag dicts."""
+    with rasterio.open(path) as src:
+        meta = src.meta.copy()
+        meta["crs"] = src.crs
+        meta["transform"] = src.transform
+        data = src.read().astype(np.float32)          # (C,H,W)
+        nodata = src.nodata
+        tags = []
+        for i in range(1, src.count + 1):
+            t = dict(src.tags(i) or {})
+            tags.append(t)
+    if nodata is not None:
+        data[data == nodata] = np.nan
+    data[~np.isfinite(data)] = np.nan
+    data[data < -1e30] = np.nan                        # reference solution convention
+    return np.moveaxis(data, 0, -1), meta, tags         # (H,W,C)
+
+
+def load_labels(path: str) -> Tuple[np.ndarray, dict]:
+    with rasterio.open(path) as src:
+        meta = src.meta.copy()
+        meta["crs"] = src.crs
+        meta["transform"] = src.transform
+        y = src.read(1).astype(np.float32)
+        if src.nodata is not None:
+            y[y == src.nodata] = 0
+    y[~np.isfinite(y)] = 0
+    y = (y > 0.5).astype(np.float32)          # reference: `y_orig[y_orig < 1] = 0`
+    return y, meta
+
+
+def band_names(tags: List[dict], n: int) -> List[str]:
+    out = []
+    for i in range(n):
+        t = tags[i] if i < len(tags) else {}
+        out.append(t.get("description") or t.get("name") or t.get("LONG_NAME") or f"band_{i}")
     return out
 
-def _unpatchify3d(patches, imsize):
-    n_h, n_w, h, w, c = patches.shape
-    H, W, C = imsize
-    out = np.zeros(imsize, dtype=patches.dtype)
-    for i in range(n_h):
-        for j in range(n_w):
-            out[i*h:(i+1)*h, j*w:(j+1)*w, :] = patches[i, j]
-    return out
 
-def unpatchify(patches: np.ndarray, imsize: Imsize) -> np.ndarray:
-    assert len(patches.shape) / 2 == len(imsize), "dim mismatch"
-    if len(patches.shape) == 4:
-        return _unpatchify2d(patches, imsize)
-    elif len(patches.shape) == 5:
-        return _unpatchify3d(patches, imsize)
-    else:
-        raise NotImplementedError("Unpatchify only supports 2D and 3D")
-
-def robust_normalize(X, clip_percentile=(2,98)):
-    """
-    X: (H,W,C) with NaNs
-    Clip per channel to percentile, then min-max to [0,1] or standardize.
-    """
-    X_norm = np.empty_like(X, dtype=np.float32)
+# --------------------------------------------------------------------------------------
+# normalisation (stats persisted so train == inference == reproduction)
+# --------------------------------------------------------------------------------------
+def fit_norm_stats(X: np.ndarray, clip_percentile=(1.0, 99.0)) -> dict:
+    """Per-channel (lo, hi, mean, std) on finite values, after percentile clipping."""
+    stats = {"clip_percentile": list(clip_percentile), "channels": []}
     for c in range(X.shape[-1]):
-        ch = X[:, :, c]
-        valid = ch[np.isfinite(ch)]
-        if len(valid) == 0:
-            X_norm[:, :, c] = 0
+        ch = X[..., c]
+        v = ch[np.isfinite(ch)]
+        if v.size == 0:
+            stats["channels"].append(dict(lo=0.0, hi=1.0, mean=0.0, std=1.0, n=0))
             continue
-        lo, hi = np.percentile(valid, clip_percentile)
-        ch_clipped = np.clip(ch, lo, hi)
-        # min-max
-        min_v = np.nanmin(ch_clipped)
-        max_v = np.nanmax(ch_clipped)
-        if max_v - min_v < 1e-8:
-            X_norm[:, :, c] = 0
-        else:
-            norm = (ch_clipped - min_v) / (max_v - min_v)
-            norm[~np.isfinite(ch)] = 0
-            X_norm[:, :, c] = norm
-    return X_norm
+        lo, hi = (float(np.percentile(v, clip_percentile[0])), float(np.percentile(v, clip_percentile[1])))
+        if not hi > lo:
+            lo, hi = float(v.min()), float(v.max())
+        sel = v[(v >= lo) & (v <= hi)]
+        mean = float(sel.mean()) if sel.size else 0.0
+        std = float(sel.std()) if sel.size and sel.std() > 1e-8 else 1.0
+        stats["channels"].append(dict(lo=lo, hi=hi, mean=mean, std=std, n=int(v.size)))
+    return stats
 
-def make_patches(X, y, patch_size, test_proportion=0.3, seed=None, train_step=32, min_fault_ratio=0.0):
+
+def apply_norm_stats(X: np.ndarray, stats: dict, mode: str = "clip_zscore") -> np.ndarray:
+    """(H,W,C) -> (H,W,C) float32 in ~[0,1]; NaNs become 0 (model sees 'no data')."""
+    out = np.zeros(X.shape, dtype=np.float32)
+    for c, ch in enumerate(stats["channels"]):
+        v = X[..., c].astype(np.float32)
+        lo, hi = ch["lo"], ch["hi"]
+        if hi <= lo:
+            continue
+        v = np.clip(v, lo, hi)
+        if mode == "minmax":
+            out[..., c] = (v - lo) / (hi - lo)
+        else:  # clip_zscore -> 0..1, centred, robust to outliers
+            out[..., c] = np.clip(0.5 + 0.25 * (v - ch["mean"]) / ch["std"], 0.0, 1.0)
+        bad = ~np.isfinite(X[..., c])
+        if bad.any():
+            out[..., c][bad] = 0.0
+    return out
+
+
+def save_norm_stats(path, stats):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(stats, f, indent=1)
+
+
+def load_norm_stats(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+# --------------------------------------------------------------------------------------
+# patching
+# --------------------------------------------------------------------------------------
+def _windows(shape_hw, patch: int, step: int):
+    H, W = shape_hw
+    ys = list(range(0, max(1, H - patch + 1), step))
+    xs = list(range(0, max(1, W - patch + 1), step))
+    if ys and ys[-1] + patch < H:
+        ys.append(H - patch)
+    if xs and xs[-1] + patch < W:
+        xs.append(W - patch)
+    return [(y, x) for y in ys for x in xs]
+
+
+def make_patches(
+    X: np.ndarray,
+    y: np.ndarray,
+    patch_size: int = 128,
+    train_step: int = 64,
+    test_proportion: float = 0.3,
+    seed: int = 0,
+    neg_fraction: float = 0.35,
+    R_pixels: int = 3,
+    min_px_per_patch: int = 3,
+):
+    """Reference-style leakage-free split + overlapping training windows.
+
+    Returns dict with:
+      X_tr, y_tr, fpw_tr (lists of arrays), X_te, y_te, test_origin (row, col of each test
+      window in the padded global grid), n_gt.
+
+    Order of operations (matches reference notebook cells 11-12 semantics):
+      1. non-overlapping test grid -> choose test windows -> ZERO them in the global arrays
+      2. re-patchify the *zeroed* global arrays with `train_step` overlap
+      3. keep windows that contain >= min_px_per_patch fault pixels, plus `neg_fraction`
+         of empty windows (hard negatives make the model calibrate, unlike the reference,
+         which trains only on fault-containing windows)
     """
-    Split into overlapping training patches and non-overlapping test patches.
-    Only patches containing valid elevation (channel heuristic) and optionally fault.
-    """
-    if seed is None:
-        seed = 0
     rng = np.random.default_rng(seed)
-
-    n_features = X.shape[-1]
-    # pad to divisible by patch_size
     H, W, C = X.shape
     pad_h = (patch_size - H % patch_size) % patch_size
     pad_w = (patch_size - W % patch_size) % patch_size
-    X_padded = np.pad(X, ((0, pad_h), (0, pad_w), (0,0)), mode='constant', constant_values=0)
-    y_padded = np.pad(y, ((0, pad_h), (0, pad_w)), mode='constant', constant_values=0)
+    Xp = np.pad(X, ((0, pad_h), (0, pad_w), (0, 0)), constant_values=0)
+    yp = np.pad(y, ((0, pad_h), (0, pad_w)), constant_values=0)
+    Hp, Wp = yp.shape
 
-    # Non-overlapping patches for test selection
-    # Using patchify with step=patch_size
-    X_nonoverlap = patchify(X_padded, (patch_size, patch_size, C), step=patch_size)  # shape (n_h, n_w, 1,1,1?) Actually view_as_windows returns (n_h, n_w, patch, patch, C)
-    # The shape is (n_h, n_w, patch, patch, C)?? Let's squeeze
-    # For 3D input (H,W,C), patch (p,p,C) -> output (n_h, n_w, 1,1,1?) No, view_as_windows returns (n_h, n_w, 1, p, p, C)?? Let's handle generically.
-    # Simplify: manually compute n_h, n_w
-    n_h = X_padded.shape[0] // patch_size
-    n_w = X_padded.shape[1] // patch_size
+    # ---- 1. test windows on a non-overlapping grid --------------------------------
+    grid = _windows((Hp, Wp), patch_size, patch_size)
+    valid = [(i, j) for (i, j) in grid if np.isfinite(Xp[i:i + patch_size, j:j + patch_size]).any()]
+    n_test = int(round(test_proportion * len(valid)))
+    test_windows = sorted(rng.choice(len(valid), size=n_test, replace=False).tolist())
+    test_windows = [valid[i] for i in test_windows]
+    test_mask = np.zeros((Hp, Wp), bool)
+    for (i, j) in test_windows:
+        test_mask[i:i + patch_size, j:j + patch_size] = True
 
-    # Reshape to list
-    X_patches_nonoverlap = X_padded.reshape(n_h, patch_size, n_w, patch_size, C).transpose(0,2,1,3,4).reshape(-1, patch_size, patch_size, C)
-    y_patches_nonoverlap = y_padded.reshape(n_h, patch_size, n_w, patch_size).transpose(0,2,1,3).reshape(-1, patch_size, patch_size)
+    X_test = np.stack([Xp[i:i + patch_size, j:j + patch_size] for (i, j) in test_windows]) if test_windows \
+        else np.zeros((0, patch_size, patch_size, C), np.float32)
+    y_test = np.stack([yp[i:i + patch_size, j:j + patch_size] for (i, j) in test_windows]) if test_windows \
+        else np.zeros((0, patch_size, patch_size), np.float32)
 
-    # Filter valid patches: must have finite elevation? Heuristic: use first channel? Actually reference uses channel 4 elevation.
-    # We'll require not all zeros in features
-    valid_mask = []
-    for i in range(len(X_patches_nonoverlap)):
-        # check if patch has any valid data (non-zero features)
-        if np.mean(X_patches_nonoverlap[i]) > 1e-6:  # not empty
-            valid_mask.append(i)
-    valid_indices = np.array(valid_mask)
+    # ---- 2. zero the test region globally, THEN extract overlapping train windows --
+    Xtr_src = Xp.copy()
+    ytr_src = yp.copy()
+    fp_src = (yp > 0.5)
+    # global FP weight map = 1 - max_g k(d(x,g)), computed on the TRAINING labels only
+    from scipy.ndimage import distance_transform_edt
+    if fp_src.any():
+        d2gt = distance_transform_edt(~fp_src)
+        fpw_global = 1.0 - np.maximum(1.0 - d2gt / float(R_pixels), 0.0)
+    else:
+        fpw_global = np.ones((Hp, Wp), np.float32)
+    Xtr_src[test_mask] = 0.0
+    ytr_src[test_mask] = 0.0
 
-    # Randomly select test indices
-    n_test = int(len(valid_indices) * test_proportion)
-    test_choice = rng.choice(valid_indices, size=n_test, replace=False)
-    test_set = set(test_choice)
+    cand = _windows((Hp, Wp), patch_size, train_step)
+    pos, neg = [], []
+    for (i, j) in cand:
+        if test_mask[i:i + patch_size, j:j + patch_size].mean() > 0.25:
+            continue                       # mostly-test window: skip outright
+        n_fault = int((ytr_src[i:i + patch_size, j:j + patch_size] > 0.5).sum())
+        (pos if n_fault >= min_px_per_patch else neg).append((i, j))
+    keep = list(pos)
+    if neg and neg_fraction > 0:
+        n_keep = int(round(neg_fraction * len(pos) / max(1e-6, 1 - neg_fraction)))
+        n_keep = min(n_keep, len(neg))
+        keep += [neg[a] for a in rng.choice(len(neg), size=n_keep, replace=False)]
+    keep = sorted(keep)
 
-    # Build test tensors
-    X_test_list = []
-    y_test_list = []
-    test_inds = []
-    for idx in test_choice:
-        # compute row,col
-        r = idx // n_w
-        c = idx % n_w
-        test_inds.append((r,c))
-        X_test_list.append(X_patches_nonoverlap[idx])
-        y_test_list.append(y_patches_nonoverlap[idx])
+    X_train = np.stack([Xtr_src[i:i + patch_size, j:j + patch_size] for (i, j) in keep]) if keep \
+        else np.zeros((0, patch_size, patch_size, C), np.float32)
+    y_train = np.stack([ytr_src[i:i + patch_size, j:j + patch_size] for (i, j) in keep]) if keep \
+        else np.zeros((0, patch_size, patch_size), np.float32)
+    fpw_train = np.stack([fpw_global[i:i + patch_size, j:j + patch_size] for (i, j) in keep]) if keep \
+        else np.zeros((0, patch_size, patch_size), np.float32)
 
-    # For training, use overlapping patches from remaining area, excluding test regions
-    # Create mask of trainable area
-    train_mask = np.ones((X_padded.shape[0], X_padded.shape[1]), dtype=bool)
-    for (r,c) in test_inds:
-        train_mask[r*patch_size:(r+1)*patch_size, c*patch_size:(c+1)*patch_size] = False
+    summary = dict(
+        n_train=len(keep), n_test=len(test_windows), n_pos=len(pos), n_neg_kept=len(keep) - len(pos),
+        patch=patch_size, train_step=train_step, seed=int(seed), H=Hp, W=Wp, C=C,
+        test_windows=[(int(i), int(j)) for (i, j) in test_windows],
+        train_windows=[(int(i), int(j)) for (i, j) in keep],
+    )
+    return dict(X_train=X_train, y_train=y_train, fpw_train=fpw_train,
+                X_test=X_test, y_test=y_test, summary=summary)
 
-    # Now sliding window with train_step
-    X_train_list = []
-    y_train_list = []
-    for i in range(0, X_padded.shape[0] - patch_size + 1, train_step):
-        for j in range(0, X_padded.shape[1] - patch_size + 1, train_step):
-            # if this window overlaps test region, skip
-            if not np.any(train_mask[i:i+patch_size, j:j+patch_size]):
-                continue
-            # also require some overlap with valid data
-            x_patch = X_padded[i:i+patch_size, j:j+patch_size, :]
-            y_patch = y_padded[i:i+patch_size, j:j+patch_size]
-            if np.mean(x_patch) < 1e-6:
-                continue
-            # optional filter: require some fault or hard negative mining - keep 30% negatives
-            has_fault = np.any(y_patch > 0)
-            if not has_fault and rng.random() > 0.3:
-                continue
-            X_train_list.append(x_patch)
-            y_train_list.append(y_patch)
 
-    # Convert to torch format (B,C,H,W)
-    X_train = np.stack(X_train_list) if X_train_list else np.empty((0, patch_size, patch_size, C))
-    y_train = np.stack(y_train_list) if y_train_list else np.empty((0, patch_size, patch_size))
-
-    X_test = np.stack(X_test_list) if X_test_list else np.empty((0, patch_size, patch_size, C))
-    y_test = np.stack(y_test_list) if y_test_list else np.empty((0, patch_size, patch_size))
-
-    # To (B,C,H,W)
-    X_train = np.moveaxis(X_train, -1, 1)  # (B,C,H,W)
-    X_test = np.moveaxis(X_test, -1, 1)
-
-    X_train = torch.from_numpy(X_train).float()
-    y_train = torch.from_numpy(y_train).float()
-    X_test = torch.from_numpy(X_test).float()
-    y_test = torch.from_numpy(y_test).float()
-
-    return X_train, y_train, X_test, y_test, test_inds
-
+# --------------------------------------------------------------------------------------
+# torch dataset
+# --------------------------------------------------------------------------------------
 class FaultDataset(Dataset):
-    def __init__(self, X, y, transform=None):
-        self.X = X
-        self.y = y
-        self.transform = transform
+    """X: (N,H,W,C) normalised, y: (N,H,W), fpw: (N,H,W).  Augment = flips/rot90/noise.
+
+    Augmentation is geometry-preserving-with-label (90-degree rotations and flips keep
+    faults valid; the reference solution uses RandomResizedCrop + RandomRotation(30), which
+    we additionally support via `rand_crop_scale`).
+    """
+
+    def __init__(self, X, y, fpw=None, train=False, augment=True, noise_std=0.01,
+                 rand_crop_scale=(0.75, 1.0), seed=None):
+        self.X = np.ascontiguousarray(X, dtype=np.float32)
+        self.y = np.ascontiguousarray(y, dtype=np.float32)
+        self.fpw = np.ones_like(self.y, np.float32) if fpw is None else np.ascontiguousarray(fpw, np.float32)
+        self.train = train
+        self.augment = augment and train
+        self.noise_std = noise_std
+        self.rand_crop_scale = rand_crop_scale
+        self._rng = np.random.default_rng(seed)
 
     def __len__(self):
         return self.X.shape[0]
 
     def __getitem__(self, idx):
-        x = self.X[idx]
-        y = self.y[idx]
-        # x: (C,H,W), y: (H,W)
-        if self.transform:
-            # albumentations expects HWC
-            # We'll handle simple torch transforms here
-            pass
-        return x, y
+        x, y, w = self.X[idx], self.y[idx], self.fpw[idx]
+        if self.augment:
+            r = self._rng
+            # random-resized-crop (zoom into a sub-window, then re-pad to patch size):
+            # teaches scale invariance; faults are 1-px wide at 100 m so we keep s >= 0.75
+            s_lo, s_hi = self.rand_crop_scale
+            if r.random() < 0.5 and s_hi < 1.0 + 1e-6 and s_lo < 1.0:
+                s = float(r.uniform(s_lo, s_hi))
+                p = x.shape[0]
+                cp = max(16, int(round(p * s)))
+                if cp < p:
+                    i = int(r.integers(0, p - cp + 1))
+                    j = int(r.integers(0, p - cp + 1))
+                    x, y, w = x[i:i + cp, j:j + cp], y[i:i + cp, j:j + cp], w[i:i + cp, j:j + cp]
+                    k = int(round((p - cp) / 2))
+                    x = np.pad(x, ((k, p - cp - k), (k, p - cp - k), (0, 0)))
+                    y = np.pad(y, ((k, p - cp - k), (k, p - cp - k)))
+                    w = np.pad(w, ((k, p - cp - k), (k, p - cp - k)), constant_values=1.0)
+            if r.random() < 0.5:
+                x, y, w = x[:, ::-1], y[:, ::-1], w[:, ::-1]
+            if r.random() < 0.5:
+                x, y, w = x[::-1], y[::-1], w[::-1]
+            k = int(r.integers(0, 4))
+            if k:
+                x, y, w = (np.rot90(a, k, axes=(0, 1)) for a in (x, y, w))
+            if self.noise_std > 0:
+                x = x + self._rng.normal(0, self.noise_std, size=x.shape).astype(np.float32)
+        x = np.ascontiguousarray(np.transpose(x, (2, 0, 1)), dtype=np.float32)
+        # flips/rot90 leave negative strides, which torch.from_numpy rejects
+        y = np.ascontiguousarray((y > 0.5).astype(np.float32))
+        w = np.ascontiguousarray(w.astype(np.float32))
+        return x, y, w
 
-def load_features_and_labels(feature_path, label_path):
-    # Try multiple possible names
-    # Naming drift (flagged irregularity): problem page vs reference solution vs Dropbox mirrors
-    feat_candidates = [feature_path, "data/training_features.tif", "data/numeric_features.tif", "data/gems-geodawn-numerical-features.tif", "data/features.tif"]
-    label_candidates = [label_path, "data/labels.tif", "data/faults.tif", "data/existing_faults.tif"]
 
-    feat_path = None
-    for p in feat_candidates:
-        if os.path.exists(p):
-            feat_path = p
-            break
-    if feat_path is None:
-        raise FileNotFoundError(f"No feature file found, tried {feat_candidates}")
-
-    label_path_found = None
-    for p in label_candidates:
-        if os.path.exists(p):
-            label_path_found = p
-            break
-    if label_path_found is None:
-        raise FileNotFoundError(f"No label file found, tried {label_candidates}")
-
-    print(f"Loading features from {feat_path}")
-    with rasterio.open(feat_path) as src:
-        meta = src.meta.copy()
-        data = src.read()  # (C,H,W)
-        print(f"Feature shape: {data.shape}, CRS: {src.crs}, res: {src.res}")
-        tags = []
-        for i in range(1, src.count+1):
-            try:
-                t = src.tags(i)
-                tags.append(t)
-            except:
-                tags.append({})
-
-    X = np.moveaxis(data, 0, -1)  # (H,W,C)
-    # replace nodata huge negative
-    X[X < -1e30] = np.nan
-
-    print(f"Loading labels from {label_path_found}")
-    with rasterio.open(label_path_found) as src:
-        label_meta = src.meta.copy()
-        y = src.read(1).astype(np.float32)
-        print(f"Label shape: {y.shape}, unique: {np.unique(y)[:10]}")
-    y[y < 1] = 0
-    y = (y > 0).astype(np.float32)
-
-    return X, y, meta, label_meta, tags
+# --------------------------------------------------------------------------------------
+# high-level loaders used by train.py / inference.py
+# --------------------------------------------------------------------------------------
+def load_features_and_labels(feature_path=None, label_path=None, require_labels=True):
+    """Back-compatible helper: returns (X(H,W,C), y(H,W), feat_meta, label_meta, tags)."""
+    fp = resolve_path(feature_path, FEATURE_NAME_CANDIDATES)
+    lp = None
+    try:
+        lp = resolve_path(label_path, LABEL_NAME_CANDIDATES)
+    except FileNotFoundError:
+        if require_labels:
+            raise
+    X, fmeta, tags = load_stack(fp)
+    if lp is None:
+        return X, None, fmeta, None, tags
+    y, lmeta = load_labels(lp)
+    if y.shape != X.shape[:2]:
+        raise ValueError(f"label grid {y.shape} != feature grid {X.shape[:2]} - "
+                         "the two rasters must share bounds/resolution (see problem page)")
+    return X, y, fmeta, lmeta, tags
