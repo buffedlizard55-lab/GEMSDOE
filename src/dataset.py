@@ -336,8 +336,22 @@ class FaultDataset(Dataset):
 # --------------------------------------------------------------------------------------
 # high-level loaders used by train.py / inference.py
 # --------------------------------------------------------------------------------------
-def load_features_and_labels(feature_path=None, label_path=None, require_labels=True):
-    """Back-compatible helper: returns (X(H,W,C), y(H,W), feat_meta, label_meta, tags)."""
+def load_features_and_labels(feature_path=None, label_path=None, require_labels=True,
+                             use_fixture=False):
+    """Back-compatible helper: returns (X(H,W,C), y(H,W), feat_meta, label_meta, tags).
+
+    `use_fixture=True` loads data/fixture/ instead: a 512x512 window of the REAL
+    competition rasters, stored int16-quantised so it fits in git (the dev sandbox can only
+    receive bytes over github.com).  src.fixture verifies the manifest and inverts the
+    quantisation to physical units before anything downstream sees the data.
+    """
+    if use_fixture:
+        from .fixture import load_fixture
+
+        X, y, meta, man = load_fixture()
+        tags = meta.get("band_tags") or [{} for _ in range(X.shape[-1])]
+        return X, y, meta, meta, tags
+
     fp = resolve_path(feature_path, FEATURE_NAME_CANDIDATES)
     lp = None
     try:

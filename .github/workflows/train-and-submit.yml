@@ -75,19 +75,20 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ github.event.inputs.profile || 'smoke' }}" = "full" ]; then
-            python -m src.train --config configs/config.yaml
+            python -m src.train --config configs/config.yaml 2>&1 | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee train.log
           else
-            python -m src.train --config configs/config_ci_smoke.yaml
+            python -m src.train --config configs/config_ci_smoke.yaml 2>&1 | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee train.log
           fi
 
       - name: Inference -> submission.tif
         run: |
           CFG=configs/config_ci_smoke.yaml
           [ "${{ github.event.inputs.profile || 'smoke' }}" = "full" ] && CFG=configs/config.yaml
-          python -m src.inference --config "$CFG" --out submission.tif --score-against data/labels.tif 2>&1 | tee inference.log
+          # strip \r progress-bar frames so the committed log stays readable
+          python -m src.inference --config "$CFG" --out submission.tif --score-against data/labels.tif 2>&1 | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee inference.log
 
       - name: Validate submission format
-        run: python scripts/validate_submission.py --submission submission.tif --reference data/sample_submission.tif 2>&1 | tee validation.log
+        run: python scripts/validate_submission.py --pred submission.tif --sample data/sample_submission.tif --train data/training_features.tif 2>&1 | tee validation.log
 
       - name: Score locally against the PUBLIC (known) faults
         run: |
@@ -104,7 +105,10 @@ jobs:
           cp -f outputs/manifest.json      "$D/" 2>/dev/null || true
           cp -f outputs/train_history.json "$D/" 2>/dev/null || true
           cp -f outputs/norm_stats.json    "$D/" 2>/dev/null || true
-          cp -f validation.log local_score.log inference.log "$D/" 2>/dev/null || true
+          cp -f validation.log local_score.log inference.log train.log "$D/" 2>/dev/null || true
+          # metric-landscape analysis against the FULL official label raster
+          python scripts/metric_strategy.py --labels data/labels.tif \
+            --out "$D/metric_strategy_full.json" 2>&1 | tail -30 | tee "$D/metric_strategy_full.log" || true
           python - <<'PY'
           import json, os, pathlib, hashlib
           d = pathlib.Path(os.environ["D"]) if "D" in os.environ else None
