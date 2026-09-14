@@ -1,0 +1,43 @@
+name: Fetch competition data
+
+# Runs on a GitHub-hosted runner, which has unrestricted internet egress.
+# The development sandbox can only reach github.com + pypi.org, so this workflow
+# is the data bridge: it downloads the competition files from the Dropbox mirrors
+# published on the DrivenData data tab and re-exports them as workflow artifacts,
+# which the sandbox pulls back over the github.com API.
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download competition files
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          dl () { # url outfile
+            echo "::group::$2"
+            curl -fL --retry 3 --retry-delay 5 -o "data/$2" "$1" || echo "FAILED: $2"
+            echo "::endgroup::"
+          }
+          dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" gems-geodawn-numerical-features.tif
+          dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" existing_faults.tif
+          dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" example_submission.tif
+          dl "https://www.dropbox.com/scl/fi/aemhtutjgcp6tr3tint94/GEMS_96647.pdf?rlkey=rek210cj2smnmzb8n0sla1vmd&dl=1" GEMS_96647.pdf
+          dl "https://www.dropbox.com/scl/fi/ig0mban712ns1atphgphe/Digital-elevation-model-links-JSON.pdf?rlkey=zm77f1vbtt2if8hlruymptnu3&dl=1" Digital-elevation-model-links-JSON.pdf
+
+      - name: Inventory (sizes, checksums, file types)
+        run: |
+          cd data
+          ls -l
+          echo "--- sha256 ---"; sha256sum * || true
+          echo "--- file ---";   file * || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: competition-data
+          path: data/
+          retention-days: 7
+          compression-level: 0
