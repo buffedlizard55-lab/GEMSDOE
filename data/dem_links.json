@@ -1,7 +1,7 @@
 {
-  "generated_utc": "2026-09-14T17:31:27+00:00",
+  "generated_utc": "2026-09-14T17:46:09+00:00",
   "source_pdf": "Digital-elevation-model-links-JSON.pdf",
-  "extractor_used": "pypdf",
+  "extractor_used": "ocr_tesseract_300dpi",
   "extractor_stats": {
     "pypdf": {
       "chars": 41,
@@ -14,13 +14,135 @@
     "pdfplumber": {
       "chars": 41,
       "http": 0
+    },
+    "ocr_tesseract_300dpi": {
+      "chars": 146149,
+      "http": 867
     }
   },
   "source_pdf_note": "Dropbox mirror of the competition data-tab file '1m_DEM_links.csv', printed to PDF. URLs reassembled across PDF line wraps; known host manglings repaired to prd-tnm.s3.amazonaws.com.",
-  "n_urls_in_pdf": 0,
-  "n_unique": 0,
-  "n_verified_200": 0,
-  "total_bytes_verified": 0,
-  "records": [],
-  "verified": []
+  "n_urls_in_pdf": 11,
+  "n_unique": 11,
+  "n_verified_200": 7,
+  "total_bytes_verified": 2266693734,
+  "records": [
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL1_2017/TIFF/USGS_one_meter_x24y44@_NV_Reno_Carson_QLi_2017.tif",
+      "filename": "USGS_one_meter_x24y44@_NV_Reno_Carson_QLi_2017.tif",
+      "head": {
+        "status": 404,
+        "error": "HTTPError 404"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL1_2017/TIFF/USGS_one_meter_x26y438_NV_Reno_Carson_QLi_2017.tif",
+      "filename": "USGS_one_meter_x26y438_NV_Reno_Carson_QLi_2017.tif",
+      "head": {
+        "status": 404,
+        "error": "HTTPError 404"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL1_2017/TIFF/USGS_one_meter_x28y436_NV_Reno_Carson_QL1_2017.tif",
+      "filename": "USGS_one_meter_x28y436_NV_Reno_Carson_QL1_2017.tif",
+      "head": {
+        "status": 200,
+        "content_length": 247527611,
+        "content_type": "image/tiff",
+        "etag": "8c9f316e2f27a6cee6bbf7c1769c37e5-48",
+        "last_modified": "Sat, 14 Feb 2026 02:23:48 GMT"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x25y441_NV_Reno_Carson_QL2_2017.tif",
+      "filename": "USGS_one_meter_x25y441_NV_Reno_Carson_QL2_2017.tif",
+      "head": {
+        "status": 200,
+        "content_length": 443246703,
+        "content_type": "image/tiff",
+        "etag": "a2ecc8379663445170dd128b92b6cef1-85",
+        "last_modified": "Sat, 14 Feb 2026 02:25:00 GMT"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x26y439_NV_Reno_Carson_QL2_2017.tif",
+      "filename": "USGS_one_meter_x26y439_NV_Reno_Carson_QL2_2017.tif",
+      "head": {
+        "status": 200,
+        "content_length": 47956386,
+        "content_type": "image/tiff",
+        "etag": "0dbdad431b2cafa990d51b752168410e",
+        "last_modified": "Sat, 14 Feb 2026 02:25:13 GMT"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x27y438_NV_Reno_Carson_QL2_2017.tif",
+      "filename": "USGS_one_meter_x27y438_NV_Reno_Carson_QL2_2017.tif",
+      "head": {
+        "status": 200,
+        "content_length": 460447285,
+        "content_type": "image/tiff",
+        "etag": "c34c89528f3788a14f02dd64aee55134-88",
+        "last_modified": "Sat, 14 Feb 2026 02:25:25 GMT"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x27y441_NV_Reno_Carson_QL2_2017.tif",
+      "filename": "USGS_one_meter_x27y441_NV_Reno_Carson_QL2_2017.tif",
+      "head": {
+        "status": 200,
+        "content_length": 394726729,
+        "content_type": "image/tiff",
+        "etag": "f19d13691dedcbbae45fce926bfbc46d-76",
+        "last_modified": "Sat, 14 Feb 2026 02:25:27 GMT"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x27y44@_NV_Reno_Carson_QL2_2017.tif",
+      "filename": "USGS_one_meter_x27y44@_NV_Reno_Carson_QL2_2017.tif",
+      "head": {
+        "status": 404,
+        "error": "HTTPError 404"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x28y439_NV_Reno_Carson_QL2_2017.tif",
+      "filename": "USGS_one_meter_x28y439_NV_Reno_Carson_QL2_2017.tif",
+      "head": {
+        "status": 200,
+        "content_length": 416855643,
+        "content_type": "image/tiff",
+        "etag": "c25fbfb6963b7b8f0e79f42989a0dc9b-80",
+        "last_modified": "Sat, 14 Feb 2026 02:25:38 GMT"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x29y439_NV_Reno_Carson_QL2_2017.tif",
+      "filename": "USGS_one_meter_x29y439_NV_Reno_Carson_QL2_2017.tif",
+      "head": {
+        "status": 200,
+        "content_length": 255933377,
+        "content_type": "image/tiff",
+        "etag": "c9349a9e769f32617a21004631092613-49",
+        "last_modified": "Sat, 14 Feb 2026 02:25:43 GMT"
+      }
+    },
+    {
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_UpperHumboldt_2016/TIFF/USGS_one_meter_x57y45@_NV_UpperHumboldt_2016.tif",
+      "filename": "USGS_one_meter_x57y45@_NV_UpperHumboldt_2016.tif",
+      "head": {
+        "status": 404,
+        "error": "HTTPError 404"
+      }
+    }
+  ],
+  "verified": [
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL1_2017/TIFF/USGS_one_meter_x28y436_NV_Reno_Carson_QL1_2017.tif",
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x25y441_NV_Reno_Carson_QL2_2017.tif",
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x26y439_NV_Reno_Carson_QL2_2017.tif",
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x27y438_NV_Reno_Carson_QL2_2017.tif",
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x27y441_NV_Reno_Carson_QL2_2017.tif",
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x28y439_NV_Reno_Carson_QL2_2017.tif",
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/NV_Reno_Carson_QL2_2017/TIFF/USGS_one_meter_x29y439_NV_Reno_Carson_QL2_2017.tif"
+  ]
 }

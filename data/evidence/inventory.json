@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-14T17:23:22+00:00",
+  "generated_utc": "2026-09-14T17:35:48+00:00",
   "generated_by": "scripts/inspect_competition_data.py on a GitHub-hosted runner",
   "note": "All values measured from the downloaded bytes. Not transcribed from docs.",
   "files": [
@@ -23,8 +23,8 @@
     },
     {
       "name": "dem_links.json",
-      "bytes": 442,
-      "sha256": "068405588e5d92510099610b0583256e7f62d6e343494edc9edc35387d6c7fca",
+      "bytes": 677,
+      "sha256": "8c7dd8cbfc51ceccbdc8e31459b26ae0fb7c7c086a4016ce5568454f26487353",
       "magic": "unknown (first bytes: b'{\\n  \"gen')"
     },
     {
