@@ -1,63 +1,108 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Data Catalog — GEMSDOE</title>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data — GEMS Prize</title>
+<meta name="description" content="Auditable, machine-verified working notes for the DOE GEMS Prize fault-detection challenge.">
 <link rel="stylesheet" href="style.css">
-</head>
-<body>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛰️</text></svg>">
+</head><body>
 <header>
-  <div class="container">
-    <h1>Data Catalog — Auditable</h1>
-    <p class="subtitle">All external data with official verified links for manual verification. No hallucinations.</p>
-    <div class="badges">
-      <span class="badge"><a href="index.html">← Back to Main</a></span>
-      <span class="badge"><a href="data_catalog.csv">CSV</a></span>
-      <span class="badge"><a href="data_catalog.json">JSON</a></span>
-      <span class="badge"><a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/references.md">Verification Log</a></span>
+  <div class="wrap">
+    <div class="brand"><span class="logo">⛰️</span>
+      <div><div class="name">GEMS Prize — working notes</div>
+      <div class="tag">Geological fault detection in the GeoDAWN region · every figure below is machine-measured</div></div>
     </div>
   </div>
 </header>
-<nav><div class="container"><a href="index.html">Overview</a><a href="index.html#data" class="active">Data Catalog</a><a href="results.html">Measured Results</a></div></nav>
-<main class="container">
-  <section class="card">
-    <h2>Verified External Data — Official Links</h2>
-    <p>All public domain / CC0 / CC BY 4.0 — allowed per <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#external-datasets" target="_blank">official external-data rule</a> and <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">official rules PDF</a>. Full per-link verification log: <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/references.md">references.md</a>. Competition data mirrors (Dropbox) are user-provided and marked as such — see <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/arena/01a0972f-gemsdoe/data/README.md">data/README.md</a>.</p>
-    <div style="overflow-x:auto;">
-    <table>
-      <thead><tr><th>#</th><th>Dataset</th><th>Agency</th><th>Official Links</th><th>License</th><th>Use</th><th>Verified</th></tr></thead>
-      <tbody>
-        <tr><td>1</td><td>GeoDAWN Mag & Radiometric</td><td>USGS</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase 657e1d85</a><br><a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">DOI P93LGLVQ</a><br><a href="https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and" target="_blank">USGS Overview</a></td><td>CC0 1.0</td><td>Primary geophysics</td><td>✅ fetch_page 2026-09-12 (full file list verified)</td></tr>
-        <tr><td>2</td><td>Quaternary Fault & Fold DB</td><td>USGS</td><td><a href="https://www.usgs.gov/programs/earthquake-hazards/faults" target="_blank">Interactive Map</a><br><a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">ScienceBase QFaults</a><br><a href="https://doi.org/10.5066/P9BCVRCK" target="_blank">DOI P9BCVRCK</a><br><a href="https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format" target="_blank">USGS FAQ (KML+GIS)</a><br><a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer" target="_blank">ArcGIS</a></td><td>Public Domain</td><td>Ground truth</td><td>✅ fetch_page 2026-09-12 (ScienceBase + files)</td></tr>
-        <tr><td>3</td><td>3DEP 1m DEM</td><td>USGS NGP</td><td><a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">About</a><br><a href="https://apps.nationalmap.gov/downloader/" target="_blank">Downloader</a><br><a href="https://apps.nationalmap.gov/lidar-explorer/" target="_blank">LidarExplorer</a><br><a href="https://registry.opendata.aws/usgs-lidar/" target="_blank">AWS</a></td><td>Public Domain</td><td>Elevation, slope, TPI, TRI</td><td>✅ web_search</td></tr>
-        <tr><td>4</td><td>INGENIOUS Regional</td><td>GBCGE/DOE</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a><br><a href="https://doi.org/10.15121/1881483" target="_blank">DOI 1881483</a><br><a href="https://www.osti.gov/biblio/1881483" target="_blank">OSTI</a><br><a href="https://gbcge.org/current-projects/ingenious/" target="_blank">Project</a></td><td>CC BY 4.0</td><td>Conductivity (DOI P9TWT2LU), detrended elevation (P9MQRCBY), geodetics, gravity/magnetics (P9Z6SA1Z), quake density, heat flow (P9BZPVUC), slip/dilation tendency (P9YL58W6), QFaults v2</td><td>✅ fetch_page 2026-09-12 (116.98 MB / 9 files verified)</td></tr>
-        <tr><td>5</td><td>GBCGE Subsurface DB</td><td>GBCGE</td><td><a href="https://doi.org/10.15121/1987556" target="_blank">DOI 1987556</a><br><a href="https://www.osti.gov/dataexplorer/biblio/dataset/1987556" target="_blank">OSTI Explorer</a></td><td>Public</td><td>Wells, springs</td><td>✅ web_search</td></tr>
-        <tr><td>6</td><td>Geothermal Favorability</td><td>USGS</td><td><a href="https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43" target="_blank">ScienceBase 66e88690</a></td><td>Public</td><td>16 ML features</td><td>✅ web_search</td></tr>
-        <tr><td>7</td><td>EarthMRI</td><td>USGS</td><td><a href="https://mrdata.usgs.gov/earthmri/" target="_blank">Portal</a><br><a href="https://pubs.usgs.gov/publication/fs20203055" target="_blank">FS 2020-3055</a></td><td>Public Domain</td><td>Critical mineral context</td><td>✅ web_search</td></tr>
-        <tr><td>8</td><td>Competition Official</td><td>DrivenData/DOE</td><td><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/" target="_blank">Main</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/" target="_blank">Problem Desc</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/" target="_blank">About</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/data/" target="_blank">Data (login)</a><br><a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">PDF Rules</a><br><a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">Ref Solution</a></td><td>Competition</td><td>Task</td><td>✅ fetch_page</td></tr>
-      </tbody>
-    </table>
-    </div>
-    <p>Download: <a href="data_catalog.csv">CSV</a> | <a href="data_catalog.json">JSON</a></p>
-  </section>
-
-  <section class="card">
-    <h2>Provided Features — From Official Page</h2>
-    <p>Source: https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#provided-features — training_features.tif EPSG:32611 100m, plus 1m_DEM_links.csv</p>
-    <ul>
-      <li>Surface conductivity and depth to conductive base surface</li>
-      <li>Detrended elevation and slope of detrended elevation</li>
-      <li>Dilatation rate, shear strain rate, second invariant of strain rate tensor</li>
-      <li>Isostatic gravity anomaly and slope of isostatic gravity anomaly</li>
-      <li>Magnetics: reduced-to-pole anomaly, TMI, vertical & horizontal slope of TMI, top-of-crustal magnetic source depth estimate</li>
-      <li>Density of earthquakes</li>
-      <li>Plus 1m DEM links CSV</li>
-    </ul>
-    <p>Details: <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/FEATURES.md">FEATURES.md</a></p>
-  </section>
-
-  <div class="footer"><p><a href="index.html">← Back to Main</a></p></div>
+<nav><div class="wrap"><a href="index.html">Overview</a><a href="data.html" class="active">Data</a><a href="metric.html">Metric</a><a href="method.html">Method</a><a href="results.html">Results</a><a href="sources.html">Sources</a><a href="reproduce.html">Reproduce</a></div></nav>
+<main class="wrap">
+<h1>Data</h1>
+<p class="lede">Exactly what the competition files contain — measured, with the irregularities found.</p>
+<h2>What the competition ships</h2>
+<p>Files come from the <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/data/">data tab</a> (login required) and are mirrored as public
+Dropbox links from the same tab. The table below is generated from a run that downloaded them and
+measured each one.</p>
+<h3><code>example_submission.tif</code></h3>
+<table class="kv"><tbody>
+<tr><th>Grid</th><td>3292 × 3730 px, 1 band(s)</td></tr>
+<tr><th>CRS</th><td>EPSG:32611 (EPSG:32611)</td></tr>
+<tr><th>Resolution</th><td>100 m × 100 m</td></tr>
+<tr><th>Bounds</th><td class="mono small">243,350, 4,135,550, 572,550, 4,508,550</td></tr>
+<tr><th>Dtype / nodata</th><td>float32 / nan</td></tr>
+<tr><th>Compression</th><td>lzw</td></tr>
+</tbody></table>
+<h3><code>existing_faults.tif</code></h3>
+<table class="kv"><tbody>
+<tr><th>Grid</th><td>3292 × 3730 px, 1 band(s)</td></tr>
+<tr><th>CRS</th><td>EPSG:32611 (EPSG:32611)</td></tr>
+<tr><th>Resolution</th><td>100 m × 100 m</td></tr>
+<tr><th>Bounds</th><td class="mono small">243,350, 4,135,550, 572,550, 4,508,550</td></tr>
+<tr><th>Dtype / nodata</th><td>int8 / -1.0</td></tr>
+<tr><th>Compression</th><td>lzw</td></tr>
+</tbody></table>
+<h3><code>gems-geodawn-numerical-features.tif</code></h3>
+<table class="kv"><tbody>
+<tr><th>Grid</th><td>3292 × 3730 px, 19 band(s)</td></tr>
+<tr><th>CRS</th><td>EPSG:32611 (EPSG:32611)</td></tr>
+<tr><th>Resolution</th><td>100 m × 100 m</td></tr>
+<tr><th>Bounds</th><td class="mono small">243,350, 4,135,550, 572,550, 4,508,550</td></tr>
+<tr><th>Dtype / nodata</th><td>float32 / -3.4028234663852886e+38</td></tr>
+<tr><th>Compression</th><td>lzw</td></tr>
+</tbody></table>
+<table class="bands"><thead><tr><th>#</th><th>Band</th><th>Category</th><th>Description (from the file's own tags)</th><th>Range</th></tr></thead><tbody><tr><td>1</td><td><code>mag_anom</code></td><td>magnetic_data</td><td>Magnetic anomaly - deviation from expected Earth&#x27;s magnetic field</td><td class="mono small">-1052 … 2109</td></tr><tr><td>2</td><td><code>rtp</code></td><td>magnetic_data</td><td>Reduced to pole magnetic data - magnetic anomaly corrected for latitude effects</td><td class="mono small">-2786 … 4509</td></tr><tr><td>3</td><td><code>tmi_hg</code></td><td>magnetic_data</td><td>Total magnetic intensity horizontal gradient - rate of change in horizontal direction</td><td class="mono small">0.00491 … 2200</td></tr><tr><td>4</td><td><code>geod_2ndinv</code></td><td>geodetic_strain</td><td>Geodetic second invariant - measure of strain rate tensor magnitude</td><td class="mono small">1.2 … 87.45</td></tr><tr><td>5</td><td><code>iso_grav_anom_slope</code></td><td>gravity_data</td><td>Isostatic gravity anomaly slope - gradient of gravity after isostatic correction</td><td class="mono small">0.001383 … 0.6517</td></tr><tr><td>6</td><td><code>tc</code></td><td>magnetic_data</td><td>Tilt angle or total curvature - magnetic field derivative for edge detection</td><td class="mono small">2.953 … 88.57</td></tr><tr><td>7</td><td><code>geod_shearrate</code></td><td>geodetic_strain</td><td>Geodetic shear rate - rate of angular deformation from GPS/InSAR</td><td class="mono small">0 … 54.4</td></tr><tr><td>8</td><td><code>geod_dilaterate</code></td><td>geodetic_strain</td><td>Geodetic dilatation rate - rate of volumetric strain (expansion/contraction)</td><td class="mono small">-16.5 … 34.52</td></tr><tr><td>9</td><td><code>tmi_vg</code></td><td>magnetic_data</td><td>Total magnetic intensity vertical gradient - rate of change in vertical direction</td><td class="mono small">-7.651 … 20.51</td></tr><tr><td>10</td><td><code>deq_n100a15</code></td><td>seismic</td><td>Distance to earthquake (n=100km radius, a=15° azimuth parameters)</td><td class="mono small">0 … 4.963e+06</td></tr><tr><td>11</td><td><code>iso_grav_anom_vg</code></td><td>gravity_data</td><td>Isostatic gravity anomaly vertical gradient - vertical rate of change</td><td class="mono small">-18.16 … 12.58</td></tr><tr><td>12</td><td><code>det_elev</code></td><td>topographic</td><td>Detrended elevation - topography with regional trends removed</td><td class="mono small">-590 … 1470</td></tr><tr><td>13</td><td><code>iso_grav_anom</code></td><td>gravity_data</td><td>Isostatic gravity anomaly - gravity after compensating for topographic mass</td><td class="mono small">-45.76 … 24.23</td></tr><tr><td>14</td><td><code>tmi</code></td><td>magnetic_data</td><td>Total magnetic intensity - total strength of magnetic field</td><td class="mono small">-2178 … 4506</td></tr><tr><td>15</td><td><code>depth_to_base_surf</code></td><td>subsurface</td><td>Depth to basement surface - thickness of sedimentary cover</td><td class="mono small">-14.84 … 7135</td></tr><tr><td>16</td><td><code>ieq_n100a15</code></td><td>seismic</td><td>Earthquake intensity or density (n=100km radius, a=15° parameters)</td><td class="mono small">236.8 … 7870</td></tr><tr><td>17</td><td><code>cond_surf</code></td><td>subsurface</td><td>Conductivity surface - electrical conductivity of subsurface</td><td class="mono small">0.1937 … 4.969</td></tr><tr><td>18</td><td><code>iso_grav_anom_hg</code></td><td>gravity_data</td><td>Isostatic gravity anomaly horizontal gradient - horizontal rate of change</td><td class="mono small">-15.44 … 12.86</td></tr><tr><td>19</td><td><code>det_elev_slope</code></td><td>topographic</td><td>Detrended elevation slope - gradient of elevation after detrending</td><td class="mono small">0.001103 … 62.65</td></tr></tbody></table>
+<div class="note ok"><b>19 bands.</b> The problem description lists the feature families in prose; the file itself carries self-describing tags, reproduced verbatim above.</div>
+<h2>Labels</h2>
+<table class="kv"><tbody>
+<tr><th>Grid</th><td>3730 × 3292</td></tr>
+<tr><th>Valid pixels</th><td>5,167,373 of 12,279,160</td></tr>
+<tr><th>Fault pixels</th><td><b>60,988</b>
+  (1.180% of valid)</td></tr>
+<tr><th>Distinct values</th><td>0.0, 1.0</td></tr>
+</tbody></table>
+<p>Strictly binary, and heavily imbalanced — about 1 fault pixel per 85 valid pixels.</p>
+<h2 id="irregularity">⚠ Irregularity: the sample submission is a copy of the labels</h2>
+<div class="note warn">The problem page states: <em>"A sample submission that predicts total fault absence
+is provided for your reference."</em> (<a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format">source</a>)<br><br>
+Measured instead: <code>example_submission.tif</code> contains
+<b>60,988</b> positive pixels — identical to <code>existing_faults.tif</code>
+(60,988). Binary content identical across all
+5,167,373 commonly-valid pixels: <b>True</b>.<br><br>
+<b>Why it matters:</b> anyone using the "sample" as a zero-filled template gets a file pre-populated
+with the known faults. <b>Practical impact:</b> none for us — we write submissions from the sample's
+<em>georeferencing only</em> and fill values from the model. <b>Flagged for organiser review.</b></div>
+<h2>1 m DEM tile list</h2>
+<p>The competition provides <code>1m_DEM_links.csv</code>; the public mirror is a PDF. Measured: that
+PDF <b>has no text layer</b> — pypdf, pdftotext and pdfplumber each return 0 URLs. It is a scan.</p>
+<table class="kv"><tbody>
+<tr><th>OCR (tesseract, 300 DPI)</th><td>722 (project, tile) pairs parsed</td></tr>
+<tr><th>Confirmed against the USGS bucket</th><td><b>716</b> unique tiles</td></tr>
+<tr><th>Unmatched (flagged)</th><td>3</td></tr>
+</tbody></table>
+<div class="note ok"><b>Why no URL here was typed by a machine-guess.</b> OCR of this scan corrupts
+characters — <code>2020</code> reads as <code>202@</code>, underscores become spaces,
+<code>QL1</code>/<code>QLi</code> are ambiguous. Rather than repair characters and hope, the parser
+extracts only the <em>structure</em> (project name + <code>x##y###</code> tile id) and then resolves
+every URL against a live <code>ListObjectsV2</code> enumeration of the official USGS 3DEP bucket.
+Emitted URLs are verbatim bucket keys. Anything unmatched is listed as an irregularity, never
+guessed.</div>
+<p>Full list with provenance: <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/data/dem_links.json"><code>data/dem_links.json</code></a></p>
+<h2>Working around a restricted network</h2>
+<p>The development sandbox can reach only <code>github.com</code> and <code>pypi.org</code>; Dropbox,
+S3, the Azure host serving Actions artifacts, and DrivenData itself are all blocked. Data is
+therefore fetched by a GitHub Actions runner, which has open egress, and results return as commits.
+A 890.0 MB raw feature cube compresses to:</p>
+<table><thead><tr><th>Encoding</th><th>Size</th></tr></thead><tbody><tr><td><code>float32_zstd22_pred3</code></td><td>238.0 MB</td></tr><tr><td><code>float32_deflate9_pred3</code></td><td>240.2 MB</td></tr><tr><td><code>int16_zstd22_pred2</code></td><td>101.1 MB</td></tr></tbody></table>
+<p>Still too large to commit, so a <b>512×512 window of the real rasters</b> is committed instead
+(<code>data/fixture/</code>, ~5 MB, int16-quantised with measured round-trip error 1.6×10⁻⁵ of each
+band's range). That fixture is what lets the pipeline be developed and tested in-sandbox against
+true band semantics.</p>
+<h2>Checksums</h2><table><thead><tr><th>File</th><th>Size</th><th>sha256</th></tr></thead><tbody><tr><td><code>Digital-elevation-model-links-JSON.pdf</code></td><td>22.0 MB</td><td class="mono small">c2996eaf0adcc76bb81975ec21155dbf32ddac3fbbe71f71d89a5ff465f2c775</td></tr><tr><td><code>GEMS_96647.pdf</code></td><td>444.5 KB</td><td class="mono small">50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938</td></tr><tr><td><code>README.md</code></td><td>8.2 KB</td><td class="mono small">7a5d0165507acdbbb2a7de3c8c584ac719c98549fb7b61ca37db94cdceb85d8d</td></tr><tr><td><code>dem_links.json</code></td><td>6.4 KB</td><td class="mono small">09b13ff0e99e05abd01c89bd85dad1122ac2e0fc66746d9862875593eb115212</td></tr><tr><td><code>example_submission.tif</code></td><td>1.5 MB</td><td class="mono small">2176d08e485aa2cd2860ce8df539db4faf4d76163b38a4dd8c30a40454d35cbc</td></tr><tr><td><code>existing_faults.tif</code></td><td>415.8 KB</td><td class="mono small">7ba308ccdc4418b31a178f4f1ef21aaa6e152e4028f2f6f64b01f7eb25ae4093</td></tr><tr><td><code>gems-geodawn-numerical-features.tif</code></td><td>399.5 MB</td><td class="mono small">4371c82e3b8339b807bdffcf4ef59a225520fe2988d521be208ae33743123bc5</td></tr></tbody></table>
 </main>
-</body>
-</html>
+<footer><div class="wrap">
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-14 18:10 UTC</p>
+  <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
+     <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
+     <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>
+</div></footer>
+</body></html>

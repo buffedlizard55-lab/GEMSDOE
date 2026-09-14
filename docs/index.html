@@ -1,519 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GEMSDOE — GEMS Prize Top Leaderboard</title>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview — GEMS Prize</title>
+<meta name="description" content="Auditable, machine-verified working notes for the DOE GEMS Prize fault-detection challenge.">
 <link rel="stylesheet" href="style.css">
-<meta name="description" content="Top-leaderboard framework for DOE GEMS Prize — fault detection from GeoDAWN geophysics, verified data catalog, no hallucinations.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏔️</text></svg>">
-</head>
-<body>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛰️</text></svg>">
+</head><body>
 <header>
-  <div class="container">
-    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-      <div style="font-size:48px;">🏔️</div>
-      <div>
-        <h1 style="margin:0;">GEMSDOE</h1>
-        <div style="color:#d6d3d1; font-size:1.1rem; margin-top:4px;">Geologic Enhanced Mapping System Prize — Top Leaderboard Solution</div>
-      </div>
-    </div>
-    <p class="subtitle" style="margin-top:16px;">Detecting hidden geothermal faults from GeoDAWN geophysics with verified, auditable data sources. Built to place top of leaderboard — Initial $50k + Final $250k. No hallucinations, all links verified.</p>
-    <div class="badges">
-      <span class="badge">🏆 <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/" target="_blank">DrivenData Competition</a></span>
-      <span class="badge">📄 <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/" target="_blank">Problem Desc</a></span>
-      <span class="badge">📚 <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/" target="_blank">About</a></span>
-      <span class="badge">📜 <a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">Official Rules PDF</a></span>
-      <span class="badge">💻 <a href="https://github.com/buffedlizard55-lab/GEMSDOE" target="_blank">GitHub</a></span>
-      <span class="badge">📖 <a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">Reference Solution</a></span>
-      <span class="badge">🧪 <a href="results.html">Measured results &amp; verification log</a></span>
+  <div class="wrap">
+    <div class="brand"><span class="logo">⛰️</span>
+      <div><div class="name">GEMS Prize — working notes</div>
+      <div class="tag">Geological fault detection in the GeoDAWN region · every figure below is machine-measured</div></div>
     </div>
   </div>
 </header>
+<nav><div class="wrap"><a href="index.html" class="active">Overview</a><a href="data.html">Data</a><a href="metric.html">Metric</a><a href="method.html">Method</a><a href="results.html">Results</a><a href="sources.html">Sources</a><a href="reproduce.html">Reproduce</a></div></nav>
+<main class="wrap">
+<h1>Overview</h1>
+<p class="lede">A fault-detection entry for the DOE GEMS Prize, built so every claim can be checked.</p>
 
-<nav>
-  <div class="container">
-    <a href="#overview" class="active">Overview</a>
-    <a href="#submission">Submission</a>
-    <a href="#metric">Metric</a>
-    <a href="#features">Features</a>
-    <a href="#data">Data Catalog</a>
-    <a href="#method">Method</a>
-    <a href="#limitations">Limitations</a>
-    <a href="#quickstart">Quickstart</a>
-    <a href="#references">References</a>
-    <a href="results.html">Measured Results</a>
-  </div>
-</nav>
+<div class="note ok"><strong>How to read this site.</strong> Nothing here is written from memory. Every table is rendered by <code>scripts/build_site.py</code> from JSON that a GitHub Actions runner produced by downloading the real files and measuring them with rasterio/hashlib. Where evidence is missing, the page says so.</div>
 
-<main class="container">
-  <div class="alert success">
-    <strong>✅ Verified & Auditable (links re-verified 2026-09-13 by scripts/audit_docs.py):</strong> Every link below was checked against official sources — fetch_page full-text retrieval, web_search cross-checks, and git clone of the reference solution; unverifiable links were removed and logged in <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/references.md">references.md</a>. Per-link status in <a href="data_catalog.csv">data_catalog.csv</a> / <a href="data_catalog.json">data_catalog.json</a>. No hallucinations. Flagged irregularities inline.
-  </div>
+<h2>The task</h2>
+<p>Predict where geological <b>faults</b> are in the GeoDAWN region of northwestern Nevada — faults
+being surface indicators of geothermal resources. The submission is a single-band float32 GeoTIFF of
+per-pixel probabilities on the competition grid
+(<a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format">submission format</a>).</p>
 
-  <section id="overview" class="card">
-    <h2>1. Overview — What is GEMS Prize?</h2>
-    <p><strong>Source:</strong> <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/" target="_blank">Competition Main</a> | <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/" target="_blank">Problem Description</a> | <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/" target="_blank">About Page</a> | <a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">Official Rules PDF</a></p>
-    
-    <p><strong>Goal (from problem page):</strong> Develop models and algorithms that provide accurate information about presence of structures indicative of geothermal resources — namely, geological faults. A unique feature: ground truth for currently known faults is publicly available! But it is incomplete and may contain inaccurate data. New faults manually identified by experts comprise test dataset for initial prize round. After initial round, expert panel uses submitted predictions to update fault labels for full region. Submissions rescored against entire updated label set for final round awards.</p>
+<p>The twist that shapes everything: the public USGS fault database is <em>incomplete</em>. Scoring
+uses a private set of newly-expert-labelled faults <em>absent</em> from that database, and after the
+initial round an expert panel reviews every team's predictions to expand the label set for a final
+re-scoring (<a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#competition-structure">competition structure</a>). Predicting the known
+faults back is therefore not the goal; finding the <em>unmapped</em> ones is.</p>
 
-    <div class="grid">
-      <div class="card" style="margin:0; background:#fff7ed; border-color:#fed7aa;">
-        <h3 style="margin-top:0;">Why Faults Matter</h3>
-        <p>From <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/#about-the-task" target="_blank">About Task</a>: Geological fault is fracture where two blocks have measurable displacement. Plane = fault plane, intersection with surface = fault trace. Multiple related fractures = fault zone. Detected via field observations, geophysical surveys (seismic reflection, gravity, magnetic), remote sensing, elevation, edge detection, Hough transforms, deep learning.</p>
-        <p>Geothermal resources often found in regions with active/recent faulting where fractures provide pathways for hot fluids. Image: Steamboat Geothermal Plants near Reno, Nevada (within GeoDAWN) — public domain via Wikimedia Commons (linked on about page).</p>
-      </div>
-      <div class="card" style="margin:0;">
-        <h3 style="margin-top:0;">Competition Structure</h3>
-        <p>From <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#competition-structure" target="_blank">#competition-structure</a> and PDF Section 1.1, 3.6:</p>
-        <table>
-          <tr><th>Round</th><th>Ground Truth</th><th>Prize</th></tr>
-          <tr><td><strong>Initial — $50k</strong></td><td>Fixed private set of new faults labeled before competition</td><td>Top 5 each $10k</td></tr>
-          <tr><td><strong>Expert Review</strong></td><td>Panel cross-references submitted faults for candidate new faults</td><td>—</td></tr>
-          <tr><td><strong>Final — $250k</strong></td><td>Expanded set: initial + verified new discoveries from submissions</td><td>1st $100k, 2nd $70k, 3rd $40k, 4th $25k, 5th $15k</td></tr>
-        </table>
-        <p><strong>Key:</strong> Same submission scored twice. Must choose single submission before deadline without knowing private test performance (PDF 3.6.2) — encourages generalization. Final round is where you directly contribute new geological knowledge.</p>
-      </div>
-    </div>
+<div class="stats"><div class="stat"><div class="k">Feature stack</div><div class="v">3292×3730 px · <b>19 bands</b></div><div class="s">EPSG:32611 · 100 m</div></div><div class="stat"><div class="k">Known faults</div><div class="v"><b>60,988</b> fault pixels</div><div class="s">1.18% of valid area</div></div><div class="stat"><div class="k">1 m DEM tiles</div><div class="v"><b>716</b> confirmed</div><div class="s">matched against the USGS 3DEP bucket</div></div><div class="stat"><div class="k">Blanket-coverage floor</div><div class="v">DTI <b>0.0956</b></div><div class="s">the number any model must beat</div></div></div>
 
-    <h3>Region — GeoDAWN</h3>
-    <p>From <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#datasets" target="_blank">#datasets</a>: Challenge focuses on region covered by GeoDAWN study. GeoDAWN (Geoscience Data Acquisition for Western Nevada) consists of high-resolution magnetic and radiometric surveys to support geologic and geophysical mapping. Map from USGS ScienceBase <a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">657e1d85d34e23d3533209f7</a>. Surveys conducted under EarthMRI with support from DOE Office of Geothermal, plus airborne lidar via USGS 3DEP.</p>
-    <p><strong>Official GeoDAWN sources:</strong><br>
-      - ScienceBase: <a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7</a><br>
-      - DOI: <a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">https://doi.org/10.5066/P93LGLVQ</a><br>
-      - USGS Overview: <a href="https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and" target="_blank">https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and</a><br>
-      - Citation: Glen, J.M.G., and Earney, T.E., 2024, GeoDAWN: Airborne magnetic and radiometric surveys...
-    </p>
-  </section>
+<h2>Competition files — verified on download</h2>
+<table><thead><tr><th>File</th><th>Size</th><th>Detected type</th><th>Status</th><th>sha256</th></tr></thead><tbody><tr><td><code>Digital-elevation-model-links-JSON.pdf</code></td><td>22.0 MB</td><td>PDF</td><td><span class="pill ok">verified</span></td><td class="mono small">c2996eaf0adcc76b…</td></tr><tr><td><code>GEMS_96647.pdf</code></td><td>444.5 KB</td><td>PDF</td><td><span class="pill ok">verified</span></td><td class="mono small">50d854b1e0239fe6…</td></tr><tr><td><code>example_submission.tif</code></td><td>1.5 MB</td><td>TIFF (little-endian)</td><td><span class="pill ok">verified</span></td><td class="mono small">2176d08e485aa2cd…</td></tr><tr><td><code>existing_faults.tif</code></td><td>415.8 KB</td><td>TIFF (little-endian)</td><td><span class="pill ok">verified</span></td><td class="mono small">7ba308ccdc4418b3…</td></tr><tr><td><code>gems-geodawn-numerical-features.tif</code></td><td>399.5 MB</td><td>TIFF (little-endian)</td><td><span class="pill ok">verified</span></td><td class="mono small">4371c82e3b8339b8…</td></tr></tbody></table>
 
-  <section id="submission" class="card">
-    <h2>2. Submission — How to Enter (From Official Rules PDF)</h2>
-    <p><strong>Sources:</strong> <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format" target="_blank">Submission Format</a> | PDF https://docs.nlr.gov/docs/fy26osti/96647.pdf Sections 3.1-3.7 | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md</a></p>
-    
-    <div class="grid">
-      <div>
-        <h3>What to Submit (Line-by-Line Verified)</h3>
-        <ul>
-          <li>✅ Single GeoTIFF file containing predictions for <strong>all</strong> faults in region</li>
-          <li>✅ Same CRS as training: <strong>UTM 11N EPSG:32611</strong> — <a href="https://epsg.io/32611" target="_blank">epsg.io/32611</a></li>
-          <li>✅ Same resolution: <strong>100m</strong></li>
-          <li>✅ Same bounds as training data, outside bounds null/nan</li>
-          <li>✅ Single layer, <strong>float32</strong>, values <strong>[0,1]</strong> probability/confidence</li>
-          <li>✅ Sample submission provided on data tab https://www.drivendata.org/competitions/306/competition-doe-gems/data/ (requires login)</li>
-        </ul>
-        <p>Validation script: <code>scripts/validate_submission.py</code></p>
-      </div>
-      <div>
-        <h3>How to Enter (PDF 3.1, 3.2)</h3>
-        <ol>
-          <li>Create DrivenData account, agree to rules</li>
-          <li>Navigate to https://www.drivendata.org/competitions/306/competition-doe-gems/ to sign up</li>
-          <li>Download training features + labels from data tab</li>
-          <li>Training features: GeoDAWN + other geospatial at 100m, multiband GeoTIFF, plus DEM at 1m instructions</li>
-          <li>Training labels: existing fault data at 100m, from INGENIOUS DOI https://doi.org/10.15121/1881483</li>
-          <li>Submit predictions as GeoTIFF 100m for entirety of GeoDAWN study area</li>
-          <li>Generative AI disclosure required if used (PDF 3.2)</li>
-        </ol>
-      </div>
-    </div>
+<h2>Key findings so far</h2>
+<ol class="findings">
+  <li><b>The feature stack has 19 bands, not the 10 implied by the problem page's prose.</b>
+      All 19 carry <code>band_name</code>/<code>data_category</code> tags. Full list on the
+      <a href="data.html">Data</a> page.</li>
+  <li><b><code>example_submission.tif</code> is not "total fault absence".</b> It is bit-identical
+      to the label raster (60,988 positive pixels in both). The problem page describes it as
+      predicting total absence. Flagged as an irregularity — see <a href="data.html">Data</a>.</li>
+  <li><b>The metric rewards precision, not generosity.</b> Despite β/α = 4 nominally punishing
+      misses, predicting <em>everything</em> scores 0.096 while predicting a precise <em>quarter</em>
+      of the faults scores 0.554. See <a href="metric.html">Metric</a> for the algebra and the
+      measured table.</li>
+  <li><b>The DEM link PDF has no text layer.</b> It is a scan; three text extractors return zero
+      URLs. Recovered by OCR and then re-confirmed tile-by-tile against the live USGS bucket.</li>
+</ol>
 
-    <h3>Feedback & Limits (PDF 3.4)</h3>
-    <ul>
-      <li>Up to <strong>3 submissions per week</strong> for automated scoring</li>
-      <li>Must select <strong>only one</strong> as final before deadline <strong>Dec 3, 2026 11:59pm UTC</strong> (from main page)</li>
-      <li>Multiple finalized not allowed, one final per entity</li>
-    </ul>
 
-    <h3>Evaluation (PDF 3.6)</h3>
-    <ul>
-      <li>Metric: distance-weighted Tversky (penalizes FN more than FP)</li>
-      <li>Public test → public leaderboard, Private test → Initial Round $50k</li>
-      <li>Expert review → expanded label set → Final Round $250k</li>
-      <li>Must choose final without knowing private scores (PDF 3.6.2) — discourages overfitting</li>
-      <li>Winners must submit complete code + docs reproducible, per Winning Model Documentation Template, plus eligibility certs (PDF 3.2, 3.5)</li>
-      <li>Interviews may be held (PDF 3.6.3), DOE is final judge (PDF 3.6.4)</li>
-    </ul>
+<h2>Where this stands</h2>
+<p>The pipeline runs end-to-end on the real competition rasters — train → inference → format
+validation → scoring — on a CPU runner, and locally in-sandbox against a committed real-data
+fixture. Format validation passes. What remains for a competitive score is GPU training at full
+capacity; see <a href="results.html">Results</a> for the honest current numbers, including a smoke
+run that scored <em>below</em> the trivial baseline.</p>
 
-    <div class="alert info">
-      <strong>Practical Steps:</strong> <code>python scripts/generate_dummy_submission.py</code> creates valid GeoTIFF for testing. <code>python scripts/validate_submission.py --pred submission.tif</code> checks format. Then upload via DrivenData "Submit" → "Make new submission".
-    </div>
-  </section>
-
-  <section id="metric" class="card">
-    <h2>3. Metric — Distance-Weighted Tversky Index</h2>
-    <p><strong>Source:</strong> <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric" target="_blank">Performance Metric</a> | Formula verified line-by-line from page chunk 1.</p>
-    <p>Tversky index is similarity metric parameterized by α (FP penalty) and β (FN penalty). For this challenge: α=0.2 (low FP penalty), β=0.8 (high FN penalty) → rewards high recall. Rasterization lossy, fault misalignment possible → weight by distance to nearest ground truth using triangular kernel with 300m support (3 pixels at 100m).</p>
-    
-    <div class="grid">
-      <div>
-        <h3>Mathematical Representation (from page)</h3>
-        <pre>Let p(x)∈[0,1] = predicted prob at pixel x
-Let g(x) = ground truth label
-
-TI(α,β) = Σ p(x)g(x) / [Σ p(x)g(x) + α Σ p(x)(1-g(x)) + β Σ (1-p(x))g(x)]
-
-Triangular kernel k(d) = max(1 - d/R, 0), R=300m = 3px
-
-TP_w = Σ_{g∈G} max_{x:d(x,g)≤R} p(x) k(d(x,g))
-FP_w = Σ_{x:p(x)>0} p(x) [1 - max_{g∈G} k(d(x,g))]
-FN_w = Σ_{g∈G} [1 - max_{x:d(x,g)≤R} p(x) k(d(x,g))]
-
-DTI(α,β) = TP_w / (TP_w + α FP_w + β FN_w + ε)
-
-α=0.2, β=0.8, ε small</pre>
-        <p>Implementation: <code>src/metrics.py</code> enumerates the 29 integer offsets whose Euclidean distance is ≤ R and takes <code>max</code> of <code>p(x)·k(d)</code> over them for TP<sub>w</sub>/FN<sub>w</sub>; <code>distance_transform_edt</code> on the label mask supplies the FP weight <code>1 − max k</code>. A square 7×7 window is deliberately <em>not</em> used: it would credit corner pixels at d≈4.24 px, which the spec&rsquo;s radius excludes. Full rasters score in blocks with an R-pixel halo (<code>score_arrays_blocked</code>), asserted identical to the dense path, so GeoDAWN-scale scoring does not allocate O(H·W·49).</p>
-      </div>
-      <div>
-        <h3>Scoring Example (from page)</h3>
-        <p>From page: Ground truth single vertical line, triangular kernel R=3 applied. Illustration shows weighted contributions. Example calculation: TP_w=3.00, FP_w=1.89, FN_w=2.00 → TI_w(α=0.2,β=0.8)=3.00/(3.00+0.2*1.89+0.8*2.00)=0.60</p>
-        <p>Images: <a href="https://drivendata-public-assets.s3.amazonaws.com/gems_metric_1.png" target="_blank">gems_metric_1.png</a>, <a href="https://drivendata-public-assets.s3.amazonaws.com/gems_metric_2.png" target="_blank">gems_metric_2.png</a> (from page)</p>
-        <div class="metric-box">
-          <div class="metric"><div class="value">0.2</div><div class="label">α FP penalty</div></div>
-          <div class="metric"><div class="value">0.8</div><div class="label">β FN penalty → Recall</div></div>
-          <div class="metric"><div class="value">300m</div><div class="label">R = 3px</div></div>
-          <div class="metric"><div class="value">[0,1]</div><div class="label">Prob float32</div></div>
-        </div>
-        <div class="alert">
-          <strong>Leaderboard Insight:</strong> Use low threshold 0.1-0.2 to maximize recall. FN penalized 4× FP. Post-processing should connect faults, not remove them. Our <code>src/postprocess.py</code> uses Frangi filter + closing + low thresh.
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="features" class="card">
-    <h2>4. Provided Features — Detailed Table</h2>
-    <p><strong>Source:</strong> <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#provided-features" target="_blank">Provided Features</a> | File <code>training_features.tif</code> (or <code>numeric_features.tif</code> in ref solution) EPSG:32611 100m | Plus <code>1m_DEM_links.csv</code> | Details in <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/FEATURES.md">FEATURES.md</a></p>
-    <p><strong>Official list verbatim:</strong> Surface conductivity and depth to conductive base surface; Detrended elevation and the slope of detrended elevation; Dilatation rate, shear strain rate, and the second invariant of the strain rate tensor; Isostatic gravity anomaly and the slope of the isostatic gravity anomaly; Magnetics including reduced-to-pole magnetic anomaly, total magnetic intensity, the vertical and horizontal slope of total magnetic intensity, and the top-of-crustal magnetic source depth estimate; Density of earthquakes.</p>
-    <div style="overflow-x:auto;">
-    <table>
-      <thead><tr><th>#</th><th>Category</th><th>Feature</th><th>Official Source</th><th>Verified Link</th></tr></thead>
-      <tbody>
-        <tr><td>1</td><td>MT</td><td>Surface conductivity</td><td>INGENIOUS (MT conductance)</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a> DOI <a href="https://doi.org/10.15121/1881483" target="_blank">10.15121/1881483</a>; sub-dataset <a href="https://doi.org/10.5066/P9TWT2LU" target="_blank">10.5066/P9TWT2LU</a></td></tr>
-        <tr><td>2</td><td>MT</td><td>Depth to conductive base</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
-        <tr><td>3</td><td>Topo</td><td>Detrended elevation</td><td>INGENIOUS (USGS release)</td><td><a href="https://doi.org/10.5066/P9MQRCBY" target="_blank">10.5066/P9MQRCBY</a> + <a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">3DEP About</a></td></tr>
-        <tr><td>4</td><td>Topo</td><td>Slope of detrended elevation</td><td>USGS 3DEP</td><td><a href="https://apps.nationalmap.gov/downloader/" target="_blank">TNM Downloader</a></td></tr>
-        <tr><td>5</td><td>Geodesy</td><td>Dilatation rate</td><td>INGENIOUS / UNAVCO</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
-        <tr><td>6</td><td>Geodesy</td><td>Shear strain rate</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
-        <tr><td>7</td><td>Geodesy</td><td>Second invariant of strain rate</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
-        <tr><td>8</td><td>Gravity</td><td>Isostatic gravity anomaly</td><td>USGS (Kucks 1999)</td><td><a href="https://mrdata.usgs.gov/gravity/isostatic/" target="_blank">mrdata gravity/isostatic</a> + <a href="https://mrdata.usgs.gov/metadata/usgraviso.html" target="_blank">metadata</a> + GDR <a href="https://doi.org/10.5066/P9Z6SA1Z" target="_blank">P9Z6SA1Z</a></td></tr>
-        <tr><td>9</td><td>Gravity</td><td>Slope of isostatic gravity</td><td>Derived</td><td>Derived</td></tr>
-        <tr><td>10</td><td>Mag</td><td>Reduced-to-pole anomaly</td><td>GeoDAWN</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase 657e1d85</a> DOI <a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">P93LGLVQ</a></td></tr>
-        <tr><td>11</td><td>Mag</td><td>Total magnetic intensity (TMI)</td><td>GeoDAWN</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase</a></td></tr>
-        <tr><td>12</td><td>Mag</td><td>Vertical slope of TMI</td><td>GeoDAWN</td><td>Derived</td></tr>
-        <tr><td>13</td><td>Mag</td><td>Horizontal slope of TMI</td><td>GeoDAWN</td><td>Derived</td></tr>
-        <tr><td>14</td><td>Mag</td><td>Top-of-crustal magnetic source depth</td><td>GeoDAWN</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase</a></td></tr>
-        <tr><td>15</td><td>Seismic</td><td>Density of earthquakes</td><td>INGENIOUS</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR</a></td></tr>
-        <tr><td>16</td><td>DEM</td><td>1m DEM links CSV</td><td>USGS 3DEP</td><td><a href="https://apps.nationalmap.gov/lidar-explorer/" target="_blank">LidarExplorer</a> + <a href="https://apps.nationalmap.gov/downloader/" target="_blank">Downloader</a> + <a href="https://registry.opendata.aws/usgs-lidar/" target="_blank">AWS</a></td></tr>
-      </tbody>
-    </table>
-    </div>
-    <p><strong>Labels:</strong> From USGS Quaternary Fault maps and INGENIOUS, provided in vector and raster formats on data download page. Sources: QFaults https://www.usgs.gov/programs/earthquake-hazards/faults + ScienceBase https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23 DOI https://doi.org/10.5066/P9BCVRCK and INGENIOUS DOI https://doi.org/10.15121/1881483.</p>
-    <p>Visualization: Two choropleth maps of GeoDAWN region showing total radiometric counts per second (left) and total magnetic intensity (right) — image https://drivendata-public-assets.s3.amazonaws.com/gems_tc_tmi.png (from USGS GeoDAWN).</p>
-  </section>
-
-  <section id="data" class="card">
-    <h2>5. Verified External Data Catalog — Auditable, No Hallucinations</h2>
-    <p>All entries public domain or CC, allowed per rules: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#external-datasets" target="_blank">External Datasets</a> says participants allowed to use any additional data sources provided license permits use and sharing with sponsor. See Rules https://www.drivendata.org/competitions/306/competition-doe-gems/rules/ → HeroX https://www.herox.com/GEMSPrize/resource/2274 → PDF https://www.nlr.gov/docs/fy26osti/96647.pdf. Use encouraged if licensed.</p>
-    <p><strong>Download:</strong> <a href="data_catalog.csv">CSV</a> | <a href="data_catalog.json">JSON</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/references.md">Verification Log</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/FEATURES.md">FEATURES.md</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/LIMITATIONS.md">LIMITATIONS.md</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md</a></p>
-    <div style="overflow-x:auto;">
-    <table>
-      <thead><tr><th>#</th><th>Dataset</th><th>Agency</th><th>Official Verified Links (Click to Verify)</th><th>License</th><th>Use</th><th>Status</th></tr></thead>
-      <tbody>
-        <tr><td>1</td><td><strong>GeoDAWN Mag & Radiometric</strong></td><td>USGS</td><td><a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">ScienceBase 657e1d85</a><br><a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">DOI 10.5066/P93LGLVQ</a><br><a href="https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and" target="_blank">USGS Overview</a></td><td>CC0 1.0</td><td>Primary geophysics</td><td>✅ fetch_page 2026-09-12 — license CC0 1.0</td></tr>
-        <tr><td>2</td><td><strong>Quaternary Fault & Fold DB</strong></td><td>USGS Earthquake Hazards</td><td><a href="https://www.usgs.gov/programs/earthquake-hazards/faults" target="_blank">Interactive Fault Map</a><br><a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">ScienceBase QFaults</a><br><a href="https://doi.org/10.5066/P9BCVRCK" target="_blank">DOI P9BCVRCK</a><br><a href="https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format" target="_blank">USGS FAQ (KML+GIS)</a><br><a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer" target="_blank">ArcGIS Service</a></td><td>Public Domain</td><td>Ground truth labels</td><td>✅ Verified</td></tr>
-        <tr><td>3</td><td><strong>3DEP 1m DEM / Lidar</strong></td><td>USGS NGP</td><td><a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">About 3DEP</a><br><a href="https://apps.nationalmap.gov/downloader/" target="_blank">TNM Downloader</a><br><a href="https://apps.nationalmap.gov/lidar-explorer/" target="_blank">LidarExplorer</a><br><a href="https://registry.opendata.aws/usgs-lidar/" target="_blank">AWS Open Data</a></td><td>Public Domain</td><td>Elevation, slope, TPI, TRI, curvature</td><td>✅ Verified</td></tr>
-        <tr><td>4</td><td><strong>INGENIOUS Regional Compilation</strong></td><td>GBCGE/DOE GDR</td><td><a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a><br><a href="https://doi.org/10.15121/1881483" target="_blank">DOI 1881483</a><br><a href="https://www.osti.gov/biblio/1881483" target="_blank">OSTI 1881483</a><br><a href="https://gbcge.org/current-projects/ingenious/" target="_blank">Project Site</a></td><td>CC BY 4.0</td><td>Conductivity, strain, gravity, quake density, heat flow</td><td>✅ Verified</td></tr>
-        <tr><td>5</td><td><strong>GBCGE Subsurface DB</strong></td><td>GBCGE</td><td><a href="https://doi.org/10.15121/1987556" target="_blank">DOI 1987556</a><br><a href="https://www.osti.gov/dataexplorer/biblio/dataset/1987556" target="_blank">OSTI Explorer</a></td><td>Public</td><td>Wells, springs, temps, chemistry</td><td>✅ Verified</td></tr>
-        <tr><td>6</td><td><strong>Geothermal Favorability</strong></td><td>USGS + INGENIOUS</td><td><a href="https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43" target="_blank">ScienceBase 66e88690</a></td><td>Public</td><td>16 ML features</td><td>✅ Verified</td></tr>
-        <tr><td>7</td><td><strong>EarthMRI</strong></td><td>USGS Mineral Resources</td><td><a href="https://mrdata.usgs.gov/earthmri/" target="_blank">Portal</a><br><a href="https://pubs.usgs.gov/publication/fs20203055" target="_blank">FS 2020-3055 DOI 10.3133/fs20203055</a></td><td>Public Domain</td><td>Critical mineral context</td><td>✅ Verified</td></tr>
-        <tr><td>8</td><td><strong>Competition Official</strong></td><td>DrivenData/DOE/NLR</td><td><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/" target="_blank">Main</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/" target="_blank">Problem Desc</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/" target="_blank">About</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/data/" target="_blank">Data (login)</a><br><a href="https://www.drivendata.org/competitions/306/competition-doe-gems/rules/" target="_blank">Rules</a> → <a href="https://www.herox.com/GEMSPrize/resource/2274" target="_blank">HeroX</a> → <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">PDF Official Rules</a><br><a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">Reference Solution</a></td><td>Competition Rules</td><td>Task definition</td><td>✅ Verified via fetch_page</td></tr>
-        <tr><td>9</td><td><strong>Paper: Auto Fault Mapping</strong></td><td>Journal</td><td><a href="https://doi.org/10.1029/2020JB021269" target="_blank">DOI 10.1029/2020JB021269</a> Mattéo et al 2021</td><td>Open Access</td><td>Method inspiration</td><td>✅ Listed on About page</td></tr>
-        <tr><td>10</td><td><strong>Paper: Quaternary Faults DL</strong></td><td>Stanford</td><td><a href="https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf" target="_blank">Hermant et al 2025 PDF</a></td><td>Open Access</td><td>Deep learning for QFaults</td><td>✅ Listed on About page</td></tr>
-      </tbody>
-    </table>
-    </div>
-    <div class="alert">
-      <strong>Irregularities flagged for review:</strong>
-      <ul style="margin:8px 0;">
-        <li>Data tab https://www.drivendata.org/competitions/306/competition-doe-gems/data/ requires login — confirmed via fetch_page redirect to login. Cannot verify exact file list without auth. We handle all three observed naming sets in <code>src/dataset.py</code>: <code>training_features.tif</code> (problem page), <code>numeric_features.tif</code> (reference solution), <code>gems-geodawn-numerical-features.tif</code> (Dropbox mirror), likewise labels (<code>labels.tif</code> / <code>existing_faults.tif</code>), submission (<code>sample_submission.tif</code> / <code>example_submission.tif</code>), DEM links (<code>1m_DEM_links.csv</code> / <code>Digital-elevation-model-links-JSON.pdf</code>).</li>
-        <li>GeoDAWN ScienceBase has many zips (grids 42MB+227MB, gdb 350MB+378MB, tiffs 43MB+230MB, plus 3GB contractor packages) — exact file used for <code>training_features.tif</code> not documented; organizers pre-processed them.</li>
-        <li>INGENIOUS layers derivation not fully documented — closest official sources are INGENIOUS sub-datasets with own USGS DOIs: MT conductance 10.5066/P9TWT2LU, detrended elevation 10.5066/P9MQRCBY, gravity/magnetics 10.5066/P9Z6SA1Z, heat flow 10.5066/P9BZPVUC, slip/dilation tendency 10.5066/P9YL58W6.</li>
-        <li>No official sample submission offline — we create dummy via <code>scripts/generate_dummy_submission.py</code> if missing.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section id="method" class="card">
-    <h2>6. Method — How to Place Top of Leaderboard</h2>
-    <div class="grid">
-      <div class="card" style="margin:0; background:#fafaf9;">
-        <h3 style="margin-top:0;">Reference Solution (Baseline)</h3>
-        <p><strong>Author:</strong> John Lipor, Portland State — <a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">GitHub</a></p>
-        <ul>
-          <li>U-Net with segmentation_models_pytorch</li>
-          <li>5 MC splits, patch 128, 5 epochs, Tversky loss α0.2 β0.8, basic [0,1] min-max norm</li>
-          <li>Single model, no TTA, no external DEM, no post-process</li>
-          <li>Rough DTI estimate only (clearly labeled estimate; no verified public baseline exists for this new competition)</li>
-        </ul>
-        <p>Notebook: <code>unet-mc-cv-reference-solution.ipynb</code> — loads features, patchify, train U-Net, average predictions.</p>
-      </div>
-      <div class="card" style="margin:0; border-color:#fdba74; background:#fff7ed;">
-        <h3 style="margin-top:0;">Our Improvements — implemented in <code>src/</code></h3>
-        <ul>
-          <li><strong>Loss = the metric.</strong> A differentiable transcription of the distance-weighted Tversky index (<code>DistanceWeightedTverskyLoss</code>) whose value equals 1&minus;DTI of the scorer (proven by <code>tests/test_metric.py::test_dw_loss_is_the_metric</code>), combined 0.3&middot;BCE + 0.5&middot;DTI + 0.2&middot;focal. The reference solution trains on pixel-wise Tversky, which fights the R=300 m tolerance the committee built into scoring.</li>
-          <li><strong>FP weight map from the global distance transform</strong>, cropped per patch, so predictions at a patch border are neither over- nor under-penalised.</li>
-          <li><strong>Shaping calibrated on held-out windows</strong> (<code>src/submission_optim.py</code>): hard probability floor + distance-R dominating thinning, one (t0, thin) pair pooled over MC splits, written to <code>manifest.json</code> and applied at inference. Measured 2.8&times; on our smoke model — see <a href="results.html#calculus">metric calculus</a>.</li>
-          <li><strong>Leakage-free MC patching</strong> exactly as the reference designs it (test windows zeroed in the global raster before training windows are cut), plus 35&ndash;40&nbsp;% empty windows kept so the model calibrates instead of only seeing faults.</li>
-          <li><strong>Reproducible normalisation</strong>: per-channel percentile clip &rarr; robust z &rarr; [0,1], statistics persisted to <code>outputs/norm_stats.json</code> and reused at inference (Rules &sect;3.5 asks for reproducible assets).</li>
-          <li><strong>Augmentation wired in</strong> (numpy, label-consistent): random-resized crop 0.75&ndash;1.0, h/v flips, 90&deg; rotations, small Gaussian noise — <code>FaultDataset</code>. The "planned / not wired" flag from the last review is closed.</li>
-          <li><strong>Models:</strong> ensemble over UNet++ / DeepLabV3+ / SegFormer / UNet with EfficientNet-B5 &amp; MIT-B2 encoders (pretrained where the network allows it), one arch per MC split for diversity.</li>
-          <li><strong>Model selection on the shaped held-out DTI</strong>, not on loss — the quantity we are scored on.</li>
-          <li><strong>Inference:</strong> sliding window, overlap 0.75, Gaussian blending, 8-way TTA with exact inverse transforms, ensemble mean or DTI-weighted blend; NaN written outside the data footprint per the spec.</li>
-          <li><strong>Memory-safe scorer</strong> for full-region evaluation (<code>score_arrays_blocked</code>) — the previous dense form allocated 49&times; the pixel count and would OOM on the real GeoDAWN grid.</li>
-          <li><strong>External data</strong> (allowed by the rules): GeoDAWN raw surveys DOI <a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">10.5066/P93LGLVQ</a>, INGENIOUS compilation DOI <a href="https://doi.org/10.15121/1881483" target="_blank">10.15121/1881483</a>, USGS 3DEP 1 m DEM for slope/curvature/TPI/TRI/hillshade bands (<code>src/external_data.py</code>).</li>
-        </ul>
-      </div>
-    </div>
-
-    <h3>Data flow (as implemented)</h3>
-    <pre>data/*.tif (any of the three documented name variants)
-  |  load_stack: nodata &amp; values &lt; -1e30 -> NaN            [src/dataset.py]
-  v
-fit_norm_stats -> outputs/norm_stats.json  (persisted, reused at inference)
-  |  apply_norm_stats: 1-99% clip -> robust z -> [0,1], NaN -> 0
-  v
-make_patches(seed=10*mc): non-overlapping test windows -> ZERO globally
-  |                      -> overlapping train windows (>=3 fault px) + 35% empty
-  |                      -> fpw crop = 1 - max_g k(d(x,g)) from the GLOBAL EDT
-  v
-FaultDataset: crop 0.75-1.0 / h-flip / v-flip / rot90 / noise  (x, y, fpw aligned)
-  v
-model (per MC split: unetplusplus | deeplabv3plus | segformer | unet)
-  v
-loss = 0.3 BCE + 0.5 (1 - DTI_surrogate, R=3px, alpha .2 beta .8) + 0.2 focal-Tversky
-  v
-selection: max shaped held-out DTI   [src/metrics.score_arrays_blocked]
-  v
-pooled shaping search (t0, thin) -> manifest.json
-  v
-inference: sliding window (overlap .75, Gaussian blend, 8-way TTA) -> ensemble mean
-  v
-optimize_submission(t0, thin) -> Frangi/closing (postprocess) -> NaN outside footprint
-  v
-GeoTIFF float32 [0,1], EPSG:32611, 100 m, same bounds   -> scripts/validate_submission.py</pre>
-
-    <h3>Why This Wins Final Round</h3>
-    <p>Final Round rewards discovering <em>true new faults</em> that experts verify. Our low threshold (0.15) + Frangi line enhancement + DEM lineaments (slope, TPI) increases recall of subtle hidden faults not in USGS database. We don't overfit to known faults only — we use MC CV and high recall loss to generalize. Expert review builds the expanded label set from "expert review of all submissions" (competition main page, verbatim — verified 2026-09-12; problem page + PDF 3.6.1 wording: uses submitted predictions) — our predictions that flag true hidden faults become part of expanded label set and boost our Final Round score even if Initial Round was lower.</p>
-
-    <h3>Measured, not estimated</h3>
-    <p>This competition is new: there is <strong>no published leaderboard history</strong> to anchor an
-    estimate, so we do not print one. What we do print is measured on data and reproducible:</p>
-    <table>
-      <tr><th>Result measured on the reconstructed public-source dataset</th><th>DTI</th><th>Source</th></tr>
-      <tr><td>raw probability field written the way the reference solution writes it</td><td>0.0437</td><td rowspan="4"><code>outputs_recon/submission_variants.json</code> (script on <a href="results.html#calculus">results page</a>)</td></tr>
-      <tr><td>+ threshold 0.1 (reference&rsquo;s suggested value)</td><td>0.0438</td></tr>
-      <tr><td>+ floor 0.3 and distance-R dominating thinning</td><td>0.1012</td></tr>
-      <tr><td>+ floor/thin grid-searched on held-out windows</td><td><strong>0.1210</strong></td></tr>
-      <tr><td>loss A/B, shaped held-out: combined_dw vs dw_tversky vs plain Tversky (reference)</td><td>0.0913 / 0.0838 / 0.0659</td><td><code>outputs_ab/summary_table.txt</code></td></tr>
-    </table>
-    <p class="small"><strong>Flagged so this cannot be misread:</strong> a 4-epoch CPU model with
-    <code>pretrained: false</code> on a reconstructed sub-region. These numbers validate the machinery and the
-    metric algebra; they are not a prediction of leaderboard position. The first real signal is the public LB,
-    scored 3&times;/week max (rules PDF &sect;3.4).</p>
-  </section>
-
-  <section id="limitations" class="card">
-    <h2>7. Limitations & Required Access — What We Need</h2>
-    <p>Full details in <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/LIMITATIONS.md">LIMITATIONS.md</a> — verified sources inline.</p>
-    <div class="grid">
-      <div class="card" style="margin:0; background:#fef2f2; border-color:#fecaca;">
-        <h3 style="margin-top:0;">Current Sandbox Limits</h3>
-        <ul>
-          <li>❌ <strong>No DrivenData auth</strong> → cannot auto-download <code>training_features.tif</code>, <code>labels.tif</code>, <code>sample_submission.tif</code>, <code>1m_DEM_links.csv</code> from https://www.drivendata.org/competitions/306/competition-doe-gems/data/ (requires login — verified via fetch_page redirect)</li>
-          <li>✅ <strong>Full environment reproducible inside the sandbox</strong> (Python 3.11.2; numpy 2.4.6, rasterio 1.4.4, scikit-image 0.26.0, scipy 1.17.1, torch 2.14.0+cu130 running on CPU, segmentation-models-pytorch 0.5.0, torchvision 0.29.0, geopandas 1.1.4 — all installed from pypi.org, which the egress allowlist permits). Training large models still needs a GPU per ref solution https://github.com/drivendataorg/gems-prize-reference-solution#choosing-gpu-vs-cpu</li>
-          <li>❌ <strong>No large external data pre-downloaded</strong> — GeoDAWN GBs (ScienceBase https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7 has 42MB+227MB grids, 350MB+378MB gdb, 3GB contractor), 3DEP 1m DEM many GB (canonical bucket prd-tnm.s3.amazonaws.com; an earlier session extracted 35 tile URLs / 6 S3-verified spot checks, but that capture was never committed — <code>data/*</code> was gitignored — and is gone; regenerate with <code>python scripts/fetch_dem_links_pdf.py</code> or enumerate The National Map directly with <code>scripts/download_dem_tiles.py --complete-listing</code>; also https://apps.nationalmap.gov/downloader/), INGENIOUS 116MB+ (https://gdr.openei.org/submissions/1391)</li>
-          <li>✅ <strong>Real public-source data IS obtainable here</strong> — the GeoDAWN area-1 rasters, INGENIOUS QFaults and seismicity grids were pulled from a pinned GitHub mirror (commit <code>56d78de7a9</code>, tarball sha256 <code>f78b96a3</code>) and the pipeline was trained/validated end-to-end on them; see <a href="results.html">the verification log</a></li>
-          <li>✅ Code handles all documented file-name variants and validates via <code>scripts/prepare_data.py</code></li>
-          <li>❌ <strong>Pretrained encoder weights</strong> — the release-asset host is blocked, so local runs use <code>pretrained: false</code>; every local number here is therefore pessimistic</li>
-        </ul>
-      </div>
-      <div class="card" style="margin:0; background:#f0fdf4; border-color:#bbf7d0;">
-        <h3 style="margin-top:0;">What You Need for Full Run</h3>
-        <ul>
-          <li>✅ <strong>DrivenData account + enroll</strong> at https://www.drivendata.org/competitions/306/competition-doe-gems/ — eligibility US citizen/permanent resident per PDF Section 1.3 https://docs.nlr.gov/docs/fy26osti/96647.pdf</li>
-          <li>✅ <strong>GPU:</strong> 1×A100 24GB+ or multi-GPU, CUDA 12.6/13.0, or Apple MPS. Reference recommends <code>uv sync --extra cu126</code></li>
-          <li>✅ <strong>Storage:</strong> ~50GB for data + outputs</li>
-          <li>✅ <strong>Time:</strong> 5-10h training (MC=10, 50 epochs), ~1h inference with TTA + ensemble</li>
-          <li>✅ <strong>Optional:</strong> AWS CLI for 3DEP lidar <code>s3://usgs-lidar/</code> via https://registry.opendata.aws/usgs-lidar/</li>
-          <li>✅ <strong>For winners:</strong> Complete code + docs reproducible, per Winning Model Documentation Template, plus eligibility certs, generative AI disclosure if used (PDF 3.2, 3.5)</li>
-        </ul>
-      </div>
-    </div>
-    <div class="alert info">
-      <strong>External data allowed & shareable:</strong> All our external sources are public domain (USGS) or CC (INGENIOUS) — shareable with sponsor per rules https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#external-datasets and PDF https://docs.nlr.gov/docs/fy26osti/96647.pdf. USGS Public Domain https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits, INGENIOUS CC on https://gdr.openei.org/submissions/1391.
-    </div>
-  </section>
-
-  <section id="quickstart" class="card">
-    <h2>8. Quickstart — End-to-End</h2>
-    <div class="alert info"><strong>End-to-end verified 2026-09-12 (CPU):</strong> the full chain train → inference → format validation → DTI scoring was executed on a reconstructed public-source dataset (<code>data/reconstructed/</code>, built by <code>scripts/build_reconstruction_dataset.py</code> from official USGS GeoDAWN + INGENIOUS sources because the official files are login/egress-gated here). <code>validate_submission.py</code> result: ✅ PASSED (EPSG:32611, 100 m, float32, [0,1], grid match). Two real bugs were found and fixed in the process (YAML <code>1e-4</code> string crash; scikit-image Frangi API silently disabled). Details: <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/data/README.md">data/README.md</a>, <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/LIMITATIONS.md">LIMITATIONS.md §1c–1e</a>.</div>
-    <div class="grid">
-      <div>
-        <h3>Setup</h3>
-        <pre>git clone https://github.com/buffedlizard55-lab/GEMSDOE.git
-cd GEMSDOE
-
-# Env (choose one)
-conda env create -f environment.yml
-conda activate gemsdoe
-# or
-pip install -r requirements.txt
-
-# Data (manual download from data tab)
-mkdir -p data/
-# Download from https://www.drivendata.org/competitions/306/competition-doe-gems/data/
-# training_features.tif, labels.tif, sample_submission.tif, 1m_DEM_links.csv
-
-# Optional external (verified links)
-bash scripts/download_external.sh
-python scripts/prepare_data.py
-
-# Dummy submission for testing format (no training needed)
-python scripts/generate_dummy_submission.py --out submission_dummy.tif
-python scripts/validate_submission.py --pred submission_dummy.tif</pre>
-      </div>
-      <div>
-        <h3>Train & Inference (needs GPU)</h3>
-        <pre># Train ensemble (MC=10, 50 epochs)
-python -m src.train --config configs/config.yaml
-# Output: outputs/model_mc0_unetplusplus_dti0.6xxx.pt etc.
-# Plus ensemble_summary.txt
-
-# Inference with TTA + ensemble
-python -m src.inference --config configs/config.yaml \
-  --model-dir outputs --out submission.tif
-
-# Validate
-python scripts/validate_submission.py \
-  --pred submission.tif \
-  --sample data/sample_submission.tif \
-  --train data/training_features.tif
-
-# Evaluate if you have val labels
-python -m src.metrics --pred submission.tif --true data/labels.tif
-
-# Submit via DrivenData:
-# Go to https://www.drivendata.org/competitions/306/competition-doe-gems/
-# Click Submit → Make new submission → upload submission.tif
-# Before Dec 3 2026 11:59pm UTC, select ONE as final</pre>
-        <p><strong>Config:</strong> <code>configs/config.yaml</code>, as it actually reads — patch 256, train_step 128
-        (2&times; overlap), MC 10 splits, batch 16, epochs 60, AdamW init 1e-4 &rarr; OneCycleLR peak 1e-3,
-        α0.2 β0.8, <code>loss: combined_dw</code>, inference overlap 0.75 + Gaussian blending, TTA 8-way,
-        <code>threshold: null</code> (probability raster) with <code>calibrate_shaping: true</code>
-        (floor + dominating thinning tuned on held-out windows). Reference for comparison (its notebook, cell 16):
-        patch 128, non-overlapping, MC 5, batch 32, epochs 5, lr 1e-4, plain Tversky, box-average ensemble,
-        <code>&gt;0.1</code> threshold.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="references" class="card">
-    <h2>9. References — All Verified Links for Manual Review</h2>
-    <p><strong>Verification log:</strong> <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/references.md">references.md</a> — logs fetch_page and web_search results. <strong>No hallucinations.</strong></p>
-    <div style="columns:2; column-gap:24px;">
-    <ul>
-      <li>Main: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/" target="_blank">https://www.drivendata.org/competitions/306/competition-doe-gems/</a></li>
-      <li>Problem Desc: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/" target="_blank">https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/</a></li>
-      <li>About: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/" target="_blank">https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/</a></li>
-      <li>Data (login): <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/data/" target="_blank">https://www.drivendata.org/competitions/306/competition-doe-gems/data/</a></li>
-      <li>Rules: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/rules/" target="_blank">Rules</a> → <a href="https://www.herox.com/GEMSPrize/resource/2274" target="_blank">HeroX</a> → <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf" target="_blank">PDF Official Rules</a></li>
-      <li>Reference Solution: <a href="https://github.com/drivendataorg/gems-prize-reference-solution" target="_blank">GitHub</a></li>
-      <li>GeoDAWN ScienceBase: <a href="https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7" target="_blank">657e1d85</a></li>
-      <li>GeoDAWN DOI: <a href="https://doi.org/10.5066/P93LGLVQ" target="_blank">10.5066/P93LGLVQ</a></li>
-      <li>GeoDAWN Overview: <a href="https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and" target="_blank">USGS Overview</a></li>
-      <li>QFaults Interactive: <a href="https://www.usgs.gov/programs/earthquake-hazards/faults" target="_blank">Faults</a></li>
-      <li>QFaults ScienceBase: <a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">589097b1</a></li>
-      <li>QFaults DOI: <a href="https://doi.org/10.5066/P9BCVRCK" target="_blank">P9BCVRCK</a></li>
-      <li>QFaults FAQ (KML+GIS availability): <a href="https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format" target="_blank">USGS FAQ</a>; <code>qfaults.kmz</code> on <a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23" target="_blank">ScienceBase</a></li>
-      <li>QFaults ArcGIS: <a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer" target="_blank">MapServer</a></li>
-      <li>3DEP About: <a href="https://www.usgs.gov/3d-elevation-program/about-3dep-products-services" target="_blank">About 3DEP</a></li>
-      <li>TNM Downloader: <a href="https://apps.nationalmap.gov/downloader/" target="_blank">Downloader</a></li>
-      <li>LidarExplorer: <a href="https://apps.nationalmap.gov/lidar-explorer/" target="_blank">LidarExplorer</a></li>
-      <li>AWS Lidar: <a href="https://registry.opendata.aws/usgs-lidar/" target="_blank">AWS Open Data</a></li>
-      <li>INGENIOUS GDR: <a href="https://gdr.openei.org/submissions/1391" target="_blank">GDR 1391</a></li>
-      <li>INGENIOUS DOI: <a href="https://doi.org/10.15121/1881483" target="_blank">DOI 1881483</a></li>
-      <li>INGENIOUS OSTI: <a href="https://www.osti.gov/biblio/1881483" target="_blank">OSTI 1881483</a></li>
-      <li>Project Site: <a href="https://gbcge.org/current-projects/ingenious/" target="_blank">gbcge.org/ingenious</a></li>
-      <li>GBCGE Explorer DOI: <a href="https://doi.org/10.15121/1987556" target="_blank">1987556</a></li>
-      <li>GBCGE OSTI: <a href="https://www.osti.gov/dataexplorer/biblio/dataset/1987556" target="_blank">Explorer</a></li>
-      <li>Favorability: <a href="https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43" target="_blank">ScienceBase 66e88690</a></li>
-      <li>EarthMRI Portal: <a href="https://mrdata.usgs.gov/earthmri/" target="_blank">mrdata.usgs.gov/earthmri</a></li>
-      <li>EarthMRI FS: <a href="https://pubs.usgs.gov/publication/fs20203055" target="_blank">FS 2020-3055</a></li>
-      <li>Mattéo et al 2021: <a href="https://doi.org/10.1029/2020JB021269" target="_blank">10.1029/2020JB021269</a></li>
-      <li>Hermant et al 2025: <a href="https://pangea.stanford.edu/ERE/db/GeoConf/papers/SGW/2025/Hermant.pdf" target="_blank">SGW 2025 PDF</a></li>
-      <li>EPSG:32611: <a href="https://epsg.io/32611" target="_blank">epsg.io/32611</a></li>
-      <li>Tversky Index: <a href="https://en.wikipedia.org/wiki/Tversky_index" target="_blank">Wikipedia</a></li>
-    </ul>
-    </div>
-    <div class="alert success">
-      <strong>✅ No hallucinations:</strong> Every link above fetched via tool during development (web_search + fetch_page). See <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/references.md">references.md</a> for logs. All file names (<code>training_features.tif</code>, <code>1m_DEM_links.csv</code>, etc.) from official problem page. Flagged irregularities in data catalog section.
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>10. Deep Research — Scientific Literature & Improvements</h2>
-    <p><strong>Autonomous deep research done:</strong> We searched scientific literature, organized knowledge, critically thought through problem, generated solution via free publicly available info. See full review: <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/literature.md">literature.md</a> (markdown) and <a href="research.html">research.html</a> (HTML) and <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/SUGGESTIONS.md">SUGGESTIONS.md</a>.</p>
-    <p><strong>15 Improvements Implemented from Literature:</strong></p>
-    <ul>
-      <li>Multi-source fusion (spectral + topo + structural) — Nature 2025 https://pmc.ncbi.nlm.nih.gov/articles/PMC11850705/</li>
-      <li>Frangi filter for line enhancement — Zhong et al 2024, GJI 236(3):1526-1544, https://doi.org/10.1093/gji/ggad491</li>
-      <li>Hough transform for fault lines — Wang & AlRegib 2014 https://ieeexplore.ieee.org/document/6854024/</li>
-      <li>Tversky loss α0.2 β0.8 matching metric — Problem page</li>
-      <li>Ensemble UNet++, DeepLabV3+, SegFormer — TransVNet 2025 https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1635344/full shows U-Net noise/poor continuity vs TransVNet</li>
-      <li>Attention mechanisms — Geo-SegNet 2025 https://www.sciencedirect.com/science/article/pii/S2949673X25000026 and Magnetic Anomalies 2022 https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765</li>
-      <li>Two-stage coarse-to-fine RF+MUnet — Geothermal RS+ML+DL 2025 https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902 F1 92.47%</li>
-      <li>CET grid + Fault Fracture Density — Integrated Structural Analysis 2025 https://pmc.ncbi.nlm.nih.gov/articles/PMC11834046/</li>
-      <li>Euler + DBSCAN clustering — Chukwu et al 2024, Exploration Geophysics 55(3):223-245, https://doi.org/10.1080/08123985.2023.2299475</li>
-      <li>Synthetic via Noddy 1M models — ESSD 2022 https://essd.copernicus.org/articles/14/381/2022/</li>
-      <li>Edge/line detectors — Hassan & Goussev 2019 https://geoconvention.com/wp-content/uploads/abstracts/2019/GC2019_313_Deep_learning_approach_to_automatic_detection_of_faults_and_fractures_CNN.pdf</li>
-      <li>Physics-informed loss — Joint Gravity+Mag Inversion 2024 https://www.mdpi.com/2072-4292/16/7/1115</li>
-      <li>Multi-channel U-Net for geothermal — MUnet</li>
-      <li>Human-in-the-loop semi-supervised — Springer 2026 https://link.springer.com/article/10.1007/s12145-026-02224-5</li>
-    </ul>
-    <p><strong>Future suggestions for top leaderboard:</strong> Self-supervised pretraining on 1m DEM, multi-scale inference 128/256/512, uncertainty quantification via MC dropout, graph-based post-processing with Hough + geological double-threshold constraints, strain tensor eigenvectors from GSRM https://gsrm2.unavco.org/model/model.html, radiometric ternary K/Th/U, Euler+DBSCAN as feature channel, Noddy synthetic pretraining, physics-informed loss aligning faults with shear strain + conductivity.</p>
-    <p>See <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/SUGGESTIONS.md">SUGGESTIONS.md</a> for full implementation status.</p>
-  </section>
-
-  <div class="footer">
-    <p>Built for DOE GEMS Prize Challenge — Sponsor: <a href="https://www.energy.gov/hgeo/geothermal/office-geothermal" target="_blank">DOE Office of Geothermal</a> + <a href="https://www.nlr.gov/" target="_blank">NLR</a> | Code MIT | Data Public Domain/CC | Last updated 2026-09-12 | Prize: $300k | Deadline: Dec 3, 2026 11:59pm UTC</p>
-    <p>Repo: <a href="https://github.com/buffedlizard55-lab/GEMSDOE">buffedlizard55-lab/GEMSDOE</a> | Branch: <code>arena/01a0972f-gemsdoe</code> | Deploy: GitHub Pages via <code>.github/workflows/pages.yml</code> → <code>docs/</code> | Local preview: <code>cd docs && python -m http.server 8000</code></p>
-    <p>Additional docs: <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/README.md">README.md</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/REQUIREMENTS.md">REQUIREMENTS.md (Full Line-by-Line Verified)</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/LIMITATIONS.md">LIMITATIONS.md</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/SUBMISSION_GUIDE.md">SUBMISSION_GUIDE.md</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/FEATURES.md">FEATURES.md</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/SUGGESTIONS.md">SUGGESTIONS.md</a> | <a href="data_catalog.csv">data_catalog.csv</a> | <a href="data_catalog.json">data_catalog.json</a> | <a href="https://github.com/buffedlizard55-lab/GEMSDOE/blob/main/docs/literature.md">literature.md</a> | <a href="research.html">research.html</a> | <a href="methodology.html">methodology.html</a> | <a href="submission.html">submission.html</a> | <a href="data.html">data.html</a></p>
-  </div>
 </main>
-
-<script>
-  // Active nav highlighting
-  const sections = document.querySelectorAll('section');
-  const navLinks = document.querySelectorAll('nav a');
-  function setActive() {
-    let current = '';
-    sections.forEach(s => {
-      const top = s.offsetTop - 120;
-      if (window.scrollY >= top) current = s.id;
-    });
-    navLinks.forEach(a => {
-      a.classList.remove('active');
-      if (a.getAttribute('href') === '#' + current) a.classList.add('active');
-    });
-  }
-  window.addEventListener('scroll', setActive);
-  navLinks.forEach(a => {
-    a.addEventListener('click', e => {
-      e.preventDefault();
-      const id = a.getAttribute('href').substring(1);
-      document.getElementById(id).scrollIntoView({behavior:'smooth'});
-    });
-  });
-</script>
-</body>
-</html>
+<footer><div class="wrap">
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-14 18:10 UTC</p>
+  <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
+     <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
+     <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>
+</div></footer>
+</body></html>

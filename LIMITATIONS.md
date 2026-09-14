@@ -180,7 +180,7 @@ for the repo owner:
    mass. Fixed, with the correction kept visible; `src/inference.py` now writes
    `outputs_recon/inference_summary.json` so that row is derived from a run record, and `audit_docs.py`
    re-derives it.
-2. `docs/methodology.html` quoted "perfect line &rarr; 0.91 DTI, shifted 1 px &rarr; 0.61". The code gives
+2. The old hand-written methodology page (deleted 2026-09-14 when the site was regenerated from measured evidence by `scripts/build_site.py`; superseded by `docs/method.html` and `docs/metric.html`) quoted "perfect line &rarr; 0.91 DTI, shifted 1 px &rarr; 0.61". The code gives
    **1.0000** and **0.6667** (= k(1) = 2/3) and **0.0000** at 3 px; replaced by the measured table and pinned
    by `test_line_geometry_dti_values`. Two pages also described a "7&times;7 max filter" that no longer exists
    (it would credit corners at d&asymp;4.24 px, which the spec's *radius* excludes).
