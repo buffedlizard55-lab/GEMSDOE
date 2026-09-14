@@ -5,8 +5,15 @@ name: Fetch competition data
 # is the data bridge: it downloads the competition files from the Dropbox mirrors
 # published on the DrivenData data tab and re-exports them as workflow artifacts,
 # which the sandbox pulls back over the github.com API.
+# workflow_dispatch alone is not usable here: GitHub only registers manual dispatch
+# for workflows present on the DEFAULT branch, and this session may only touch
+# arena/**. So the trigger is a push that touches .github/triggers/fetch-data,
+# which keeps it off every unrelated commit.
 on:
   workflow_dispatch:
+  push:
+    branches: ["arena/**"]
+    paths: [".github/triggers/fetch-data"]
 
 jobs:
   fetch:
