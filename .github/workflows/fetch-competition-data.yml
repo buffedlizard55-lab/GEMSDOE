@@ -67,6 +67,9 @@ jobs:
       - name: Build the small real-data dev fixture (committed back to the branch)
         run: python scripts/make_dev_fixture.py --data-dir data --out-dir data/fixture --size 512
 
+      - name: Verify every catalog link over live HTTP
+        run: python scripts/verify_links.py --catalog docs/data_catalog.csv --json-out docs/link_verification.json --csv-out docs/data_catalog.verified.csv || true
+
       - name: Extract the DEM link list from the provided PDF
         run: python scripts/extract_dem_links.py --pdf data/Digital-elevation-model-links-JSON.pdf --out data/dem_links.json --evidence data/evidence || echo "DEM link extraction failed (non-fatal)"
 
@@ -76,6 +79,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f data/evidence data/dem_links.json data/fixture 2>/dev/null || true
+          git add -f docs/link_verification.json docs/data_catalog.verified.csv 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "no evidence changes"
           else
