@@ -1,6 +1,21 @@
 {
-  "generated_utc": "2026-09-14T17:19:53+00:00",
+  "generated_utc": "2026-09-14T17:31:27+00:00",
   "source_pdf": "Digital-elevation-model-links-JSON.pdf",
+  "extractor_used": "pypdf",
+  "extractor_stats": {
+    "pypdf": {
+      "chars": 41,
+      "http": 0
+    },
+    "pdftotext": {
+      "chars": 0,
+      "http": 0
+    },
+    "pdfplumber": {
+      "chars": 41,
+      "http": 0
+    }
+  },
   "source_pdf_note": "Dropbox mirror of the competition data-tab file '1m_DEM_links.csv', printed to PDF. URLs reassembled across PDF line wraps; known host manglings repaired to prd-tnm.s3.amazonaws.com.",
   "n_urls_in_pdf": 0,
   "n_unique": 0,
