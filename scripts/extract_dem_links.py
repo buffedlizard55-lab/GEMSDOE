@@ -40,44 +40,88 @@ HOST_FIXES = [
 ]
 URL_RE = re.compile(r"https?://[^\s\"'<>,\]\}]+", re.I)
 
+# OCR confusions seen in scanned URL listings. Applied ONLY inside the fixed, known
+# path prefix of the 3DEP bucket - never to the tile filename, where a wrong repair
+# would invent a tile that does not exist. Every resulting URL is HTTP-verified.
+PATH_FIXES = [
+    (r"StagedProduct[sS]", "StagedProducts"),
+    (r"E1evation", "Elevation"),
+    (r"e1evation", "elevation"),
+    (r"TIFE", "TIFF"),
+    (r"Tl[FE]F", "TIFF"),
+    (r"//+", "/"),
+]
+
 
 def pdf_text(pdf: Path) -> str:
-    """Text from the PDF, trying three extractors and keeping the richest result.
+    """Text from the PDF, trying text-layer extractors first, then OCR.
 
-    The 23 MB Dropbox print yields EMPTY text under pypdf, so a single extractor is
-    not enough; poppler's pdftotext and pdfplumber use different text-layer paths.
-    Whichever returns the most URL-looking content wins, and the choice is reported.
+    MEASURED on the competition file (runner, 2026-09-14): the 23 MB Dropbox print of
+    `1m_DEM_links.csv` has NO text layer at all - pypdf 41 chars, pdfplumber 41 chars,
+    pdftotext 0 chars, zero 'http' occurrences in any of them.  It is a raster scan.
+    So OCR (tesseract at 300 DPI) is the only way to read it, and even then the output
+    must be treated as untrusted until each URL is confirmed against the live S3 bucket
+    - which `verify`/`head` below does.
     """
     results: dict[str, str] = {}
-    try:
+
+    def try_(name, fn):
+        try:
+            results[name] = fn() or ""
+        except Exception as e:  # noqa: BLE001
+            results[name] = ""
+            print(f"  {name} failed: {e}")
+
+    def _pypdf():
         from pypdf import PdfReader
 
-        results["pypdf"] = "\n".join((pg.extract_text() or "") for pg in PdfReader(str(pdf)).pages)
-    except Exception as e:  # noqa: BLE001
-        results["pypdf"] = ""
-        print("pypdf failed:", e)
-    try:
+        return "\n".join((pg.extract_text() or "") for pg in PdfReader(str(pdf)).pages)
+
+    def _pdftotext():
         import subprocess
 
-        out = subprocess.run(
-            ["pdftotext", "-layout", "-nopgbrk", str(pdf), "-"],
-            capture_output=True, text=True, timeout=900,
-        )
-        results["pdftotext"] = out.stdout or ""
-    except Exception as e:  # noqa: BLE001
-        results["pdftotext"] = ""
-        print("pdftotext failed:", e)
-    try:
+        return subprocess.run(["pdftotext", "-layout", "-nopgbrk", str(pdf), "-"],
+                              capture_output=True, text=True, timeout=1800).stdout
+
+    def _pdfplumber():
         import pdfplumber
 
         with pdfplumber.open(str(pdf)) as doc:
-            results["pdfplumber"] = "\n".join((pg.extract_text() or "") for pg in doc.pages)
-    except Exception as e:  # noqa: BLE001
-        results["pdfplumber"] = ""
-        print("pdfplumber failed:", e)
+            return "\n".join((pg.extract_text() or "") for pg in doc.pages)
+
+    def _ocr():
+        """Rasterise each page at 300 DPI and OCR it.
+
+        `--psm 6` = assume a uniform block of text, which suits a printed JSON listing.
+        The character whitelist is NOT restricted: a wrong guess would silently corrupt
+        URLs, and every URL is HTTP-verified afterwards anyway.
+        """
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["pdftoppm", "-r", "300", "-png", str(pdf), f"{td}/pg"],
+                           check=True, timeout=3600)
+            pages = sorted(Path(td).glob("pg*.png"))
+            print(f"  OCR: {len(pages)} page images at 300 DPI")
+            chunks = []
+            for i, img in enumerate(pages, 1):
+                out = subprocess.run(["tesseract", str(img), "stdout", "--psm", "6"],
+                                     capture_output=True, text=True, timeout=600)
+                chunks.append(out.stdout)
+                if i % 10 == 0 or i == len(pages):
+                    print(f"    OCR page {i}/{len(pages)}")
+            return "\n".join(chunks)
+
+    try_("pypdf", _pypdf)
+    try_("pdftotext", _pdftotext)
+    try_("pdfplumber", _pdfplumber)
+    if max(v.lower().count("http") for v in results.values()) == 0:
+        print("  no text layer found in any extractor -> falling back to OCR")
+        try_("ocr_tesseract_300dpi", _ocr)
 
     for name, txt in results.items():
-        print(f"  extractor {name}: {len(txt)} chars, {txt.lower().count('http')} 'http' occurrences")
+        print(f"  extractor {name}: {len(txt)} chars, {txt.lower().count('http')} 'http'")
     best = max(results, key=lambda k: (results[k].lower().count("http"), len(results[k])))
     print(f"  -> using {best}")
     globals()["_EXTRACTOR_USED"] = best
@@ -98,7 +142,21 @@ def reassemble(text: str) -> str:
     t = re.sub(r"\n\s*(?=[\w%/._~+-])", "", t)   # wrap directly into a URL-ish char
     for pat, rep in HOST_FIXES:
         t = re.sub(pat, rep, t, flags=re.I)
+    t = t.replace("https:/" + "/", "https://")   # normalise after the // collapse below
     return t
+
+
+def repair_path(url: str) -> str:
+    """Repair OCR damage in the *fixed* part of a 3DEP URL, leaving the filename alone."""
+    try:
+        scheme, rest = url.split("://", 1)
+        host, path = rest.split("/", 1)
+    except ValueError:
+        return url
+    head, _, tail = path.rpartition("/")
+    for pat, rep in PATH_FIXES:
+        head = re.sub(pat, rep, head)
+    return f"{scheme}://{host}/{head}/{tail}" if head else url
 
 
 def head(url: str, timeout: int = 45) -> dict:
@@ -135,21 +193,24 @@ def main() -> int:
     fixed = reassemble(raw)
     found = URL_RE.findall(fixed)
     # normalise trailing punctuation left over from the JSON print
-    found = [u.rstrip('.,;"\'') for u in found]
+    found = [repair_path(u.rstrip('.,;"\'')) for u in found]
     tiles = [u for u in found if u.lower().endswith((".tif", ".tiff"))]
     uniq = sorted(set(tiles))
 
     print(f"raw text {len(raw)} chars; {len(found)} URLs; {len(tiles)} tif; {len(uniq)} unique")
 
     records = []
-    for u in uniq:
-        rec = {"url": u, "filename": u.rsplit("/", 1)[-1]}
-        if not a.no_verify:
-            rec["head"] = head(u)
-            st = rec["head"].get("status")
-            mb = rec["head"].get("content_length", 0) / 1e6
-            print(f"  {st}  {mb:8.1f} MB  {rec['filename']}")
-        records.append(rec)
+    if a.no_verify:
+        records = [{"url": u, "filename": u.rsplit("/", 1)[-1]} for u in uniq]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=16) as ex:
+            heads = list(ex.map(head, uniq))
+        for u, h in zip(uniq, heads):
+            rec = {"url": u, "filename": u.rsplit("/", 1)[-1], "head": h}
+            print(f"  {h.get('status')}  {h.get('content_length', 0) / 1e6:8.1f} MB  {rec['filename']}")
+            records.append(rec)
 
     verified = [r for r in records if r.get("head", {}).get("status") == 200]
     stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
