@@ -42,9 +42,48 @@ URL_RE = re.compile(r"https?://[^\s\"'<>,\]\}]+", re.I)
 
 
 def pdf_text(pdf: Path) -> str:
-    from pypdf import PdfReader
+    """Text from the PDF, trying three extractors and keeping the richest result.
 
-    return "\n".join((pg.extract_text() or "") for pg in PdfReader(str(pdf)).pages)
+    The 23 MB Dropbox print yields EMPTY text under pypdf, so a single extractor is
+    not enough; poppler's pdftotext and pdfplumber use different text-layer paths.
+    Whichever returns the most URL-looking content wins, and the choice is reported.
+    """
+    results: dict[str, str] = {}
+    try:
+        from pypdf import PdfReader
+
+        results["pypdf"] = "\n".join((pg.extract_text() or "") for pg in PdfReader(str(pdf)).pages)
+    except Exception as e:  # noqa: BLE001
+        results["pypdf"] = ""
+        print("pypdf failed:", e)
+    try:
+        import subprocess
+
+        out = subprocess.run(
+            ["pdftotext", "-layout", "-nopgbrk", str(pdf), "-"],
+            capture_output=True, text=True, timeout=900,
+        )
+        results["pdftotext"] = out.stdout or ""
+    except Exception as e:  # noqa: BLE001
+        results["pdftotext"] = ""
+        print("pdftotext failed:", e)
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(str(pdf)) as doc:
+            results["pdfplumber"] = "\n".join((pg.extract_text() or "") for pg in doc.pages)
+    except Exception as e:  # noqa: BLE001
+        results["pdfplumber"] = ""
+        print("pdfplumber failed:", e)
+
+    for name, txt in results.items():
+        print(f"  extractor {name}: {len(txt)} chars, {txt.lower().count('http')} 'http' occurrences")
+    best = max(results, key=lambda k: (results[k].lower().count("http"), len(results[k])))
+    print(f"  -> using {best}")
+    globals()["_EXTRACTOR_USED"] = best
+    globals()["_EXTRACTOR_STATS"] = {k: {"chars": len(v), "http": v.lower().count("http")}
+                                     for k, v in results.items()}
+    return results[best]
 
 
 def reassemble(text: str) -> str:
@@ -117,6 +156,8 @@ def main() -> int:
     payload = {
         "generated_utc": stamp,
         "source_pdf": pdf.name,
+        "extractor_used": globals().get("_EXTRACTOR_USED"),
+        "extractor_stats": globals().get("_EXTRACTOR_STATS"),
         "source_pdf_note": (
             "Dropbox mirror of the competition data-tab file '1m_DEM_links.csv', printed to PDF. "
             "URLs reassembled across PDF line wraps; known host manglings repaired to "

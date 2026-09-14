@@ -54,10 +54,15 @@ jobs:
           dl "https://www.dropbox.com/scl/fi/ig0mban712ns1atphgphe/Digital-elevation-model-links-JSON.pdf?rlkey=zm77f1vbtt2if8hlruymptnu3&dl=1" Digital-elevation-model-links-JSON.pdf
 
       - name: Install inspection deps
-        run: python -m pip install --quiet rasterio numpy pypdf
+        run: |
+          python -m pip install --quiet rasterio numpy pypdf pdfplumber
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
 
       - name: Inspect -> machine-generated evidence JSON
         run: python scripts/inspect_competition_data.py --data-dir data --out data/evidence
+
+      - name: Transfer/encoding analysis + sample-vs-labels cross-check
+        run: python scripts/analyze_for_transfer.py --data-dir data --out data/evidence/transfer_analysis.json
 
       - name: Extract the DEM link list from the provided PDF
         run: python scripts/extract_dem_links.py --pdf data/Digital-elevation-model-links-JSON.pdf --out data/dem_links.json --evidence data/evidence || echo "DEM link extraction failed (non-fatal)"
