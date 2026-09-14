@@ -1,0 +1,11 @@
+{
+  "generated_utc": "2026-09-14T17:19:53+00:00",
+  "source_pdf": "Digital-elevation-model-links-JSON.pdf",
+  "source_pdf_note": "Dropbox mirror of the competition data-tab file '1m_DEM_links.csv', printed to PDF. URLs reassembled across PDF line wraps; known host manglings repaired to prd-tnm.s3.amazonaws.com.",
+  "n_urls_in_pdf": 0,
+  "n_unique": 0,
+  "n_verified_200": 0,
+  "total_bytes_verified": 0,
+  "records": [],
+  "verified": []
+}
