@@ -122,3 +122,20 @@ is recorded as such. It proves plumbing, not predictive power. Shaping helped on
   `LOGIN_REQUIRED` is reported as such, never as "verified".
 - Local scores are labelled **optimistic** wherever shown — they are computed against the
   labels the model trained on, which are not the test set.
+
+---
+
+## Site publishing note (2026-09-15)
+
+GitHub Pages for this repo is set to **`build_type: legacy`** (Jekyll from the repo root), so
+the root URL renders `README.md` and the `docs/` artifact uploaded by
+`.github/workflows/pages.yml` is ignored at the root. Switching Settings → Pages → Source to
+**"GitHub Actions"** requires repository-admin rights the automation token does not have
+(`PUT /repos/.../pages` returns HTTP 403).
+
+Workaround in place: a root `index.html` redirects to `docs/index.html`, which legacy Jekyll
+honours ahead of `README.md`. The generated site is live and correct at
+<https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html>.
+
+**Recommended (optional) owner action:** flip Source to "GitHub Actions" for a cleaner root
+URL. The redirect becomes harmless if you do.
