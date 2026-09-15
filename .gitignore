@@ -19,20 +19,27 @@ data/*
 !data/evidence/**
 !data/reconstructed/
 !data/reconstructed/provenance.json
+# small REAL-data dev fixture (few MB, int16-quantised) - see scripts/make_dev_fixture.py
+!data/fixture/
+!data/fixture/**
 !data/*.md
 outputs/
 outputs_recon/
 outputs_*/
 *.tif
 *.tiff
+!data/fixture/*.tif
 *.zip
 *.gdb
 *.grd
 *.csv
 !docs/data_catalog.csv
+!data/evidence/*.csv
 *.pt
 *.pth
 .ipynb_checkpoints/
 .DS_Store
 .idea/
 .vscode/
+.venv/
+.venv/

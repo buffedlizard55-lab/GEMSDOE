@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Live HTTP verification of every link in docs/data_catalog.csv — line by line.
+
+The catalog carries human-written `verification_result` strings from earlier sessions.
+Those are claims. This script replaces claims with *measurements*: it fetches every
+`official_link` right now and records the status code, final URL after redirects,
+content type, byte size and (for HTML) the page <title>.
+
+Rules applied, so the output cannot flatter itself:
+  * a login redirect is reported as LOGIN_REQUIRED, not as "verified"
+  * a 4xx/5xx is reported as BROKEN
+  * a redirect to a different host is reported with the destination so a silent
+    takeover is visible
+  * anything that times out is UNREACHABLE, never assumed good
+
+Writes docs/link_verification.json and a rewritten docs/data_catalog.verified.csv whose
+`verification_result` column is machine-generated. Run on a GitHub runner (the dev sandbox
+reaches only github.com / pypi.org, so it would mark everything UNREACHABLE).
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import datetime as dt
+import json
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+
+UA = "Mozilla/5.0 (compatible; gems-prize-link-audit/1.0; +https://github.com/buffedlizard55-lab/GEMSDOE)"
+LOGIN_HINTS = ("/login", "/accounts/login", "signin", "sign-in", "/users/sign_in")
+
+# Academic publishers and DOI resolvers routinely return 403 to any non-browser client
+# (Cloudflare / bot mitigation). That is NOT evidence the link is broken, and reporting it
+# as BROKEN would be its own small hallucination. These hosts are therefore classified
+# separately as BOT_BLOCKED_<code> and excluded from the "problems needing review" count.
+# The DOI itself remains the citable identifier regardless of what a scripted HEAD sees.
+BOT_BLOCKING_HOSTS = (
+    "doi.org", "onlinelibrary.wiley.com", "agupubs.onlinelibrary.wiley.com",
+    "www.mdpi.com", "mdpi.com", "link.springer.com", "www.sciencedirect.com",
+    "sciencedirect.com", "pubs.geoscienceworld.org", "academic.oup.com",
+    "www.tandfonline.com", "tandfonline.com", "iopscience.iop.org",
+)
+
+
+def check(url: str, timeout: int = 45) -> dict:
+    out = {"url": url}
+    if not url or not url.startswith("http"):
+        out.update(status=None, result="NOT_A_URL")
+        return out
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            final = r.geturl()
+            ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip()
+            body = b""
+            if ctype.startswith("text/html"):
+                body = r.read(200000)
+            clen = r.headers.get("Content-Length")
+            out.update(
+                status=r.status,
+                final_url=final,
+                content_type=ctype,
+                content_length=(int(clen) if clen and clen.isdigit() else None),
+            )
+            if body:
+                m = re.search(rb"<title[^>]*>(.*?)</title>", body, re.S | re.I)
+                if m:
+                    t = re.sub(r"\s+", " ", m.group(1).decode("utf-8", "replace")).strip()
+                    out["title"] = t[:200]
+            same_host = urllib.parse.urlparse(final).netloc == urllib.parse.urlparse(url).netloc
+            out["redirected"] = final.rstrip("/") != url.rstrip("/")
+            out["redirected_offsite"] = not same_host
+            low = final.lower()
+            if any(h in low for h in LOGIN_HINTS):
+                out["result"] = "LOGIN_REQUIRED"
+            elif not same_host:
+                out["result"] = f"OK_REDIRECTED_TO_{urllib.parse.urlparse(final).netloc}"
+            else:
+                out["result"] = f"OK_{r.status}"
+    except urllib.error.HTTPError as e:
+        host = urllib.parse.urlparse(url).netloc.lower()
+        if e.code in (401, 403) and any(host == h or host.endswith("." + h)
+                                        for h in BOT_BLOCKING_HOSTS):
+            out.update(status=e.code, result=f"BOT_BLOCKED_{e.code}",
+                       note="publisher/DOI resolver rejects scripted clients; not a broken link")
+        else:
+            out.update(status=e.code, result=f"BROKEN_HTTP_{e.code}")
+    except Exception as e:  # noqa: BLE001
+        out.update(status=None, result="UNREACHABLE", error=repr(e)[:200])
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--catalog", default="docs/data_catalog.csv")
+    ap.add_argument("--json-out", default="docs/link_verification.json")
+    ap.add_argument("--csv-out", default="docs/data_catalog.verified.csv")
+    a = ap.parse_args()
+
+    with open(a.catalog, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    urls = [r.get("official_link", "").strip() for r in rows]
+    uniq = sorted({u for u in urls if u})
+    print(f"{len(rows)} catalog rows, {len(uniq)} unique URLs")
+
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        results = list(ex.map(check, uniq))
+    by_url = {r["url"]: r for r in results}
+
+    counts: dict[str, int] = {}
+    for r in results:
+        k = r["result"].split("_TO_")[0]
+        counts[k] = counts.get(k, 0) + 1
+        print(f"  {r['result']:34s} {r['url'][:95]}")
+
+    stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    EXPECTED = ("OK", "BOT_BLOCKED", "LOGIN_REQUIRED")
+    problems = [r for r in results if not r["result"].startswith(EXPECTED)]
+    expected_nonok = [r for r in results
+                      if r["result"].startswith(("BOT_BLOCKED", "LOGIN_REQUIRED"))]
+
+    fields = list(rows[0].keys())
+    for extra in ("verification_result", "verified_status", "verified_final_url", "verified_utc"):
+        if extra not in fields:
+            fields.append(extra)
+    with open(a.csv_out, "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields)
+        w.writeheader()
+        for row in rows:
+            u = row.get("official_link", "").strip()
+            res = by_url.get(u, {"result": "NO_LINK"})
+            row["verification_result"] = res["result"]
+            row["verified_status"] = res.get("status", "")
+            row["verified_final_url"] = res.get("final_url", "")
+            row["verified_utc"] = stamp
+            w.writerow(row)
+
+    payload = {
+        "generated_utc": stamp,
+        "generated_by": "scripts/verify_links.py on a GitHub-hosted runner (live HTTP)",
+        "catalog": a.catalog,
+        "n_rows": len(rows),
+        "n_unique_urls": len(uniq),
+        "summary_counts": counts,
+        "n_problems": len(problems),
+        "problems": problems,
+        "n_expected_non_ok": len(expected_nonok),
+        "expected_non_ok": expected_nonok,
+        "results": results,
+        "note": (
+            "Machine-measured. LOGIN_REQUIRED (DrivenData data tab) and BOT_BLOCKED_403/401 "
+            "(publishers and doi.org rejecting scripted clients) are EXPECTED and are not "
+            "counted as problems. Only BROKEN_* / UNREACHABLE / NOT_A_URL require review."
+        ),
+    }
+    with open(a.json_out, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+    print(f"\nsummary: {json.dumps(counts)}")
+    print(f"{len(problems)} problem link(s); wrote {a.json_out} and {a.csv_out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

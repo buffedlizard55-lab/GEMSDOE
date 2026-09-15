@@ -122,7 +122,8 @@ def main():
 
     X, y, fmeta, lmeta, tags = load_features_and_labels(cfg["data"].get("feature_path"),
                                                         cfg["data"].get("label_path"),
-                                                        require_labels=bool(args.score_against))
+                                                        require_labels=bool(args.score_against),
+                                                        use_fixture=bool(cfg["data"].get("use_fixture")))
     stats_path = out_dir / "norm_stats.json"
     if stats_path.exists():
         stats = load_norm_stats(stats_path)

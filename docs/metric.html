@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metric — GEMS Prize</title>
+<meta name="description" content="Auditable, machine-verified working notes for the DOE GEMS Prize fault-detection challenge.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛰️</text></svg>">
+</head><body>
+<header>
+  <div class="wrap">
+    <div class="brand"><span class="logo">⛰️</span>
+      <div><div class="name">GEMS Prize — working notes</div>
+      <div class="tag">Geological fault detection in the GeoDAWN region · every figure below is machine-measured</div></div>
+    </div>
+  </div>
+</header>
+<nav><div class="wrap"><a href="index.html">Overview</a><a href="data.html">Data</a><a href="metric.html" class="active">Metric</a><a href="method.html">Method</a><a href="results.html">Results</a><a href="sources.html">Sources</a><a href="reproduce.html">Reproduce</a></div></nav>
+<main class="wrap">
+<h1>Metric</h1>
+<p class="lede">The scoring function, rearranged — and what it actually pays for.</p>
+<h2>Definition</h2>
+<p>Scoring is a <b>distance-weighted Tversky index</b> with α=0.2, β=0.8 and a triangular kernel of
+range R=300 m (3 px at 100 m) — <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#performance-metric">official definition</a>.
+Our implementation is <code>src/metrics.py</code>; its self-test checks it against a brute-force
+transcription of the formulas and reproduces the worked example's 0.60.</p>
+<pre class="math">TP_w = Σ<sub>g∈G</sub> max<sub>x:d(x,g)≤R</sub> p(x)·k(d(x,g))
+FP_w = Σ<sub>x:p(x)&gt;0</sub> p(x)·[1 − max<sub>g∈G</sub> k(d(x,g))]
+FN_w = Σ<sub>g∈G</sub> [1 − max<sub>x:d(x,g)≤R</sub> p(x)·k(d(x,g))]
+DTI  = TP_w / (TP_w + α·FP_w + β·FN_w + ε)</pre>
+
+<h2>The rearrangement that matters</h2>
+<p>From the two sums, <code>TP_w + FN_w = |G|</code> holds <em>identically</em>, for any prediction.
+Substituting:</p>
+<pre class="math big">DTI = TP_w / ( 0.2·(TP_w + FP_w) + 0.8·|G| )</pre>
+<p>So <code>TP_w</code> and <code>FP_w</code> enter with the <b>same coefficient</b>. Probability mass
+costs the same wherever you put it; it earns credit only when it is the strongest mass within 3 px of
+a ground-truth pixel. And <code>TP_w</code> saturates at 1 per ground-truth pixel, so extra mass on an
+already-covered fault is pure cost. <code>scripts/metric_strategy.py</code> asserts this identity
+against the direct computation on every row below.</p>
+<h2>Measured baselines</h2>
+<p>Computed on a real 512×512 window of the competition labels (|G| = 5,154 fault
+pixels, 261,835 valid pixels). Reproduce:
+<code>python scripts/metric_strategy.py</code></p>
+<table class="metric"><thead><tr><th>Strategy</th><th>DTI</th><th>TP_w</th><th>FP_w</th>
+<th>mass emitted</th></tr></thead><tbody><tr class=""><td>all zeros</td><td class="num"><b>0.0000</b></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr><tr class="hl"><td>all ones (blanket coverage)</td><td class="num"><b>0.0956</b></td><td class="num">5,154</td><td class="num">243,768</td><td class="num">261,835</td></tr><tr class=""><td>uniform p=0.05</td><td class="num"><b>0.0390</b></td><td class="num">258</td><td class="num">12,188</td><td class="num">13,092</td></tr><tr class=""><td>uniform p=0.1</td><td class="num"><b>0.0566</b></td><td class="num">515</td><td class="num">24,377</td><td class="num">26,184</td></tr><tr class=""><td>uniform p=0.25</td><td class="num"><b>0.0778</b></td><td class="num">1,288</td><td class="num">60,942</td><td class="num">65,459</td></tr><tr class=""><td>uniform p=0.5</td><td class="num"><b>0.0888</b></td><td class="num">2,577</td><td class="num">121,884</td><td class="num">130,918</td></tr><tr class=""><td>exact known faults, p=1</td><td class="num"><b>0.9999</b></td><td class="num">5,154</td><td class="num">0</td><td class="num">5,153</td></tr><tr class=""><td>known faults dilated r=1, p=1</td><td class="num"><b>0.8818</b></td><td class="num">5,154</td><td class="num">3,452</td><td class="num">15,509</td></tr><tr class=""><td>known faults dilated r=2, p=1</td><td class="num"><b>0.7336</b></td><td class="num">5,154</td><td class="num">9,357</td><td class="num">25,816</td></tr><tr class=""><td>known faults dilated r=3, p=1</td><td class="num"><b>0.5887</b></td><td class="num">5,154</td><td class="num">18,003</td><td class="num">35,935</td></tr><tr class=""><td>known faults dilated r=4, p=1</td><td class="num"><b>0.4830</b></td><td class="num">5,154</td><td class="num">27,576</td><td class="num">45,643</td></tr><tr class=""><td>known faults dilated r=6, p=1</td><td class="num"><b>0.3584</b></td><td class="num">5,154</td><td class="num">46,125</td><td class="num">64,192</td></tr><tr class=""><td>triangular ramp radius 3px</td><td class="num"><b>0.8118</b></td><td class="num">5,154</td><td class="num">5,972</td><td class="num">18,067</td></tr><tr class=""><td>triangular ramp radius 5px</td><td class="num"><b>0.6223</b></td><td class="num">5,154</td><td class="num">15,636</td><td class="num">30,120</td></tr><tr class=""><td>triangular ramp radius 8px</td><td class="num"><b>0.4504</b></td><td class="num">5,154</td><td class="num">31,441</td><td class="num">47,268</td></tr><tr class="hl"><td>25% of known faults, p=1</td><td class="num"><b>0.5545</b></td><td class="num">2,571</td><td class="num">0</td><td class="num">1,288</td></tr><tr class=""><td>50% of known faults, p=1</td><td class="num"><b>0.7939</b></td><td class="num">3,891</td><td class="num">0</td><td class="num">2,577</td></tr><tr class=""><td>75% of known faults, p=1</td><td class="num"><b>0.9166</b></td><td class="num">4,627</td><td class="num">0</td><td class="num">3,864</td></tr></tbody></table>
+<div class="note warn"><b>The counter-intuitive result.</b> α=0.2 / β=0.8 reads as
+“false negatives hurt 4× more, so predict generously”. The measurement says the opposite: blanket
+coverage scores <b>0.096</b>, while a precise quarter of the faults scores <b>0.554</b> — about 6×
+better from 200× less predicted mass. β multiplies FN_w, which is capped at |G|; α multiplies FP_w,
+which grows with the <em>area</em> you paint, and there are ~50× more non-fault pixels than fault
+pixels. The per-unit discount loses to the count.</div>
+<h2>Consequences for the model</h2>
+<ul>
+<li><b>Be sparse, thin and confident.</b> Dilating perfect predictions by one pixel costs 12 points
+of DTI (0.9999 → 0.8818); by three pixels, 41 points.</li>
+<li><b>Thin before writing.</b> Faults are 1-px lineaments at 100 m. <code>src/submission_optim.py</code>
+applies a probability floor plus distance-R dominating thinning; the pooled held-out search in
+training selects <code>thin=True</code> essentially always.</li>
+<li><b>Recall still matters most among <em>correct</em> predictions</b> — DTI is near-linear in the
+fraction of faults found (0.554 → 0.794 → 0.917 for 25/50/75% precise recall).</li>
+<li><b>Beat 0.096.</b> A model scoring under the blanket-coverage floor is worse than a constant.</li>
+</ul>
+<h2>Caveats</h2>
+<ul>
+<li>These baselines use the <b>public/known</b> labels. Scoring uses a <b>private</b> set of
+newly-labelled faults (<a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#competition-structure">structure</a>). The metric's shape is
+identical so the strategy transfers; the absolute values do not.</li>
+<li>|G| for the hidden test set is unknown, so the <code>0.8·|G|</code> floor is unknown.</li>
+<li>ε is not specified on the problem page; we use 1×10⁻⁷. Negligible here, recorded for exactness.</li>
+</ul>
+</main>
+<footer><div class="wrap">
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-15 04:15 UTC</p>
+  <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
+     <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
+     <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>
+</div></footer>
+</body></html>

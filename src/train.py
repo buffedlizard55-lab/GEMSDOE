@@ -175,7 +175,8 @@ def main():
 
     # ---------------------------------------------------------------- data ---------
     X, y, fmeta, lmeta, tags = load_features_and_labels(cfg["data"].get("feature_path"),
-                                                        cfg["data"].get("label_path"))
+                                                        cfg["data"].get("label_path"),
+                                                        use_fixture=bool(cfg["data"].get("use_fixture")))
     names = band_names(tags, X.shape[-1])
     print(f"features {X.shape} labels {y.shape}  bands={names[:4]}{'...' if len(names) > 4 else ''}")
 
