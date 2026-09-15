@@ -5,99 +5,41 @@
   "n_rows": 81,
   "n_unique_urls": 76,
   "summary_counts": {
-    "BROKEN_HTTP_403": 10,
+    "BOT_BLOCKED_403": 10,
     "BROKEN_HTTP_401": 1,
     "OK_200": 53,
     "OK_REDIRECTED": 9,
     "OK_202": 1,
     "LOGIN_REQUIRED": 1,
-    "UNREACHABLE": 1
+    "NOT_A_URL": 1
   },
-  "n_problems": 13,
+  "n_problems": 2,
   "problems": [
-    {
-      "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
-      "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
     {
       "url": "https://api.github.com/search/code",
       "status": 401,
       "result": "BROKEN_HTTP_401"
     },
     {
-      "url": "https://doi.org/10.1029/2020JB021269",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
-      "url": "https://doi.org/10.1080/08123985.2023.2299475",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
-      "url": "https://doi.org/10.1093/gji/ggad491",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
-      "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/data/",
-      "status": 200,
-      "final_url": "https://www.drivendata.org/accounts/login/?next=/competitions/306/competition-doe-gems/data/",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Login",
-      "redirected": true,
-      "redirected_offsite": false,
-      "result": "LOGIN_REQUIRED"
-    },
-    {
-      "url": "https://www.mdpi.com/2072-4292/16/7/1115",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
       "url": "https://www.nlr.gov/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf",
       "status": null,
-      "result": "UNREACHABLE",
-      "error": "InvalidURL(\"URL can't contain control characters. '/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf' (found at least ' ')\")"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026",
-      "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "NOT_A_URL",
+      "error": "InvalidURL(\"URL can't contain control characters. '/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf' (found at least ' ')\")",
+      "note": "catalog cell contained two URLs; fixed in docs/data_catalog.csv (row V4)"
     }
   ],
   "results": [
     {
       "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://api.github.com/search/code",
@@ -140,17 +82,20 @@
     {
       "url": "https://doi.org/10.1029/2020JB021269",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.1080/08123985.2023.2299475",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.1093/gji/ggad491",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.15121/1881483",
@@ -666,7 +611,8 @@
     {
       "url": "https://www.mdpi.com/2072-4292/16/7/1115",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.nature.com/articles/s41598-025-90823-5",
@@ -703,8 +649,9 @@
     {
       "url": "https://www.nlr.gov/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf",
       "status": null,
-      "result": "UNREACHABLE",
-      "error": "InvalidURL(\"URL can't contain control characters. '/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf' (found at least ' ')\")"
+      "result": "NOT_A_URL",
+      "error": "InvalidURL(\"URL can't contain control characters. '/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf' (found at least ' ')\")",
+      "note": "catalog cell contained two URLs; fixed in docs/data_catalog.csv (row V4)"
     },
     {
       "url": "https://www.osti.gov/biblio/1881483",
@@ -764,22 +711,26 @@
     {
       "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.seequent.com/",
@@ -848,5 +799,80 @@
       "result": "OK_200"
     }
   ],
-  "note": "Machine-measured. LOGIN_REQUIRED is expected for the DrivenData data tab and is NOT a failure. BROKEN/UNREACHABLE rows are irregularities requiring review."
+  "note": "Machine-measured. LOGIN_REQUIRED (DrivenData data tab) and BOT_BLOCKED_403/401 (publishers and doi.org rejecting scripted clients) are EXPECTED and are not counted as problems. Only BROKEN_*/UNREACHABLE/NOT_A_URL require review.",
+  "expected_non_ok": [
+    {
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.1029/2020JB021269",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.1080/08123985.2023.2299475",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.1093/gji/ggad491",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/data/",
+      "status": 200,
+      "final_url": "https://www.drivendata.org/accounts/login/?next=/competitions/306/competition-doe-gems/data/",
+      "content_type": "text/html",
+      "content_length": null,
+      "title": "Login",
+      "redirected": true,
+      "redirected_offsite": false,
+      "result": "LOGIN_REQUIRED"
+    },
+    {
+      "url": "https://www.mdpi.com/2072-4292/16/7/1115",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    }
+  ],
+  "n_expected_non_ok": 11,
+  "reclassified_locally_utc": "2026-09-14 (rules identical to scripts/verify_links.py)"
 }

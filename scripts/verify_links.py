@@ -32,6 +32,18 @@ from concurrent.futures import ThreadPoolExecutor
 UA = "Mozilla/5.0 (compatible; gems-prize-link-audit/1.0; +https://github.com/buffedlizard55-lab/GEMSDOE)"
 LOGIN_HINTS = ("/login", "/accounts/login", "signin", "sign-in", "/users/sign_in")
 
+# Academic publishers and DOI resolvers routinely return 403 to any non-browser client
+# (Cloudflare / bot mitigation). That is NOT evidence the link is broken, and reporting it
+# as BROKEN would be its own small hallucination. These hosts are therefore classified
+# separately as BOT_BLOCKED_<code> and excluded from the "problems needing review" count.
+# The DOI itself remains the citable identifier regardless of what a scripted HEAD sees.
+BOT_BLOCKING_HOSTS = (
+    "doi.org", "onlinelibrary.wiley.com", "agupubs.onlinelibrary.wiley.com",
+    "www.mdpi.com", "mdpi.com", "link.springer.com", "www.sciencedirect.com",
+    "sciencedirect.com", "pubs.geoscienceworld.org", "academic.oup.com",
+    "www.tandfonline.com", "tandfonline.com", "iopscience.iop.org",
+)
+
 
 def check(url: str, timeout: int = 45) -> dict:
     out = {"url": url}
@@ -69,7 +81,13 @@ def check(url: str, timeout: int = 45) -> dict:
             else:
                 out["result"] = f"OK_{r.status}"
     except urllib.error.HTTPError as e:
-        out.update(status=e.code, result=f"BROKEN_HTTP_{e.code}")
+        host = urllib.parse.urlparse(url).netloc.lower()
+        if e.code in (401, 403) and any(host == h or host.endswith("." + h)
+                                        for h in BOT_BLOCKING_HOSTS):
+            out.update(status=e.code, result=f"BOT_BLOCKED_{e.code}",
+                       note="publisher/DOI resolver rejects scripted clients; not a broken link")
+        else:
+            out.update(status=e.code, result=f"BROKEN_HTTP_{e.code}")
     except Exception as e:  # noqa: BLE001
         out.update(status=None, result="UNREACHABLE", error=repr(e)[:200])
     return out
@@ -99,7 +117,10 @@ def main() -> int:
         print(f"  {r['result']:34s} {r['url'][:95]}")
 
     stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    problems = [r for r in results if not r["result"].startswith("OK")]
+    EXPECTED = ("OK", "BOT_BLOCKED", "LOGIN_REQUIRED")
+    problems = [r for r in results if not r["result"].startswith(EXPECTED)]
+    expected_nonok = [r for r in results
+                      if r["result"].startswith(("BOT_BLOCKED", "LOGIN_REQUIRED"))]
 
     fields = list(rows[0].keys())
     for extra in ("verification_result", "verified_status", "verified_final_url", "verified_utc"):
@@ -126,10 +147,13 @@ def main() -> int:
         "summary_counts": counts,
         "n_problems": len(problems),
         "problems": problems,
+        "n_expected_non_ok": len(expected_nonok),
+        "expected_non_ok": expected_nonok,
         "results": results,
         "note": (
-            "Machine-measured. LOGIN_REQUIRED is expected for the DrivenData data tab and is "
-            "NOT a failure. BROKEN/UNREACHABLE rows are irregularities requiring review."
+            "Machine-measured. LOGIN_REQUIRED (DrivenData data tab) and BOT_BLOCKED_403/401 "
+            "(publishers and doi.org rejecting scripted clients) are EXPECTED and are not "
+            "counted as problems. Only BROKEN_* / UNREACHABLE / NOT_A_URL require review."
         ),
     }
     with open(a.json_out, "w", encoding="utf-8") as fh:

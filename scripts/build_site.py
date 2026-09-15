@@ -169,7 +169,8 @@ def build_index(ev: dict) -> str:
         c = lv["summary_counts"]
         okn = sum(v for k, v in c.items() if k.startswith("OK"))
         lvline = (f'<p>Catalog links checked live: <b>{lv["n_unique_urls"]}</b> unique URLs · '
-                  f'<b>{okn}</b> reachable · <b>{lv["n_problems"]}</b> flagged. '
+                  f'<b>{okn}</b> reachable · <b>{lv.get("n_expected_non_ok", 0)}</b> login-walled or '
+                  f'publisher bot-blocked (expected) · <b>{lv["n_problems"]}</b> needing review. '
                   f'See <a href="sources.html">Sources</a>.</p>')
 
     return page("Overview", "index.html", f"""
@@ -538,7 +539,14 @@ licence allows use in the challenge and sharing with the sponsor
 
     if lv:
         c = lv["summary_counts"]
-        chips = " ".join(f'<span class="pill {"ok" if k.startswith("OK") else ("info" if k == "LOGIN_REQUIRED" else "bad")}">{e(k)}: {v}</span>'
+        def _cls(k):
+            if k.startswith("OK"):
+                return "ok"
+            if k.startswith(("LOGIN_REQUIRED", "BOT_BLOCKED")):
+                return "info"
+            return "bad"
+
+        chips = " ".join(f'<span class="pill {_cls(k)}">{e(k)}: {v}</span>'
                          for k, v in sorted(c.items()))
         body.append(f"""<h2>Live link verification</h2>
 <p>Every URL in <a href="{REPO}/blob/main/docs/data_catalog.csv"><code>data_catalog.csv</code></a> is
@@ -546,14 +554,27 @@ re-fetched by <code>scripts/verify_links.py</code> on a runner and its real HTTP
 Checked {lv['n_unique_urls']} unique URLs across {lv['n_rows']} catalog rows
 ({e(lv['generated_utc'])}).</p>
 <p>{chips}</p>""")
+        exp = lv.get("expected_non_ok") or []
+        if exp:
+            rows = "".join(f'<tr><td><span class="pill info">{e(p["result"])}</span></td>'
+                           f'<td class="small"><a href="{e(p["url"])}">{e(p["url"][:110])}</a></td></tr>'
+                           for p in exp)
+            body.append('<h3>Expected non-200 responses (not defects)</h3>'
+                        '<table><thead><tr><th>Status</th><th>URL</th></tr></thead>'
+                        f'<tbody>{rows}</tbody></table>')
+            body.append(note("ok", """<b>Why these are not counted as broken.</b>
+<code>LOGIN_REQUIRED</code> on the DrivenData data tab is the competition working as designed.
+<code>BOT_BLOCKED_403/401</code> is Cloudflare-style bot mitigation at academic publishers and
+<code>doi.org</code>, which reject any non-browser client; the DOI remains the citable identifier.
+Calling either one "broken" would itself be an inaccuracy, so they are reported separately."""))
         if lv.get("problems"):
             rows = "".join(f'<tr><td><span class="pill bad">{e(p["result"])}</span></td>'
                            f'<td class="small"><a href="{e(p["url"])}">{e(p["url"][:110])}</a></td></tr>'
                            for p in lv["problems"])
             body.append('<h3>Flagged for review</h3><table><thead><tr><th>Status</th><th>URL</th></tr>'
                         f'</thead><tbody>{rows}</tbody></table>')
-            body.append(note("warn", "<code>LOGIN_REQUIRED</code> on the DrivenData data tab is "
-                                     "expected, not a defect. Other statuses need a human look."))
+            body.append(note("warn", "These need a human look — they are neither reachable nor "
+                                     "explained by a login wall or publisher bot-blocking."))
         body.append(f'<p>Machine output: <a href="link_verification.json">link_verification.json</a> · '
                     f'<a href="data_catalog.verified.csv">data_catalog.verified.csv</a></p>')
     else:
