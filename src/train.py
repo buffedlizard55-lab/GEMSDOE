@@ -38,6 +38,7 @@ from .losses import CombinedLoss, TverskyLoss, DistanceWeightedTverskyLoss
 from .metrics import compute_distance_weighted_tversky, score_arrays_blocked
 from .models import count_params, get_model
 from .submission_optim import search_threshold
+from .submission_optim import optimize_submission
 
 
 def set_seed(seed: int = 42):
@@ -84,6 +85,30 @@ def stitch(patches, origins, shape, crop=None):
     return out
 
 
+def _compact_window_subset(tw, gt_stack, nmax, patch):
+    """Pick up to `nmax` test windows whose bounding box is COMPACT and fault-bearing.
+
+    The shaping search scores the bbox of these windows; row-major-consecutive runs
+    of a non-overlapping grid are spatial neighbours, so a run that contains labels
+    with the smallest bbox is a cheap, representative calibration crop (instead of a
+    scatter of windows whose bbox is the whole 3292x3730 raster -> EDT cost x ~20).
+    """
+    n = len(tw)
+    if nmax <= 0 or n <= nmax:
+        return tw
+    best = None
+    for s0 in range(0, n - nmax + 1):
+        sub = tw[s0:s0 + nmax]
+        if int(gt_stack[s0:s0 + nmax].sum()) == 0:
+            continue
+        rows = [i for i, _ in sub]
+        cols = [j for _, j in sub]
+        area = (max(rows) - min(rows) + patch) * (max(cols) - min(cols) + patch)
+        if best is None or area < best[0]:
+            best = (area, sub)
+    return best[1] if best else tw[:nmax]
+
+
 def heldout_maps(model, res, y_shape, device, cfg, R):
     """Held-out (Monte-Carlo test) predictions/GT: full stitched map + search crop.
 
@@ -96,7 +121,7 @@ def heldout_maps(model, res, y_shape, device, cfg, R):
     pred_full = stitch(probs, tw, (Hp, Wp), crop=y_shape)
     gt_full = stitch(res["y_test"], tw, (Hp, Wp), crop=y_shape)
     nmax = int(cfg["training"].get("shaping_windows", 48))
-    box = tw[:nmax]
+    box = _compact_window_subset(tw, res["y_test"], nmax, int(cfg["training"]["patch_size"]))
     if not box:
         return pred_full, gt_full, pred_full, gt_full
     p_ = int(cfg["training"]["patch_size"])
@@ -210,8 +235,16 @@ def main():
 
     hist = []
     calib_maps = []
-    for mc in range(int(cfg["training"]["mc_splits"])):
-        print(f"\n=== MC split {mc + 1}/{cfg['training']['mc_splits']} ===")
+    # mc_id offsets the split index so a workflow can run ONE fold per job
+    # (fold j: --override training.mc_id=j training.mc_splits=1).  Fold j always
+    # gets the same seed/architecture regardless of how the work is parallelised.
+    mc0 = int(cfg["training"].get("mc_id", 0))
+    n_splits = int(cfg["training"]["mc_splits"])
+    max_minutes = float(cfg["training"].get("max_minutes", 0) or 0)
+    job_t0 = time.time()
+    for kk in range(n_splits):
+        mc = mc0 + kk
+        print(f"\n=== MC split {mc + 1} (fold {kk + 1}/{n_splits}) ===")
         res = make_patches(
             Xn, y, patch_size=cfg["training"]["patch_size"], train_step=cfg["training"]["train_step"],
             test_proportion=cfg["training"]["test_proportion"], seed=mc * 10 + int(cfg["training"].get("seed", 42)),
@@ -260,15 +293,32 @@ def main():
         best = dict(dti=-1.0, epoch=-1)
         best_state = None
         best_maps = None
+        patience = int(cfg["training"].get("early_stopping_patience", 0) or 0)
+        bad = 0
+        aborted_by_budget = False
         for ep in range(epochs):
             t0 = time.time()
+            if max_minutes and (t0 - job_t0) / 60.0 > max_minutes:
+                print(f"time budget ({max_minutes:.0f} min) exhausted after {ep} epochs; "
+                      "stopping to save the best-so-far checkpoint")
+                aborted_by_budget = True
+                break
             tr = train_one_epoch(model, train_dl, criterion, opt, device, scaler, use_amp,
                                  use_fpw and loss_name != "plain_tversky", sched=sched)
             pf, gf, pc, gc = heldout_maps(model, res, y.shape, device, cfg, R_px)
             dti_g, _unused, comps = _score_full(pf, gf, cfg, R_px)
-            _thr = np.linspace(0.02, 0.9, int(cfg["training"].get("shaping_grid", 15)))
-            tbl = shaped_table(pc, gc, R_px, _thr)
-            dti_shaped, sh_best = (max(r[2] for r in tbl), max(tbl, key=lambda r: r[2]))
+            # selection_mode: "shaped" (full t0 x thin table per epoch - GPU boxes only) or
+            # "raw" (one fixed floor+thin candidate on the compact crop - CPU-cheap, the
+            # binding calibration is the pooled search below / blend_submission.py).
+            sel_mode = str(cfg["training"].get("selection_mode", "shaped"))
+            if sel_mode == "shaped":
+                _thr = np.linspace(0.02, 0.9, int(cfg["training"].get("shaping_grid", 15)))
+                tbl = shaped_table(pc, gc, R_px, _thr)
+                dti_shaped, sh_best = (max(r[2] for r in tbl), max(tbl, key=lambda r: r[2]))
+            else:
+                d0 = float(compute_distance_weighted_tversky(
+                    optimize_submission(pc, R=R_px, t0=0.5, thin=True), gc, R_pixels=R_px))
+                dti_shaped, sh_best = d0, (0.5, True, d0)
             print(f"epoch {ep + 1}/{epochs}  loss={tr:.4f}  DTI_raw={dti_g:.4f}  "
                   f"DTI_shaped={dti_shaped:.4f} (t0={sh_best[0]:.2f},thin={sh_best[1]})  "
                   f"TP={comps['TP_w']:.0f} FP={comps['FP_w']:.0f} "
@@ -280,14 +330,29 @@ def main():
                 best = dict(dti=dti_shaped, epoch=ep + 1)
                 best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 best_maps = (pc.copy(), gc.copy())
+                bad = 0
+            else:
+                bad += 1
+                if patience and bad >= patience:
+                    print(f"early stop: no shaped-DTI improvement for {patience} epochs")
+                    break
         if cfg["training"].get("calibrate_shaping", True) and best_maps is not None:
             calib_maps.append(best_maps)            # pooled search over all splits, below
+            # persist the fold's held-out crop maps so a SEPARATE blend job can pool
+            # shaping calibration across folds (scripts/blend_submission.py)
+            np.savez_compressed(out_dir / f"heldout_mc{mc}.npz",
+                                pred=best_maps[0].astype(np.float16),
+                                gt=best_maps[1].astype(np.uint8))
 
+        if best_state is None:
+            raise SystemExit(f"fold {mc}: no epoch completed (time budget?); refusing to save an empty checkpoint")
         ck = out_dir / f"model_mc{mc}_{arch}_{enc}.pt"
         torch.save(best_state, ck)
         manifest["models"].append(dict(file=ck.name, arch=arch, encoder=enc, in_channels=int(in_ch),
                                        classes=1, dti=best["dti"], epoch=best["epoch"], mc=mc,
                                        patch_size=cfg["training"]["patch_size"],
+                                       minutes_used=round((time.time() - job_t0) / 60.0, 1),
+                                       budget_hit=aborted_by_budget,
                                        test_windows=res["summary"]["test_windows"]))
         print(f"saved {ck} (best DTI {best['dti']:.4f} @ epoch {best['epoch']})")
 

@@ -12,51 +12,39 @@ import torch.nn as nn
 import segmentation_models_pytorch as smp
 
 def get_model(arch="unetplusplus", encoder="efficientnet-b5", in_channels=10, classes=1, pretrained=True):
+    def _mk(maker, **kw):
+        """Build with ImageNet weights, falling back to random init if the weights
+        download fails (the sandbox cannot reach the release-asset host; runners can).
+        A hard failure here would silently turn a `pretrained: true` config into zero
+        checkpoints, so the fallback is a warning, not an exception."""
+        if pretrained:
+            try:
+                return maker(encoder_weights="imagenet", **kw)
+            except Exception as e:  # noqa: BLE001 - any network/integrity error
+                print(f"WARNING: pretrained weights for encoder '{kw.get('encoder_name')}' "
+                      f"failed to download ({type(e).__name__}: {e}); training from scratch")
+        return maker(encoder_weights=None, **kw)
+
     arch = arch.lower()
     if arch == "unet":
-        model = smp.Unet(
-            encoder_name=encoder,
-            encoder_weights="imagenet" if pretrained else None,
-            in_channels=in_channels,
-            classes=classes,
-            activation=None,
-        )
+        model = _mk(smp.Unet, encoder_name=encoder, in_channels=in_channels,
+                    classes=classes, activation=None)
     elif arch == "unetplusplus":
-        model = smp.UnetPlusPlus(
-            encoder_name=encoder,
-            encoder_weights="imagenet" if pretrained else None,
-            in_channels=in_channels,
-            classes=classes,
-            activation=None,
-        )
+        model = _mk(smp.UnetPlusPlus, encoder_name=encoder, in_channels=in_channels,
+                    classes=classes, activation=None)
     elif arch == "deeplabv3plus":
-        model = smp.DeepLabV3Plus(
-            encoder_name=encoder,
-            encoder_weights="imagenet" if pretrained else None,
-            in_channels=in_channels,
-            classes=classes,
-            activation=None,
-        )
+        model = _mk(smp.DeepLabV3Plus, encoder_name=encoder, in_channels=in_channels,
+                    classes=classes, activation=None)
     elif arch == "segformer":
         # SegFormer uses mit encoders
         # Map encoder name
         if "mit" not in encoder:
             encoder = "mit_b2"
-        model = smp.Segformer(
-            encoder_name=encoder,
-            encoder_weights="imagenet" if pretrained else None,
-            in_channels=in_channels,
-            classes=classes,
-            activation=None,
-        )
+        model = _mk(smp.Segformer, encoder_name=encoder, in_channels=in_channels,
+                    classes=classes, activation=None)
     elif arch == "fpn":
-        model = smp.FPN(
-            encoder_name=encoder,
-            encoder_weights="imagenet" if pretrained else None,
-            in_channels=in_channels,
-            classes=classes,
-            activation=None,
-        )
+        model = _mk(smp.FPN, encoder_name=encoder, in_channels=in_channels,
+                    classes=classes, activation=None)
     else:
         raise ValueError(f"Unknown arch {arch}")
 

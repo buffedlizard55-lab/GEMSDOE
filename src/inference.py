@@ -111,10 +111,25 @@ def main():
     ap.add_argument("--model-dir", default=None, help="defaults to data.output_dir")
     ap.add_argument("--out", default="submission.tif")
     ap.add_argument("--no-tta", action="store_true")
+    ap.add_argument("--raw", action="store_true",
+                    help="write the raw ensemble probability map: skip post-processing and "
+                         "shaping (used per fold so scripts/blend_submission.py can average "
+                         "fold maps before shaping once, on the pooled calibration)")
     ap.add_argument("--score-against", default=None, help="label GeoTIFF -> print local DTI")
+    ap.add_argument("--override", nargs="*", default=[], help="dotted.key=value overrides (same as src.train)")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
+    for o in args.override:
+        k, v = o.split("=", 1)
+        cur = cfg
+        parts = k.split(".")
+        for p in parts[:-1]:
+            cur = cur.setdefault(p, {})
+        try:
+            cur[parts[-1]] = json.loads(v)
+        except json.JSONDecodeError:
+            cur[parts[-1]] = v
     device = torch.device("cuda" if torch.cuda.is_available() else
                           "mps" if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else "cpu")
     out_dir = Path(cfg["data"]["output_dir"])
@@ -172,14 +187,19 @@ def main():
     else:
         final = np.mean([p for p, _ in maps], axis=0).astype(np.float32)
 
-    final, _binary = postprocess_pipeline(final, cfg.get("postprocess", {}))
-
-    # metric-aware shaping (floor + distance-R dominating thinning).  Parameters come from
-    # the training manifest (calibrated on held-out windows); config can override.
-    shp = dict(manifest.get("shaping") or {})
-    shp.update({k: v for k, v in (cfg["inference"].get("submission_shaping") or {}).items() if v is not None})
+    # --raw mode: fold-level probability map, untouched by post-processing or shaping.
+    # scripts/blend_submission.py averages fold maps first, then shapes ONCE with the
+    # calibration pooled across folds (one thinning pass, not six).
+    if args.raw:
+        shp, _binary = {}, None
+    else:
+        final, _binary = postprocess_pipeline(final, cfg.get("postprocess", {}))
+        # metric-aware shaping (floor + distance-R dominating thinning).  Parameters come
+        # from the training manifest (calibrated on held-out windows); config can override.
+        shp = dict(manifest.get("shaping") or {})
+        shp.update({k: v for k, v in (cfg["inference"].get("submission_shaping") or {}).items() if v is not None})
     pre_mass = float(np.nansum(final))          # machine-checkable record for the docs table
-    if shp.get("t0") is not None or shp.get("enabled"):
+    if not args.raw and (shp.get("t0") is not None or shp.get("enabled")):
         from .submission_optim import optimize_submission
         pre = pre_mass
         final = optimize_submission(final, R=R_px_infer(cfg), t0=float(shp.get("t0", 0.3)),

@@ -189,9 +189,9 @@ for the repo owner:
    audit's new link check enforces it.
 4. The audit gate grew from three checks to five (published tables vs artifacts; site link targets),
    each falsification-tested.
-5. **Owner action, not code:** `GET /repos/&hellip;/pages` reports `build_type: legacy`, source `main`, path
+5. **Owner action, not code:** `GET /repos/buffedlizard55-lab/GEMSDOE/pages` reports `build_type: legacy`, source `main`, path
    `/`, yet the successful `deploy-pages` job means the artifact (which uploads `docs/`) is what is
-   currently live &mdash; `https://&hellip;/GEMSDOE/` now serves `docs/index.html` and `https://&hellip;/GEMSDOE/docs/...`
+   currently live &mdash; `https://buffedlizard55-lab.github.io/GEMSDOE/` now serves `docs/index.html` and `https://buffedlizard55-lab.github.io/GEMSDOE/docs/...`
    returns 404. Both builders are therefore racing on every push to `main`. Pick one: set
    **Settings &rarr; Pages &rarr; Source: GitHub Actions** (recommended; the workflow already uploads `docs/`),
    or remove the `deploy` job and let Jekyll build the repo root. Nothing in the repo can settle this
