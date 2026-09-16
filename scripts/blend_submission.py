@@ -41,7 +41,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.metrics import compute_distance_weighted_tversky, score_arrays_blocked  # noqa: E402
-from src.submission_optim import optimize_submission  # noqa: E402
+from src.submission_optim import optimize_submission, shaping_thresholds  # noqa: E402
+from src.submission_io import clean_profile, write_submission  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -187,7 +188,12 @@ def main():
 
     # 2. pooled held-out shaping calibration ---------------------------------------
     n_grid = int(args.shaping_grid or cfg["training"].get("shaping_grid", 11))
-    thr = np.linspace(0.02, 0.9, n_grid)
+    # shaping_thresholds() is log-spaced and always contains 0.0.  This script used to
+    # build its own linear 0.02-0.9 grid, which (a) omitted the no-floor reference
+    # point and (b) could not reach a low-contrast optimum -- the same defect PR #9 fixed
+    # in src/train.py but not here, even though the BINDING calibration for the 6-fold
+    # workflow happens in this script.  See src/submission_optim.shaping_thresholds.
+    thr = shaping_thresholds(n_grid)
     t0b, thinb, mean_dti, table = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta, pre=enh)
     print(f"pooled shaping: t0={t0b:.3f} thin={thinb} -> mean held-out DTI {mean_dti:.4f}"
           f" (unshaped {table[0]['mean_dti']:.4f})")
@@ -207,12 +213,19 @@ def main():
 
     # write on the sample grid when given, else on the fold grid (identical by spec;
     # scripts/validate_submission.py re-checks against both the sample and the features)
+    #
+    # NOTE (2026-09-16): the profile MUST NOT inherit block geometry from the sample file.
+    # A striped GeoTIFF reports blockxsize == width (3292 for the competition template), and
+    # requesting TILED=YES with that block size makes GDAL refuse to write at all:
+    #   "RasterBlockError: The height and width of TIFF dataset blocks must be multiples of 16"
+    # (this is exactly how Actions run 35042805806 lost its submission).  clean_profile()
+    # drops stale block keys and pins legal 256-px tiles.
     grid = folds[0]["grid"]
     if args.sample and Path(args.sample).exists():
         with rasterio.open(args.sample) as src:
             sgrid = dict(width=src.width, height=src.height, crs=str(src.crs),
                          transform=list(src.transform), res=[float(src.res[0]), float(src.res[1])])
-            profile = src.profile.copy()
+            profile = clean_profile(src.profile.copy(), dtype="float32")
         if sgrid["width"] != grid["width"] or sgrid["height"] != grid["height"]:
             print(f"WARNING sample grid {sgrid['width']}x{sgrid['height']} != fold grid "
                   f"{grid['width']}x{grid['height']} — writing on the SAMPLE grid (crop/pad)")
@@ -220,27 +233,29 @@ def main():
             hh, ww = min(sgrid["height"], q.shape[0]), min(sgrid["width"], q.shape[1])
             buf[:hh, :ww] = q[:hh, :ww]
             q = buf
-        profile.update(driver="GTiff", count=1, dtype="float32", nodata=None,
-                       compress="lzw", TILED="YES")
     else:
-        profile = dict(driver="GTiff", height=grid["height"], width=grid["width"], count=1,
-                       dtype="float32", crs=grid["crs"],
-                       transform=rasterio.Affine(*grid["transform"]),
-                       nodata=None, compress="lzw", TILED="YES")
+        profile = clean_profile(None, dtype="float32", crs=grid["crs"],
+                                transform=rasterio.Affine(*grid["transform"]),
+                                height=q.shape[0], width=q.shape[1])
 
     out = Path(args.out)
-    with rasterio.open(out, "w", **profile) as dst:
-        dst.write(q, 1)
-        dst.set_band_description(1, "fault-presence probability (GEMSDOE 6-fold MC ensemble, shaped)")
-        dst.update_tags(source="GEMSDOE train-ensemble workflow",
-                        n_models=str(len(folds)),
-                        models=";".join(str(m) for f in folds for m in f["model"]),
-                        shaping_t0=str(t0b), shaping_thin=str(bool(thinb)))
-    print(f"wrote {out}  nonzero={int(np.count_nonzero(np.nan_to_num(q)))} "
-          f"finite={int(np.isfinite(q).sum())}/{q.size} mass {pre_mass:.0f} -> {post_mass:.0f}")
+    # write_submission() reopens the bytes on disk and raises unless it reads back as a
+    # single-band float32 raster on this grid with non-zero mass -> a crashed or empty
+    # submission can no longer be reported as success.
+    written = write_submission(
+        out, q, profile,
+        band_description="fault-presence probability (GEMSDOE MC ensemble, shaped)",
+        tags=dict(source="GEMSDOE train-ensemble workflow", n_models=str(len(folds)),
+                  models=";".join(str(m) for f in folds for m in f["model"]),
+                  shaping_t0=str(t0b), shaping_thin=str(bool(thinb))))
+    print(f"wrote {out}  {written['bytes']} B sha256={written['sha256'][:16]}  "
+          f"nonzero={written['nonzero_px']} finite={written['finite_px']}/{written['total_px']} "
+          f"mass {pre_mass:.0f} -> {post_mass:.0f}  tiled={written['tiled']} "
+          f"blocks={written['block_shapes']}")
 
     # 4. informational score vs known (public) faults -------------------------------
     local = None
+    discovery = None
     if args.labels and Path(args.labels).exists():
         with rasterio.open(args.labels) as src:
             lab = src.read(1)
@@ -261,6 +276,17 @@ def main():
                           "set (private expert-labelled NEW faults). Optimistic AND wrong-universe: "
                           "reported for pipeline monitoring only.")
         print(f"informational DTI vs known faults = {d:.4f} (blanket-ones floor {d_ones:.4f})")
+        # The competition target is the NEW fault dataset (rules §1.1) — disjoint from the
+        # catalog we can see.  Measure how much of the submission is a *discovery*.
+        from src.discovery import discovery_report
+        thr_diag = [t for t in (0.1, 0.5, 0.9)]
+        discovery = discovery_report(np.nan_to_num(q), gt, R=R, alpha=alpha, beta=beta,
+                                     thresholds=thr_diag)
+        print("discovery vs known catalog: novel_fraction={:.3f}  candidate_new(>0.5)={} px "
+              "in {} components".format(
+                  discovery["novel_mass"]["novel_fraction"] or 0.0,
+                  discovery["per_threshold"]["0.5"]["novel_px"],
+                  discovery["per_threshold"]["0.5"]["n_novel_components"]))
 
     report = dict(
         generated_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -280,8 +306,10 @@ def main():
                         grid=grid, finite_px=int(np.isfinite(q).sum()), total_px=int(q.size),
                         nonzero_px=int(np.count_nonzero(np.nan_to_num(q))),
                         min=float(np.nanmin(q)), max=float(np.nanmax(q)),
-                        mean=float(np.nanmean(q))),
+                        mean=float(np.nanmean(q)),
+                        readback=written),
         local_score_vs_known=local,
+        discovery_vs_known_catalog=discovery,
     )
     rp = Path(args.report) if args.report else out.with_name(out.stem + "_report.json")
     rp.write_text(json.dumps(report, indent=1))

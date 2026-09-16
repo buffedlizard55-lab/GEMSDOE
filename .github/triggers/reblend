@@ -1,0 +1,4 @@
+Touching this file fire- starts the "Re-blend existing fold artifacts" workflow
+(.github/workflows/reblend.yml), which re-runs ONLY the blend step against the fold
+artifacts of run 35042805806 (those artifacts trained successfully; the blend crashed
+on the TIFF block-size bug fixed on 2026-09-16).

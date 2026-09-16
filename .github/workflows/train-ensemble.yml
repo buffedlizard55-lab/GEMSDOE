@@ -83,15 +83,19 @@ jobs:
 
       - name: Train fold ${{ matrix.fold }}
         run: |
+          # pipefail: without it a crashed training run still exits 0 through `tee`
+          # (that is how run 35042805806's blend failure went unnoticed).
+          set -uo pipefail
           python -m src.train --config configs/config_ci_ensemble.yaml \
             --override training.mc_id=${{ matrix.fold }} 2>&1 \
-            | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee train.log
+            | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee train.log
 
       - name: Inference (raw, 8-way TTA) -> prob map
         run: |
+          set -uo pipefail
           python -m src.inference --config configs/config_ci_ensemble.yaml --raw \
             --out outputs/prob_raw.tif 2>&1 \
-            | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee inference.log
+            | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee inference.log
 
       - name: Stage fold outputs
         run: |
@@ -145,6 +149,7 @@ jobs:
 
       - name: Blend + shape + write submission
         run: |
+          set -uo pipefail
           python scripts/blend_submission.py \
             --folds folds/fold-*/ \
             --config configs/config_ci_ensemble.yaml \
@@ -152,9 +157,11 @@ jobs:
             --labels data/labels.tif \
             --out submission.tif --report blend_report.json --weights equal 2>&1 | tee blend.log
 
-      - name: Validate submission format
-        run: python scripts/validate_submission.py --pred submission.tif \
-             --sample data/sample_submission.tif --train data/training_features.tif 2>&1 | tee validation.log
+      - name: Validate submission format (exit code gates the commit)
+        run: |
+          set -uo pipefail
+          python scripts/validate_submission.py --pred submission.tif \
+            --sample data/sample_submission.tif --train data/training_features.tif 2>&1 | tee validation.log
 
       - name: Commit run report + submission to the branch
         if: always()
@@ -164,9 +171,18 @@ jobs:
           mkdir -p "$D"
           cp -f blend_report.json "$D/" 2>/dev/null || true
           cp -f blend.log validation.log "$D/" 2>/dev/null || true
-          # the shaped submission is ~1 MB (float32 LZW, mostly zeros): committed so the
-          # sandbox and the repo owner can both use it without artifact access
-          cp -f submission.tif "$D/submission.tif" 2>/dev/null || true
+          # Only a real submission may be committed.  Run 35042805806 committed a 110-byte
+          # GDAL stub left behind by the crashed writer, and every downstream reader treated
+          # it as a submission.  Size + a read-back check are cheap and decisive.
+          if [ -f submission.tif ] && [ "$(stat -c%s submission.tif)" -gt 10000 ] && \
+             python -c "import rasterio,numpy as np,sys; s=rasterio.open('submission.tif'); a=s.read(1); sys.exit(0 if (s.count==1 and s.dtypes[0]=='float32' and np.count_nonzero(np.nan_to_num(a))>0) else 1)"; then
+            cp -f submission.tif "$D/submission.tif"
+            sha256sum submission.tif | tee "$D/submission.sha256"
+          else
+            echo "NO VALID submission.tif - committing the failure evidence instead"
+            rm -f "$D/submission.tif" "$D/submission.sha256"
+            printf '{"status":"NO_SUBMISSION","reason":"blend or validate step failed - see blend.log/validation.log in this directory","run_id":"%s"}\n' "${{ github.run_id }}" > "$D/FAILED.json"
+          fi
           for f in folds/fold-*/manifest.json; do
             [ -f "$f" ] && cp -f "$f" "$D/$(basename "$(dirname "$f")").manifest.json" || true
           done

@@ -117,7 +117,10 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
     rep = json.loads((tmp_path / "report.json").read_text())
     assert rep["n_folds"] == 2
     assert rep["submission"]["finite_px"] == int(np.isfinite(q).sum())
-    assert len(rep["shaping"]["calibration_table"]) == 1 + 2 * 11  # row0 + grid x thin options
+    # row0 (unshaped reference) + |grid| x |thin| ; the grid is log-spaced and includes 0.0
+    # (src/submission_optim.shaping_thresholds), not the old 11-point linear 0.02-0.9 ramp
+    from src.submission_optim import shaping_thresholds
+    assert len(rep["shaping"]["calibration_table"]) == 1 + 2 * len(shaping_thresholds(11))
     loc = rep["local_score_vs_known"]
     assert loc["closed_form_matches"] is True, "DTI != closed form -> identity regression"
     assert 0.0 <= loc["dti_known_faults"] <= 1.0
@@ -126,9 +129,16 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
 
 
 def test_blend_refuses_all_zero_submission(tmp_path):
-    """Guard added 2026-09-15: if shaping collapses the whole map (a failure mode seen
-    when a pre-transform flattens the distribution), the blend must FAIL LOUDLY,
-    never write an empty submission."""
+    """Guard added 2026-09-15: if shaping collapsed the whole map (a failure mode seen when a
+    pre-transform flattens the distribution), the blend had to FAIL LOUDLY rather than write an
+    empty submission.
+
+    Updated 2026-09-16 after the shaping grid fix.  With the OLD linear grid (first candidate
+    0.02) a map whose maximum is 0.01 was zeroed at EVERY candidate, so the run aborted; with
+    the log-spaced grid used now, 0.0 is an explicit candidate and the search can choose it, so
+    the same input produces a valid sparse submission instead of a collapse.  Both behaviours
+    are checked: no all-zero submission may be written, and the chosen floor must sit BELOW the
+    old grid's reach (0.02) - that is the defect this covers."""
     H = W = 64
     gt = np.zeros((H, W), np.float32)
     for k in range(8, 56):
@@ -151,4 +161,19 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
          "--folds", str(fd), "--config", str(cfg), "--labels", str(tmp_path / "labels.tif"),
          "--out", str(tmp_path / "sub.tif"), "--report", str(tmp_path / "rep.json")],
         capture_output=True, text=True, timeout=600)
-    assert r.returncode != 0 and "collapsed" in (r.stderr + r.stdout), "all-zero submission must abort the blend"
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = json.loads((tmp_path / "rep.json").read_text())
+    t0 = rep["shaping"]["t0"]
+    assert t0 < 0.02, f"floor {t0} is not below the old grid's first point - grid regression"
+    with rasterio.open(tmp_path / "sub.tif") as src:
+        q = src.read(1)
+    assert np.count_nonzero(np.nan_to_num(q)) > 0, "an all-zero submission was written"
+    # ... and the backstop still holds for a genuinely empty prediction
+    from src.submission_io import clean_profile, write_submission
+    prof = clean_profile(None, height=8, width=8)
+    try:
+        write_submission(tmp_path / "zero.tif", np.zeros((8, 8), np.float32), prof)
+    except RuntimeError as e:
+        assert "all zeros" in str(e)
+    else:
+        raise AssertionError("all-zero submission must never be written")
