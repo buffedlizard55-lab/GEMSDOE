@@ -27,7 +27,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   pytest:
@@ -55,9 +55,21 @@ jobs:
 
       - name: Run the test suite
         run: |
-          set -euo pipefail
-          python -m pytest tests -q 2>&1 | tee pytest.log
-          tail -1 pytest.log
+          set -o pipefail
+          python -m pytest tests -q --tb=line -rf 2>&1 | tee pytest.log
+          S=$?
+          # A failure has to be readable without access to the raw job log, so the failing test
+          # names go into the check-run annotations and the whole log is committed below.
+          grep -E "^FAILED|^ERROR" pytest.log | while read -r line; do
+            echo "::error title=pytest::${line}"
+          done
+          {
+            echo "### pytest"
+            echo '```'
+            tail -40 pytest.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $S
 
       - name: Documentation audit (the same five checks the Pages deploy gates on)
         run: |
@@ -72,3 +84,32 @@ jobs:
           path: pytest.log
           retention-days: 14
           if-no-files-found: ignore
+
+      # Artifacts are a dead end for anyone auditing this repository from the development sandbox
+      # (the blob host is not reachable), so a failure also commits its log to the branch.  That
+      # keeps the "measured, not claimed" rule intact for CI itself: the failing assertion is in
+      # the repository, next to the code that produced it.
+      - name: On failure, commit the log to the branch
+        if: failure()
+        run: |
+          set -euo pipefail
+          D="data/evidence/ci"
+          mkdir -p "$D"
+          cp -f pytest.log "$D/pytest-${GITHUB_RUN_ID}.log"
+          {
+            echo "workflow: Tests"
+            echo "run: ${GITHUB_RUN_ID}"
+            echo "sha: ${GITHUB_SHA}"
+            echo "branch: ${GITHUB_REF_NAME}"
+            echo
+            echo "--- pytest tail ---"
+            tail -25 pytest.log
+          } > "$D/pytest-${GITHUB_RUN_ID}.txt"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$D"
+          git diff --cached --quiet && echo "nothing to commit" || {
+            git commit -m "ci(tests): failing pytest log for run ${GITHUB_RUN_ID} [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          }
