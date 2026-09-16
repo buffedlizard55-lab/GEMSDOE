@@ -11,7 +11,17 @@ import torch
 import torch.nn as nn
 import segmentation_models_pytorch as smp
 
-def get_model(arch="unetplusplus", encoder="efficientnet-b5", in_channels=10, classes=1, pretrained=True):
+def get_model(arch="unetplusplus", encoder="efficientnet-b5", in_channels=19, classes=1, pretrained=True):
+    """Build a segmentation model.
+
+    `in_channels` defaults to 19 because that is what the competition feature stack
+    actually has (measured on the downloaded raster: gems-geodawn-numerical-features.tif
+    carries 19 float32 bands, each with a band_name tag -- see data/evidence/ and the
+    Data page of the generated site).  It used to default to 10, a number taken from the
+    problem page's prose; every caller in this repo passes `in_channels` explicitly, so
+    the wrong default never reached a run, but it was a trap for anyone importing
+    get_model directly.
+    """
     arch = arch.lower()
     if arch == "unet":
         model = smp.Unet(

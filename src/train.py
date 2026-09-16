@@ -37,7 +37,7 @@ from .dataset import (FaultDataset, band_names, load_features_and_labels, load_n
 from .losses import CombinedLoss, TverskyLoss, DistanceWeightedTverskyLoss
 from .metrics import compute_distance_weighted_tversky, score_arrays_blocked
 from .models import count_params, get_model
-from .submission_optim import search_threshold
+from .submission_optim import search_threshold, shaping_thresholds
 
 
 def set_seed(seed: int = 42):
@@ -266,11 +266,11 @@ def main():
                                  use_fpw and loss_name != "plain_tversky", sched=sched)
             pf, gf, pc, gc = heldout_maps(model, res, y.shape, device, cfg, R_px)
             dti_g, _unused, comps = _score_full(pf, gf, cfg, R_px)
-            _thr = np.linspace(0.02, 0.9, int(cfg["training"].get("shaping_grid", 15)))
+            _thr = shaping_thresholds(int(cfg["training"].get("shaping_grid", 15)))
             tbl = shaped_table(pc, gc, R_px, _thr)
             dti_shaped, sh_best = (max(r[2] for r in tbl), max(tbl, key=lambda r: r[2]))
             print(f"epoch {ep + 1}/{epochs}  loss={tr:.4f}  DTI_raw={dti_g:.4f}  "
-                  f"DTI_shaped={dti_shaped:.4f} (t0={sh_best[0]:.2f},thin={sh_best[1]})  "
+                  f"DTI_shaped={dti_shaped:.4f} (t0={sh_best[0]:.4g},thin={sh_best[1]})  "
                   f"TP={comps['TP_w']:.0f} FP={comps['FP_w']:.0f} "
                   f"FN={comps['FN_w']:.0f}  [{time.time() - t0:.0f}s]")
             hist.append(dict(mc=mc, epoch=ep + 1, loss=tr, dti_raw=dti_g, dti_shaped=dti_shaped,
@@ -296,7 +296,7 @@ def main():
     # scalar fitted against |splits| x |windows| pixels of held-out truth, so this is far
     # from the overfitting risk of per-split tuning, and it is what inference.py applies.
     if calib_maps and cfg["training"].get("calibrate_shaping", True):
-        thr = np.linspace(0.02, 0.9, int(cfg["training"].get("shaping_grid", 15)))
+        thr = shaping_thresholds(int(cfg["training"].get("shaping_grid", 15)))
         tables = [shaped_table(pg, gg, R_px, thr) for pg, gg in calib_maps]
         mean_dti = np.mean([np.array([r[2] for r in t]) for t in tables], axis=0)
         i = int(np.argmax(mean_dti))
@@ -308,7 +308,7 @@ def main():
                                    search=[dict(t0=float(r[0]), thin=bool(r[1]), mean_dti=float(mean_dti[k]))
                                            for k, r in enumerate(tables[0])],
                                    note="floor+thin by pooled held-out mean DTI; src/submission_optim.py")
-        print(f"\npooled shaping: t0={t0b:.3f} thin={thinb} -> held-out DTI {mean_dti[i]:.4f} "
+        print(f"\npooled shaping: t0={t0b:.4g} thin={thinb} -> held-out DTI {mean_dti[i]:.4f} "
               f"(raw probabilities: {raw:.4f})")
 
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=1))
