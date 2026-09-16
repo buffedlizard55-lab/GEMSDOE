@@ -124,9 +124,13 @@ def main():
     ap.add_argument("--report", default=None, help="defaults to <out stem>_report.json")
     ap.add_argument("--shaping-grid", type=int, default=None, help="threshold count (default: config)")
     ap.add_argument("--weights", choices=["equal", "dti"], default="equal",
-                    help="fold averaging weights. 'dti' = softmax over each fold's best "
-                         "HELD-OUT shaped DTI (mirrors src/inference.py's ensemble_weights). "
-                         "A weak fold otherwise dilutes every good one; measured 2026-09-15 on the fixture.")
+                    help="fold averaging weights. 'dti' = softmax over each fold's best HELD-OUT "
+                         "shaped DTI. MEASURED 2026-09-15 on the real 512x512 fixture window: with "
+                         "2 folds a weak fold drowned the strong one and dti-weights helped "
+                         "(0.0143 -> 0.0984); with 6 folds per-fold DTI differences are crop-noise "
+                         "and dti-weights HURT (0.1033 -> 0.0656). Equal averaging is therefore the "
+                         "default for the 6-fold workflow; consider 'dti' only to exclude a known-"
+                         "catastrophic fold. Evidence: data/evidence/runs/local-mini-ensemble/.")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())

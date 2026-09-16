@@ -150,7 +150,7 @@ jobs:
             --config configs/config_ci_ensemble.yaml \
             --sample data/sample_submission.tif \
             --labels data/labels.tif \
-            --out submission.tif --report blend_report.json --weights dti 2>&1 | tee blend.log
+            --out submission.tif --report blend_report.json --weights equal 2>&1 | tee blend.log
 
       - name: Validate submission format
         run: python scripts/validate_submission.py --pred submission.tif \

@@ -26,12 +26,14 @@
    (`scripts/blend_submission.py`) and commits report + submission back to the branch.
    New regression tests (`tests/test_ensemble.py`); full suite **23/23 green** in-sandbox.
 
-4. **Measured improvement: fold-weighted blending.** On the sandbox 2-fold mini ensemble
-   over the real 512×512 fixture window, equal weights let a weak fold (held-out 0.049)
-   bury a strong one (0.150) under the shaping floor; softmax-over-held-out-DTI weights
-   (0.691/0.309) lifted the shaped submission's informational DTI from **0.0143 → 0.0984**
-   (above the 0.0955 blanket floor). `--weights dti` is now the workflow default.
-   Evidence: `data/evidence/runs/local-mini-ensemble/` (machine-generated reports).
+4. **Blend-weighting rule MEASURED, not assumed** (6-fold mini ensemble on the real
+   512×512 fixture window, sandbox): with **2** folds, equal weights let a weak fold
+   (held-out 0.049) bury a strong one (0.150) and softmax-over-held-out-DTI lifted the
+   blend 0.0143 → 0.0984; but with **6** folds the same weighting HURT
+   (equal 0.1033 vs weighted 0.0656) because per-fold held-out DTI differences on small
+   crops are noise and the softmax over-concentrates. Final rule: **equal averaging is
+   the workflow default**; `--weights dti` remains for excluding a known-catastrophic
+   fold. Evidence + full table: `data/evidence/runs/local-mini-ensemble/`.
 
 5. **Also fixed**: per-epoch shaping-table cost (scattered 12-window bbox → whole-raster
    EDTs; now a compact fault-bearing window run, `selection_mode: raw` for CPU folds);

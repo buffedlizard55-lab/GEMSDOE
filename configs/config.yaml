@@ -61,9 +61,11 @@ inference:
   tta: true                       # 8-way (4 rotations x flip), each inverted exactly
   threshold: null                 # submission is a probability raster, NOT a binary map
   blend_mode: gaussian
-  ensemble_weights: dti           # softmax over each model's held-out DTI (measured 2026-09-15:
-                                  # equal weights let a weak MC fold bury a strong one; the
-                                  # blend path showed 0.0143 -> 0.0984 with DTI weights)
+  ensemble_weights: null          # equal, like the reference solution. Measured 2026-09-15 on
+                                  # the fixture: DTI-softmax weights help only when folds differ
+                                  # CATASTROPHICALLY (2-fold toy 0.014->0.098) and HURT with 6
+                                  # folds (0.103->0.066: held-out-crop noise). See
+                                  # data/evidence/runs/local-mini-ensemble/README.md
   submission_shaping:             # null/absent -> use values calibrated in manifest.json
     t0: null                      # e.g. 0.35: probability floor applied before writing
     thin: null                    # distance-R dominating thinning (FP mass is an AREA sum)

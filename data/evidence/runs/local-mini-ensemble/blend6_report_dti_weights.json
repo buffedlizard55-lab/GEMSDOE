@@ -1,7 +1,7 @@
 {
- "generated_utc": "2026-09-16T00:30:36Z",
+ "generated_utc": "2026-09-16T00:30:55Z",
  "script": "scripts/blend_submission.py",
- "minutes": 0.34,
+ "minutes": 0.31,
  "n_folds": 6,
  "folds": [
   {
@@ -309,15 +309,22 @@
   ]
  },
  "probability_mass": {
-  "pre_shaping": 133122.2985219558,
-  "post_shaping": 7842.0,
-  "collapse_factor": 16.975554516954322
+  "pre_shaping": 136865.43859336784,
+  "post_shaping": 6167.0,
+  "collapse_factor": 22.193195815366927
  },
- "fold_weights": "equal",
+ "fold_weights": [
+  0.1478,
+  0.0659,
+  0.2072,
+  0.3601,
+  0.0552,
+  0.1637
+ ],
  "submission": {
-  "path": "outputs_mini6/sub_equal.tif",
-  "bytes": 21994,
-  "sha256": "f00ab4f7b3a4af6408db3a617e7cb2a76571aca935f0bbb49f117d65bb4df92f",
+  "path": "outputs_mini6/sub_dti.tif",
+  "bytes": 20346,
+  "sha256": "351dfd44eba09deca039844b2b657f5143d30abb9c6b458d5918553b58525a04",
   "grid": {
    "width": 512,
    "height": 512,
@@ -340,17 +347,17 @@
   },
   "finite_px": 261835,
   "total_px": 262144,
-  "nonzero_px": 7842,
+  "nonzero_px": 6167,
   "min": 0.0,
   "max": 1.0,
-  "mean": 0.029950158670544624
+  "mean": 0.023553000763058662
  },
  "local_score_vs_known": {
-  "dti_known_faults": 0.10326609256591363,
-  "TP_w": 587.3107577350218,
-  "FP_w": 7233.456003330384,
-  "FN_w": 4566.689242264978,
-  "closed_form": 0.10326609256591363,
+  "dti_known_faults": 0.06558538369889902,
+  "TP_w": 351.4959935863507,
+  "FP_w": 5829.327761650195,
+  "FN_w": 4802.504006413649,
+  "closed_form": 0.06558538369889902,
   "closed_form_matches": true,
   "blanket_ones_dti": 0.09550081915407606,
   "note": "scored against the PUBLIC known-fault raster \u2014 NOT the competition test set (private expert-labelled NEW faults). Optimistic AND wrong-universe: reported for pipeline monitoring only."
