@@ -1,0 +1,191 @@
+name: Train MC ensemble (parallel folds) + blend
+
+# =============================================================================
+# The competitive run that fits free CPU runners.  6 Monte-Carlo folds train in
+# PARALLEL (one model per fold: UNet++/DeepLabV3+/U-Net x resnet34 rotating across
+# folds; configs/config_ci_ensemble.yaml), each producing a full-raster raw
+# probability map (8-way TTA) plus its held-out calibration crop.  A final blend
+# job averages the six maps, runs ONE shaping pass calibrated on the POOLED
+# held-out DTI (docs/METRIC_STRATEGY.md), validates the format, scores the result
+# against the public known-fault raster for monitoring, commits everything back
+# to this branch (small files + report) and uploads submission.tif + models as an
+# artifact.
+#
+# Data path: the dev sandbox cannot reach Dropbox; runners can.  Same trick as
+# .github/workflows/train-and-submit.yml (fetch from the data-tab mirrors into
+# the runner's workspace).  Checkpoints stay in the artifact (14 d) - never in git.
+#
+# Timings are budgeted against measured CPU-runner rates (see the config comments);
+# training is time-guarded (training.max_minutes) so a job CANNOT expire without a
+# checkpoint.  On a GPU box use configs/config.yaml instead.
+# =============================================================================
+on:
+  workflow_dispatch:
+    inputs:
+      folds:
+        description: "JSON list of fold indices to run"
+        default: "[0,1,2,3,4,5]"
+  push:
+    branches: ["arena/**"]
+    paths: [".github/triggers/ensemble"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ensemble-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  fold:
+    name: fold ${{ matrix.fold }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        fold: ${{ fromJson(github.event.inputs.folds || '[0,1,2,3,4,5]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies (CPU torch)
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet -r requirements.txt
+
+      - name: Download competition data (data-tab Dropbox mirrors)
+        run: |
+          set -uo pipefail
+          mkdir -p data
+          dl () {
+            curl -fL --retry 3 --retry-delay 5 -o "data/$2" "$1" && echo "OK $2 $(stat -c%s data/$2) bytes" || echo "FAILED $2"
+          }
+          dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" training_features.tif
+          dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
+          dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
+          ls -lh data/
+          sha256sum data/*.tif | tee data/checksums.txt
+
+      - name: Pre-flight data validation
+        run: python scripts/prepare_data.py
+
+      - name: Train fold ${{ matrix.fold }}
+        run: |
+          python -m src.train --config configs/config_ci_ensemble.yaml \
+            --override training.mc_id=${{ matrix.fold }} 2>&1 \
+            | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee train.log
+
+      - name: Inference (raw, 8-way TTA) -> prob map
+        run: |
+          python -m src.inference --config configs/config_ci_ensemble.yaml --raw \
+            --out outputs/prob_raw.tif 2>&1 \
+            | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee inference.log
+
+      - name: Stage fold outputs
+        run: |
+          mkdir -p fold
+          cp -f outputs/prob_raw.tif outputs/manifest.json outputs/heldout_mc${{ matrix.fold }}.npz fold/
+          cp -f outputs/model_mc*.pt fold/ 2>/dev/null || true
+          cp -f outputs/norm_stats.json fold/ 2>/dev/null || true
+          cp -f train.log inference.log fold/ 2>/dev/null || true
+          ls -la fold/
+
+      - name: Upload fold artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fold-${{ matrix.fold }}
+          path: fold/
+          retention-days: 14
+
+  blend:
+    name: blend folds -> submission.tif
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: fold
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (numpy/rasterio/scipy/scikit-image only - no torch needed to blend)
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet numpy scipy rasterio scikit-image pyyaml
+
+      - name: Download fold artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fold-*
+          path: folds
+
+      - name: Download labels + sample grid (for validation and the informational score)
+        run: |
+          set -uo pipefail
+          mkdir -p data
+          dl () { curl -fL --retry 3 -o "data/$2" "$1" && echo "OK $2 $(stat -c%s data/$2)"; }
+          dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
+          dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
+          dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" training_features.tif
+
+      - name: Blend + shape + write submission
+        run: |
+          python scripts/blend_submission.py \
+            --folds folds/fold-*/ \
+            --config configs/config_ci_ensemble.yaml \
+            --sample data/sample_submission.tif \
+            --labels data/labels.tif \
+            --out submission.tif --report blend_report.json --weights equal 2>&1 | tee blend.log
+
+      - name: Validate submission format
+        run: python scripts/validate_submission.py --pred submission.tif \
+             --sample data/sample_submission.tif --train data/training_features.tif 2>&1 | tee validation.log
+
+      - name: Commit run report + submission to the branch
+        if: always()
+        run: |
+          set -uo pipefail
+          D="data/evidence/runs/${{ github.run_id }}"
+          mkdir -p "$D"
+          cp -f blend_report.json "$D/" 2>/dev/null || true
+          cp -f blend.log validation.log "$D/" 2>/dev/null || true
+          # the shaped submission is ~1 MB (float32 LZW, mostly zeros): committed so the
+          # sandbox and the repo owner can both use it without artifact access
+          cp -f submission.tif "$D/submission.tif" 2>/dev/null || true
+          for f in folds/fold-*/manifest.json; do
+            [ -f "$f" ] && cp -f "$f" "$D/$(basename "$(dirname "$f")").manifest.json" || true
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$D" || true
+          git diff --cached --quiet && echo "nothing to commit" || {
+            git commit -m "train(ensemble): run report ${{ github.run_id }} [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
+          }
+
+      - name: Upload final submission
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: submission-final-${{ github.run_id }}
+          path: |
+            submission.tif
+            blend_report.json
+            blend.log
+            validation.log
+          retention-days: 30

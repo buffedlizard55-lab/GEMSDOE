@@ -488,6 +488,52 @@ here as a negative result rather than dressed up.''')}"""]
             if r.get("score"):
                 body.append(f'<p><b>Full-raster score vs public labels:</b> '
                             f'<code>{e(r["score"].strip())}</code></p>')
+            b = r.get("blend")
+            if b:
+                shp = b.get("shaping", {})
+                sub = b.get("submission", {})
+                mass = b.get("probability_mass", {})
+                loc = b.get("local_score_vs_known") or {}
+                folds = ", ".join(f["dir"] for f in b.get("folds", []))
+                body.append(f"""<h4>Ensemble blend ({e(str(b.get('generated_utc', '')))})</h4>
+<table class="kv"><tbody>
+<tr><th>Folds blended</th><td>{b.get('n_folds', '—')} — <span class="mono small">{e(folds)}</span></td></tr>
+<tr><th>Pooled shaping</th><td>t0 = <b>{e(str(round(shp.get('t0', float('nan')), 3)))}</b>,
+  thin = <b>{e(str(shp.get('thin')))}</b> — mean held-out DTI
+  <b>{shp.get('mean_heldout_dti', float('nan')):.4f}</b> (unshaped {shp.get('unshaped_mean_heldout_dti', float('nan')):.4f})</td></tr>
+<tr><th>Probability mass</th><td>{mass.get('pre_shaping', 0):,.0f} → {mass.get('post_shaping', 0):,.0f}
+  (shaping compression ×{round(mass.get('collapse_factor') or 0, 1)})</td></tr>
+<tr><th>Fold weights</th><td>{e(str(b.get('fold_weights')))}</td></tr>
+<tr><th>Submission</th><td>{fmt_bytes(sub.get('bytes'))}, nonzero {sub.get('nonzero_px', 0):,} px,
+  sha256 <span class="mono small">{e(str(sub.get('sha256', ''))[:16])}…</span></td></tr>
+<tr><th>Info: DTI vs <em>known</em> faults</th><td>{loc.get('dti_known_faults', float('nan')):.4f}
+  (blanket-ones floor {loc.get('blanket_ones_dti', float('nan')):.4f}) — wrong-universe number, see caveat</td></tr>
+</tbody></table>""")
+                fold_rows = "".join(
+                    f'<tr><td>{e(fr["dir"])}</td><td>{e(", ".join(m or "?" for m in fr["models"]))}</td>'
+                    f'<td class="num">{", ".join(f"{d:.4f}" for d in fr["fold_best_dti"] if d is not None) or "—"}</td></tr>'
+                    for fr in b.get("folds", []))
+                if fold_rows:
+                    body.append('<table><thead><tr><th>Fold</th><th>Model(s)</th>'
+                                '<th>Best held-out shaped DTI</th></tr></thead>'
+                                f"<tbody>{fold_rows}</tbody></table>")
+                cal = shp.get("calibration_table") or []
+                if cal:
+                    best_t = shp.get("t0")
+                    best_th = shp.get("thin")
+                    crows = ""
+                    for row in cal:
+                        hl = ' class="hl"' if (row.get("t0") == best_t and row.get("thin") == best_th) else ""
+                        if row.get("t0") is None:
+                            tcell, thcell = "unshaped", "—"
+                        else:
+                            tcell, thcell = format(row["t0"], ".2f"), ("yes" if row["thin"] else "no")
+                        crows += ('<tr' + hl + '><td class="num">' + tcell + "</td><td>" + thcell
+                                  + '</td><td class="num">' + format(row["mean_dti"], ".4f") + "</td></tr>")
+                    body.append("<details><summary>Full shaping calibration table (highlighted row = chosen)</summary>"
+                                "<table><thead><tr><th>t0 floor</th><th>thin</th>"
+                                "<th>mean held-out DTI</th></tr></thead>"
+                                "<tbody>" + crows + "</tbody></table></details>")
     else:
         body.append(missing("Training run reports.", "GitHub Actions → “Train and build submission”"))
 
@@ -503,13 +549,18 @@ here as a negative result rather than dressed up.''')}"""]
 
 <h2>Next steps, in priority order</h2>
 <ol>
-<li><b>GPU training at full capacity</b> — <code>configs/config.yaml</code> (UNet++/DeepLabV3+/SegFormer
-    ensemble, EfficientNet-B5, 10 MC splits, 60 epochs, pretrained encoders). CPU runners cannot do
-    this inside the job limit.</li>
-<li><b>Aggressive output thinning</b>, guided by the measured dilation-cost curve on the Metric page.</li>
+<li><b>Parallel 6-fold ensemble on CPU runners</b> — implemented as the
+    <em>Train MC ensemble</em> workflow (<code>configs/config_ci_ensemble.yaml</code>:
+    UNet++ / DeepLabV3+ / U-Net × resnet34 at patch 256, 8-way TTA, pooled shaping calibration).
+    The first full run is the current frontier until a GPU exists.</li>
+<li><b>GPU training at full capacity</b> — <code>configs/config.yaml</code> (EfficientNet-B5, 10 MC
+    splits, 60 epochs, 4 architectures) remains the config to move to; a 24 GB card turns the
+    ~4 h CPU profile into under an hour and roughly doubles fold count.</li>
 <li><b>1 m DEM derivatives</b> from the 716 confirmed tiles — lineament and scarp signal at 100 m is
-    the most direct physical evidence of surface faulting.</li>
-<li><b>Ensemble + TTA</b>, already implemented, currently disabled in the smoke profile for time.</li>
+    the most direct physical evidence of surface faulting (code ready:
+    <code>src/external_data.py</code>, <code>scripts/download_dem_tiles.py</code>).</li>
+<li><b>Frangi line-enhancement A/B</b> on the blended map, and self-training with high-confidence
+    pseudo-labels — both proposed in <code>SUGGESTIONS.md</code>, not yet measured.</li>
 </ol>""")
     return page("Results", "results.html", "\n".join(body),
                 "Measured outcomes, including the ones that did not work.")
@@ -605,6 +656,11 @@ python scripts/validate_submission.py --pred submission.tif --sample data/sample
 # CPU, proves the pipeline on the real rasters
 python -m src.train --config configs/config_ci_smoke.yaml
 
+# CPU, ensemble: one fold (repeat per fold), raw map, then blend+shape across folds
+python -m src.train --config configs/config_ci_ensemble.yaml --override training.mc_id=0
+python -m src.inference --config configs/config_ci_ensemble.yaml --raw --out outputs/prob_raw.tif
+python scripts/blend_submission.py --folds outputs_f0 outputs_f1 ... --out submission.tif
+
 # In-sandbox, against the committed real-data fixture (no download needed)
 python -m src.fixture                                    # verify the fixture
 python -m src.train --config configs/config_fixture.yaml</code></pre>
@@ -622,8 +678,12 @@ python scripts/build_site.py              # rebuilds this site from the JSON abo
 <li><b>Fetch competition data</b> — downloads the files, measures them, OCRs the DEM PDF, resolves
 tiles against the USGS bucket, verifies every link, builds the dev fixture, and commits the evidence
 JSON back to the branch.</li>
-<li><b>Train and build submission</b> — runs train → inference → validation → scoring and uploads
-<code>submission.tif</code> as an artifact.</li>
+<li><b>Train and build submission</b> — single-job smoke: train → inference → validation → scoring,
+uploads <code>submission.tif</code> as an artifact.</li>
+<li><b>Train MC ensemble (parallel folds) + blend</b> — six fold jobs train one MC split each
+(<code>--override training.mc_id=F</code>) and blend the raw probability maps in a final job with one
+shaping pass calibrated on the pooled held-out DTI. Reports and the shaped submission are committed
+back to the branch under <code>data/evidence/runs/&lt;run_id&gt;/</code>.</li>
 </ul>
 
 <h2>Submitting</h2>
@@ -740,6 +800,7 @@ def main() -> int:
                 "summary": load(d / "run_summary.json") or {},
                 "history": load(d / "train_history.json"),
                 "score": score,
+                "blend": load(d / "blend_report.json"),
             })
 
     DOCS.mkdir(exist_ok=True)

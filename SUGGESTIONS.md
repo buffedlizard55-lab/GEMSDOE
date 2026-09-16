@@ -19,6 +19,27 @@
 | Semi-supervised / self-training on the region's unlabeled half | 🆕 **proposed next** — the metric's FP cost is area-proportional, so self-training with high-confidence pseudo-labels is the cheapest way to sharpen the background; run after the first GPU pass | analysis in `src/submission_optim.py` docstring |
 | Orientation-aware post-processing (faults in Walker Lane have preferred strikes) | 🆕 proposed: penalise sub-vertical/sub-horizontal thin lines by strike histogram; validate on held-out windows before trusting it | none yet — deliberately not implemented blind |
 
+## -2. Session 2026-09-15 — implemented + measured
+
+| Item | Status | Evidence |
+|---|---|---|
+| Scoring universe verified from sources | ✅ **verified** — both rounds score the NEW-fault set only (problem page + rules PDF §1.1 fetched this session); known-fault copy = trap, local DTI = plumbing monitor | `docs/METRIC_STRATEGY.md` §4 + `STATUS.md` session-3 |
+| Reference-solution cross-check | ✅ **verified** — 19/19 band descriptions of the acquired `gems-geodawn-numerical-features.tif` equal the reference notebook's executed output verbatim; grid/CRS/nodata match; notebook confirms `numeric_features.tif` name, min-max norm, cuda→mps→cpu device order | `STATUS.md`, comparison run in-session (fixture manifest carries the same tags with the `band_name - ` prefix) |
+| Parallel MC-ensemble on CPU runners | ✅ **implemented** — `train-ensemble.yml`: 6 fold jobs (one fold each, `training.mc_id`), blend job (`scripts/blend_submission.py`): nanmean + ONE pooled-shaping pass + validate + score + commit report and shaped `submission.tif` back to the branch | configs + workflow + `tests/test_ensemble.py` (23/23 suite green) |
+| Fold-weighted blending | ✅ **measured, nuance captured** — 2 folds: equal weights let a weak fold (0.049 held-out) bury a strong one (0.150), dti-softmax lifted the blend 0.0143 → 0.0984; 6 folds: dti-softmax HURT (0.1033 → 0.0656, crop-noise). **Equal is the workflow default**; `--weights dti` documented for catastrophic-fold exclusion | `data/evidence/runs/local-mini-ensemble/` (4 reports + README) |
+| Per-epoch shaping table cost at patch 256 | ✅ **fixed** — the search scored the bbox of 12 *scattered* held-out windows ≈ the whole raster (≈7 min/epoch of EDTs, CPU); now: `selection_mode: raw` per epoch + `_compact_window_subset` picks the smallest fault-bearing contiguous run for the crop the table IS run on | `src/train.py`, unit test in `tests/test_ensemble.py` |
+| `early_stopping_patience` implemented | ✅ **fixed** — was config-only, never read; now honoured on shaped/raw DTI, plus `training.max_minutes` wall-clock guard so a job CANNOT time out without saving its best checkpoint | `src/train.py` |
+| `pretrained: true` robustness | ✅ **fixed** — weight-download failure now warns and trains from scratch instead of crashing the fold | `src/models.py` |
+| Docs pseudo-URL `https://&hellip;` | ✅ fixed (audit now finds no uncatalogued hosts beyond notes) | `scripts/audit_docs.py` PASS |
+
+**Next (queued, in order):**
+1. Run the 6-fold ensemble workflow once GitHub auth is restored (push = trigger). Read its report from `data/evidence/runs/<id>/`, then iterate: fold count, epochs within budget, `shaping_grid` refinement (0.2–0.6 at 0.05 steps around the selected floor).
+2. ~~A/B `frangi_filter` at the blend step~~ **measured 2026-09-15: NEGATIVE on the fixture** (frangi ON: held-out 0.0991, calibration retreats to blanket; OFF: 0.1286, thin). Kept off; revisit only as a floor-gated residual on stronger models. `data/evidence/runs/local-mini-ensemble/AB_FRANGI.md`.
+3. Spatial block-holdout validation (train on two thirds by x, score the untouched third) as a harder proxy for the new-fault discovery regime than random MC windows; keep MC as the primary so numbers stay comparable to the reference.
+4. Self-training with high-confidence pseudo-labels after the first real ensemble (background sharpening; FP mass is area-proportional).
+5. 1 m DEM derivatives (code ready) on the GPU box; pretrain-on-external-GeoDAWN-regions idea needs a band-mapping plan first — flagged, not started.
+6. Human-only steps: DrivenData account + submit (3/week limit), report the `example_submission.tif` == labels anomaly on the forum, flip Pages source to "GitHub Actions".
+
 ## 0. Priority code fixes queued from E2E verification (2026-09-12)
 
 1. **Test-region leakage in `make_patches`** (src/dataset.py): training windows partially overlapping held-out test patches are kept; reference solution zeroes test regions GLOBALLY before patching. Fix: apply a global boolean test mask before sliding-window extraction. Priority HIGH (affects trust in local DTI).

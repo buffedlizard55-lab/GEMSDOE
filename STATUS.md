@@ -1,4 +1,73 @@
-# Project status — 2026-09-14
+# Project status — 2026-09-15 (session 3)
+
+## What changed this session
+
+1. **Strategic fact re-verified from the official page** (fetched 2026-09-15, verbatim):
+   both prize rounds score against the set of **newly-labelled** faults — Phase 1 against
+   "a privately withheld subset of the original new fault dataset compiled by expert
+   reviewers", Phase 2 against "the full, revised new fault dataset" (rules PDF §1.1,
+   <https://docs.nlr.gov/docs/fy26osti/96647.pdf>). The public `existing_faults.tif` is
+   training data, NOT the scoring target. `docs/METRIC_STRATEGY.md` §4 now states the
+   consequence: copying the known-fault raster (which scores 0.9999 against itself) is a
+   trap, and every local DTI number is a plumbing monitor, not a leaderboard proxy.
+
+2. **Reference solution cross-verification (new, line-by-line)**: fetched the official
+   reference notebook and compared its executed output against our runner-measured
+   evidence: **19/19 band descriptions in `gems-geodawn-numerical-features.tif` match the
+   notebook output exactly** (names, order, wording), CRS/resolution/nodata/shape agree,
+   and the notebook confirms `numeric_features.tif` naming + plain min-max normalisation +
+   device-fallback order. This independently ties our acquired files to the official ones.
+
+3. **The parallel ensemble pipeline is implemented and locally exercised**:
+   `configs/config_ci_ensemble.yaml` + `.github/workflows/train-ensemble.yml` run 6 MC
+   folds as 6 parallel CPU jobs (UNet++/DeepLabV3+/U-Net × resnet34 @ patch 256, 8-way
+   TTA, time-guarded so a checkpoint always exists), then a blend job averages the raw
+   fold maps, shapes ONCE with the pooled held-out (t0, thin) calibration
+   (`scripts/blend_submission.py`) and commits report + submission back to the branch.
+   New regression tests (`tests/test_ensemble.py`); full suite **23/23 green** in-sandbox.
+
+4. **Blend-weighting rule MEASURED, not assumed** (6-fold mini ensemble on the real
+   512×512 fixture window, sandbox): with **2** folds, equal weights let a weak fold
+   (held-out 0.049) bury a strong one (0.150) and softmax-over-held-out-DTI lifted the
+   blend 0.0143 → 0.0984; but with **6** folds the same weighting HURT
+   (equal 0.1033 vs weighted 0.0656) because per-fold held-out DTI differences on small
+   crops are noise and the softmax over-concentrates. Final rule: **equal averaging is
+   the workflow default**; `--weights dti` remains for excluding a known-catastrophic
+   fold. Evidence + full table: `data/evidence/runs/local-mini-ensemble/`.
+
+5. **Also fixed**: per-epoch shaping-table cost (scattered 12-window bbox → whole-raster
+   EDTs; now a compact fault-bearing window run, `selection_mode: raw` for CPU folds);
+   `early_stopping_patience` was configured but never implemented — it is now;
+   `pretrained: true` now degrades to a warning instead of crashing;
+   `src/inference.py` gained `--raw` and `--override`; audit_docs now passes on the
+   formerly pseudo-URL `&hellip;` links in LIMITATIONS.md.
+
+## GitHub auth blocker — RESOLVED, ensemble run now live (2026-09-15, session 3 addendum)
+
+The expired `GH_TOKEN` from earlier this session was reconnected. Consequences, in order:
+
+1. `git push origin arena/01a0a738-gemsdoe` succeeded (remote branch was created).
+2. **PR #10 opened** against `main` for the six session-3 commits, incl. the reviewer note
+   that open PR #9's three defect fixes (fpw leak on un-zeroed labels, unreachable shaping
+   floor, `in_channels=10` default) are *not* in this branch — verified by inspection:
+   `src/dataset.py` still computes `fp_src = (yp > 0.5)` before the zeroing, and
+   `src/submission_optim.py` still uses `np.linspace(0.02, 0.9, 45)`.
+3. The push touched `.github/triggers/ensemble`, so **workflow run 35042805806 auto-started**
+   ("Train MC ensemble (parallel folds) + blend"): all 6 fold jobs `in_progress`. On success
+   the blend job commits `data/evidence/runs/35042805806/` (blend_report.json,
+   validation.log, submission.tif) back to this branch; the artifact `submission-final-*`
+   is the file to upload to DrivenData (3 submissions/week limit). Numbers are informational
+   monitors vs public labels, not leaderboard proxies (see §1 above).
+
+Caveat while reviewing the run: it trains the code *with* the fpw leak (#9 not merged), so
+fold-selection DTI is optimistic by the sliver effect #9 quantifies; relative fold ordering
+is expected to survive but treat selection accordingly until #9 lands.
+Human-only steps unchanged: DrivenData account + upload; optional Settings→Pages→"GitHub
+Actions" flip; forum report for the example_submission.tif == labels anomaly.
+
+---
+
+# Project status — 2026-09-14 (superseded below where it conflicts with the above)
 
 Supersedes the earlier note that read *"the single remaining blocker to training is data
 placement."* **That blocker is resolved.** The data was acquired, verified and used.

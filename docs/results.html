@@ -24,6 +24,30 @@
 It is <b>not yet competitive</b>. The only full-scale run so far was a 2-epoch MobileNetV2 smoke test
 on a CPU runner, and it scored <em>below</em> the trivial blanket-coverage baseline. That is recorded
 here as a negative result rather than dressed up.</div>
+<h3>Run <code>local-mini-ensemble</code></h3>
+<table class="kv"><tbody>
+<tr><th>Profile</th><td>sandbox calibration (NOT a GitHub run): 2 folds x 20 epochs on data/fixture, resnet34, pretrained=false</td></tr>
+<tr><th>Runner</th><td>dev sandbox (2 vCPU, CPU-only)</td></tr>
+<tr><th>Commit</th><td class="mono small"></td></tr>
+<tr><th>Submission</th><td>—,
+  sha256 <span class="mono small">…</span></td></tr>
+</tbody></table>
+<h4>Ensemble blend (2026-09-16T00:30:36Z)</h4>
+<table class="kv"><tbody>
+<tr><th>Folds blended</th><td>6 — <span class="mono small">outputs_e0, outputs_e1, outputs_e2, outputs_e3, outputs_e4, outputs_e5</span></td></tr>
+<tr><th>Pooled shaping</th><td>t0 = <b>0.46</b>,
+  thin = <b>True</b> — mean held-out DTI
+  <b>0.1286</b> (unshaped 0.0883)</td></tr>
+<tr><th>Probability mass</th><td>133,122 → 7,842
+  (shaping compression ×17.0)</td></tr>
+<tr><th>Fold weights</th><td>equal</td></tr>
+<tr><th>Submission</th><td>21.5 KB, nonzero 7,842 px,
+  sha256 <span class="mono small">f00ab4f7b3a4af64…</span></td></tr>
+<tr><th>Info: DTI vs <em>known</em> faults</th><td>0.1033
+  (blanket-ones floor 0.0955) — wrong-universe number, see caveat</td></tr>
+</tbody></table>
+<table><thead><tr><th>Fold</th><th>Model(s)</th><th>Best held-out shaped DTI</th></tr></thead><tbody><tr><td>outputs_e0</td><td>model_mc0_unetplusplus_resnet34.pt</td><td class="num">0.1497</td></tr><tr><td>outputs_e1</td><td>model_mc1_deeplabv3plus_resnet34.pt</td><td class="num">0.0488</td></tr><tr><td>outputs_e2</td><td>model_mc2_unet_resnet34.pt</td><td class="num">0.1919</td></tr><tr><td>outputs_e3</td><td>model_mc3_unetplusplus_resnet34.pt</td><td class="num">0.2610</td></tr><tr><td>outputs_e4</td><td>model_mc4_deeplabv3plus_resnet34.pt</td><td class="num">0.0266</td></tr><tr><td>outputs_e5</td><td>model_mc5_unet_resnet34.pt</td><td class="num">0.1625</td></tr></tbody></table>
+<details><summary>Full shaping calibration table (highlighted row = chosen)</summary><table><thead><tr><th>t0 floor</th><th>thin</th><th>mean held-out DTI</th></tr></thead><tbody><tr><td class="num">unshaped</td><td>—</td><td class="num">0.0883</td></tr><tr><td class="num">0.02</td><td>no</td><td class="num">0.1011</td></tr><tr><td class="num">0.02</td><td>yes</td><td class="num">0.0344</td></tr><tr><td class="num">0.11</td><td>no</td><td class="num">0.0967</td></tr><tr><td class="num">0.11</td><td>yes</td><td class="num">0.0255</td></tr><tr><td class="num">0.20</td><td>no</td><td class="num">0.0968</td></tr><tr><td class="num">0.20</td><td>yes</td><td class="num">0.0331</td></tr><tr><td class="num">0.28</td><td>no</td><td class="num">0.0971</td></tr><tr><td class="num">0.28</td><td>yes</td><td class="num">0.0533</td></tr><tr><td class="num">0.37</td><td>no</td><td class="num">0.0976</td></tr><tr><td class="num">0.37</td><td>yes</td><td class="num">0.0717</td></tr><tr><td class="num">0.46</td><td>no</td><td class="num">0.1031</td></tr><tr class="hl"><td class="num">0.46</td><td>yes</td><td class="num">0.1286</td></tr><tr><td class="num">0.55</td><td>no</td><td class="num">0.0977</td></tr><tr><td class="num">0.55</td><td>yes</td><td class="num">0.1023</td></tr><tr><td class="num">0.64</td><td>no</td><td class="num">0.0414</td></tr><tr><td class="num">0.64</td><td>yes</td><td class="num">0.0453</td></tr><tr><td class="num">0.72</td><td>no</td><td class="num">0.0391</td></tr><tr><td class="num">0.72</td><td>yes</td><td class="num">0.0395</td></tr><tr><td class="num">0.81</td><td>no</td><td class="num">0.0334</td></tr><tr><td class="num">0.81</td><td>yes</td><td class="num">0.0238</td></tr><tr><td class="num">0.90</td><td>no</td><td class="num">0.0293</td></tr><tr><td class="num">0.90</td><td>yes</td><td class="num">0.0206</td></tr></tbody></table></details>
 <h3>Run <code>34876843912</code></h3>
 <table class="kv"><tbody>
 <tr><th>Profile</th><td>smoke</td></tr>
@@ -46,17 +70,22 @@ here as a negative result rather than dressed up.</div>
 
 <h2>Next steps, in priority order</h2>
 <ol>
-<li><b>GPU training at full capacity</b> — <code>configs/config.yaml</code> (UNet++/DeepLabV3+/SegFormer
-    ensemble, EfficientNet-B5, 10 MC splits, 60 epochs, pretrained encoders). CPU runners cannot do
-    this inside the job limit.</li>
-<li><b>Aggressive output thinning</b>, guided by the measured dilation-cost curve on the Metric page.</li>
+<li><b>Parallel 6-fold ensemble on CPU runners</b> — implemented as the
+    <em>Train MC ensemble</em> workflow (<code>configs/config_ci_ensemble.yaml</code>:
+    UNet++ / DeepLabV3+ / U-Net × resnet34 at patch 256, 8-way TTA, pooled shaping calibration).
+    The first full run is the current frontier until a GPU exists.</li>
+<li><b>GPU training at full capacity</b> — <code>configs/config.yaml</code> (EfficientNet-B5, 10 MC
+    splits, 60 epochs, 4 architectures) remains the config to move to; a 24 GB card turns the
+    ~4 h CPU profile into under an hour and roughly doubles fold count.</li>
 <li><b>1 m DEM derivatives</b> from the 716 confirmed tiles — lineament and scarp signal at 100 m is
-    the most direct physical evidence of surface faulting.</li>
-<li><b>Ensemble + TTA</b>, already implemented, currently disabled in the smoke profile for time.</li>
+    the most direct physical evidence of surface faulting (code ready:
+    <code>src/external_data.py</code>, <code>scripts/download_dem_tiles.py</code>).</li>
+<li><b>Frangi line-enhancement A/B</b> on the blended map, and self-training with high-confidence
+    pseudo-labels — both proposed in <code>SUGGESTIONS.md</code>, not yet measured.</li>
 </ol>
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-15 04:15 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-16 01:10 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>

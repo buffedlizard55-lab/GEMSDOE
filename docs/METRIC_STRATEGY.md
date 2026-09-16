@@ -105,6 +105,12 @@ consistently selects `thin=True`.
   (<https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#competition-structure>).
   The *shape* of the metric is identical, so the strategic conclusions transfer; the
   absolute values do not.
+- Consequently the tempting "submit the known-fault raster itself" move (the 0.99993 row
+  above) is a **trap**: re-verified against the problem page on 2026-09-15, both prize
+  rounds score against *new* fault labels only, so a verbatim copy of the public database
+  would earn almost no TP in the Initial Round (only where new faults happen to run near
+  known ones) while adding nothing for the Final Round either. The row is kept as a
+  calibration of the scorer, not as a strategy.
 - `|G|`, and therefore the `0.8·|G|` floor, is set by the hidden test set and is unknown.
 - ε in the denominator is not specified on the problem page; we use 1e-7. Irrelevant at
   these magnitudes but recorded for exactness.

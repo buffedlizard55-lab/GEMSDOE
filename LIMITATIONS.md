@@ -112,9 +112,26 @@ official data-tab files via `scripts/download_competition_data.sh`.
 ### 1e. Code-vs-docs discrepancies found during E2E (2026-09-12)
 
 - docs claimed torchvision augmentations in the training loop — **not implemented** in `src/train.py` (FaultDataset transform is a no-op placeholder). Docs corrected; augmentation remains a next-step.
+  **Resolved 2026-09-13:** label-consistent numpy crop/flips/rot90/noise in `FaultDataset`, regression-tested (`test_augmentation_is_label_consistent`).
 - `make_patches` keeps training windows that partially overlap held-out test regions (only fully-covered windows are excluded) → mild CV leakage vs the reference solution's global test-region zeroing. Flagged; fix queued in SUGGESTIONS §.
+  **Resolved (verified 2026-09-15 by re-reading `src/dataset.py:make_patches`):** the test mask now zeros both X and y globally *before* train windows are extracted, and windows >25 % covered by test are skipped; regression-tested by `test_patches_have_no_label_leakage`.
 - `pretrained: true` configs cannot fetch encoder weights from this sandbox (release-asset host blocked); sandbox runs use `pretrained: false`. On an unrestricted machine `configs/config.yaml` works as-is.
 - 3-epoch CPU smoke model ≈ constant-prediction baseline (DTI 0.0519 vs 0.0524) — honest result; not evidence of model quality.
+
+### 1f-2. Sandbox re-test + auth status (2026-09-15, this session)
+
+| Probe (2026-09-15T00:0xZ) | Result |
+|---|---|
+| github.com / api.github.com (bare GET) | 200 — HTML of the repo/API root via the egress proxy |
+| pypi.org / files.pythonhosted.org | ✅ full installs work (torch 2.14.0+cu130 wheel from PyPI installed in `.venv`) |
+| download.pytorch.org/whl/cpu | ❌ TLS dropped (use PyPI default wheels instead) |
+| raw.githubusercontent.com (direct) | ❌ exit 35 |
+| codeload.github.com tarballs | ❌ now returns a 404 stub through the proxy (was 200 on 2026-09-12) |
+| www.dropbox.com / drivendata.org | ❌ exit 35 (unchanged) |
+| `gh api` reads | ✅ for the first ~30 min, then **"Bad credentials"** — the Arena session `GH_TOKEN` expired mid-session again; `git push` → `Invalid username or token` |
+| `fetch_page` (harness-side, not sandbox network) | ✅ reaches drivendata/NLR/GitHub — used this session to verbatim-verify the metric formulas, submission format, rules §1.1/§3.2 and the reference notebook's band table (19/19 match) |
+
+**Impact:** the parallel-ensemble work is committed on the local branch (`arena/01a0a738-gemsdoe`, 2 commits) but cannot be pushed until GitHub is reconnected in Arena; until then the 6-fold workflow cannot be dispatched. No other route exists from this sandbox (verified again above). Owner action: reconnect GitHub → `git push origin arena/01a0a738-gemsdoe` (or re-run this session) and the run starts automatically (the push touches `.github/triggers/ensemble`).
 
 ### 1f. Dropbox mirror fetch notes (2026-09-12)
 - Dropbox `scl/fi` links carry a short-lived `st` signature; it expired mid-capture of `Digital-elevation-model-links-JSON.pdf` (chunk 1/13 fetched, rest failed). The durable form is `rlkey` + `dl=1` (used in `scripts/download_competition_data.sh`).
@@ -189,9 +206,9 @@ for the repo owner:
    audit's new link check enforces it.
 4. The audit gate grew from three checks to five (published tables vs artifacts; site link targets),
    each falsification-tested.
-5. **Owner action, not code:** `GET /repos/&hellip;/pages` reports `build_type: legacy`, source `main`, path
+5. **Owner action, not code:** `GET /repos/buffedlizard55-lab/GEMSDOE/pages` reports `build_type: legacy`, source `main`, path
    `/`, yet the successful `deploy-pages` job means the artifact (which uploads `docs/`) is what is
-   currently live &mdash; `https://&hellip;/GEMSDOE/` now serves `docs/index.html` and `https://&hellip;/GEMSDOE/docs/...`
+   currently live &mdash; `https://buffedlizard55-lab.github.io/GEMSDOE/` now serves `docs/index.html` and `https://buffedlizard55-lab.github.io/GEMSDOE/docs/...`
    returns 404. Both builders are therefore racing on every push to `main`. Pick one: set
    **Settings &rarr; Pages &rarr; Source: GitHub Actions** (recommended; the workflow already uploads `docs/`),
    or remove the `deploy` job and let Jekyll build the repo root. Nothing in the repo can settle this
