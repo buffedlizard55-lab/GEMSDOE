@@ -287,3 +287,24 @@ with a 6-hour job limit. Consequences actually observed:
    official grid is the only place where a committed submission and the official label raster overlap
    locally. The 6-fold A/B runs on the runner over all six held-out crops, but the absolute numbers in
    `data/evidence/shift_robustness.json` are single-window and are reported as such.
+
+---
+
+## 7. Session-6 re-verification notes (2026-09-16, ~19:5xZ)
+
+- **Pages config re-checked via API:** still `build_type: legacy`, source `main` `/`. The root
+  `index.html` redirect remains the live mechanism; the legacy-vs-Actions race from §3.5 is still
+  open and still needs the owner setting flip. Not changed by this session.
+- **Test count corrected:** §3 says 37/37; the suite had 38 tests on arrival (all passing) and has
+  **46** after this session's 8 regression tests. Until the sibling branch's Tests workflow merges,
+  the count is enforced only by whoever runs pytest — the workflow will enforce it in CI.
+- **A second session is active on `arena/01a0ab54-gemsdoe`** (verify/links/site pipeline, Tests
+  workflow — green since run 35142395935). This session reviewed its diff and deliberately left its
+  files alone (verify_links, verify_rules_quotes, build_index URL guard, audit count check,
+  workflows/tests.yml); the one shared-file edit here (`_scoring_universe`, different hunk) is
+  flagged in STATUS §7 with merge instructions.
+- **Reblend A/B still running:** run 35133590776 (`blend` job since 18:18Z) executes pre-session-6
+  code — its floor/dilate verdicts stand, its `weight_rule_gain` must be disregarded (STATUS §7).
+- **Dependency audit:** `requirements.txt` lists `scikit-learn` and `matplotlib`, imported nowhere
+  in `src/`/`scripts/`/`tests/` (verified by grep); harmless dead weight, left in place.
+  `requirements.verified.txt` remains the install that was actually exercised here.

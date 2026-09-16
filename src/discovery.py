@@ -110,11 +110,14 @@ def candidate_new_faults(pred: np.ndarray, known: np.ndarray, R: int = 3,
                           length_px=int(max(ys.max() - ys.min(), xs.max() - xs.min()) + 1)))
     boxes.sort(key=lambda b: -b["px"])
     novel_px = int(novel_sizes[novel_sizes >= int(min_px)].sum()) if novel_ids.size else 0
+    # the size list is derived from the same largest-first boxes the report shows, so the two
+    # fields cannot disagree (they used to: boxes were largest-first while this list was the
+    # last 25 component ids in label order, unfiltered by min_px — fixed 2026-09-16, session 6)
     return dict(threshold=float(thr), positive_px=int(pos.sum()), n_components=int(n),
                 n_novel_components=int(keep.size), novel_px=novel_px,
                 novel_px_fraction=float(novel_px / int(pos.sum())) if pos.sum() else None,
                 largest_novel_px=int(novel_sizes.max()) if novel_sizes.size else 0,
-                novel_bboxes=boxes[:25], novel_component_px=sorted(novel_sizes.tolist()[-25:]))
+                novel_bboxes=boxes[:25], novel_component_px=[b["px"] for b in boxes[:25]])
 
 
 def discovery_report(pred: np.ndarray, known: np.ndarray, R: int = 3,

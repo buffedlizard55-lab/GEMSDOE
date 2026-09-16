@@ -12,7 +12,13 @@ from rasterio.transform import from_origin
 from pathlib import Path
 import argparse
 
-def generate_dummy(out_path, sample_path=None, train_path=None, width=1000, height=1000):
+def generate_dummy(out_path, sample_path=None, train_path=None, width=1000, height=1000,
+                   seed=42):
+    # A dummy submission is still a pipeline artefact: seed the RNG so two runs produce the
+    # same file (rules §3.2/§3.5 reproducibility).  Pass --seed -1 for a non-reproducible draw.
+    # (Seed added 2026-09-16, session 6; previously every invocation differed silently.)
+    if seed is not None and int(seed) >= 0:
+        np.random.seed(int(seed))
     # Try to use sample or train as template
     template = None
     if sample_path and Path(sample_path).exists():
@@ -81,5 +87,7 @@ if __name__ == "__main__":
     parser.add_argument("--train", default="data/training_features.tif")
     parser.add_argument("--width", type=int, default=1000)
     parser.add_argument("--height", type=int, default=1000)
+    parser.add_argument("--seed", type=int, default=42,
+                        help="RNG seed for the fake faults (default 42; -1 = unseeded)")
     args = parser.parse_args()
-    generate_dummy(args.out, args.sample, args.train, args.width, args.height)
+    generate_dummy(args.out, args.sample, args.train, args.width, args.height, seed=args.seed)

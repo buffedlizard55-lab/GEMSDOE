@@ -413,14 +413,28 @@ quotation.""" % PROB)
         f'<td>“{e(q["quote"])}”</td>'
         f'<td class="num">{"✔" if q.get("exact_match") else "✘"}</td></tr>'
         for q in rq["quotes"])
-    v = rq.get("verification", {})
-    badge = note("ok", f"""<b>{v.get('exact_matches', 0)}/{v.get('quotes_checked', 0)} quoted
-sentences verified verbatim</b> against <code>{e(rq['document']['canonical_url'])}</code>
-(sha256 <span class="mono small">{e(str(rq['document']['retrieved_via'].get('sha256', ''))[:16])}…</span>,
-retrieved {e(rq['generated_utc'])}).
-Method: {e(v.get('method', ''))}.""") if v.get("all_verified") else note(
-        "warn", f"Quotation verification is INCOMPLETE ({v.get('exact_matches', 0)}/"
-                f"{v.get('quotes_checked', 0)}). Do not rely on the table below until it is fixed.")
+    # Schema note (fixed 2026-09-16, session 6): this badge used to read the keys
+    # `verification` / `document`, which scripts/verify_rules_quotes.py has not written since the
+    # report was reshaped to `summary` / `source` — so every build since then printed
+    # "INCOMPLETE (0/0)" next to a table of 19 verified quotes, contradicting the overview page
+    # that reads the same file correctly.  Read the current schema; fall back to counting the
+    # quotes themselves if `summary` is ever absent, so the badge degrades to a recount, never
+    # to a false 0/0 again.
+    s = rq.get("summary") or {}
+    src = rq.get("source") or rq.get("document", {})
+    n_quotes = int(s.get("n_quotes") or len(rq["quotes"]))
+    n_found = int(s.get("n_found", sum(1 for q in rq["quotes"] if q.get("exact_match"))))
+    all_ok = bool(s.get("all_found", n_found == n_quotes and n_quotes > 0))
+    doc_url = str(src.get("canonical_url") or src.get("url") or "")
+    if not doc_url.startswith("http"):
+        doc_url = RULES            # a local extraction path is not a link (cf. build_index)
+    badge = note("ok", f"""<b>{n_found}/{n_quotes} quoted
+sentences verified verbatim</b> against <code>{e(doc_url)}</code>
+(sha256 <span class="mono small">{e(str(src.get("sha256", ""))[:16])}…</span>,
+retrieved {e(rq["generated_utc"])}).
+Method: {e(rq.get("method", ""))}.""") if all_ok else note(
+        "warn", f"Quotation verification is INCOMPLETE ({n_found}/"
+                f"{n_quotes}). Do not rely on the table below until it is fixed.")
     return head + badge + f"""<table><thead><tr><th>id</th><th>section</th><th>verbatim quotation</th>
 <th>verified</th></tr></thead><tbody>{rows}</tbody></table>""" + note("warn", """<b>Consequence for
 everything else in this repository.</b> A model that reproduces <code>labels.tif</code> perfectly scores
