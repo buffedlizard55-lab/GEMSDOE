@@ -196,6 +196,13 @@ def main():
     q = optimize_submission(mean, R=R, t0=t0b, thin=bool(thinb), hard=True, gamma=1.0)
     q = np.clip(q, 0.0, 1.0).astype(np.float32)
     post_mass = float(q[~allnan].sum())
+    if post_mass <= 0.0:
+        # Observed failure mode (fixture A/B, 2026-09-15): a pre-transform that flattens
+        # the map can drive EVERY pixel under the calibrated floor -> an all-zero
+        # submission (DTI 0).  Never write that silently; fail the step loudly instead.
+        raise SystemExit("BLEND ABORTED: shaping collapsed the map to all zeros "
+                         f"(t0={t0b:.3f}, thin={bool(thinb)}, mean mass {pre_mass:.0f}). "
+                         "A pre-transform likely changed the distribution outside calibration.")
     q[allnan] = np.nan                                        # spec: outside bounds null/nan
 
     # write on the sample grid when given, else on the fold grid (identical by spec;

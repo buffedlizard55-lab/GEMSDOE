@@ -123,3 +123,32 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
     assert 0.0 <= loc["dti_known_faults"] <= 1.0
     # the blended+shaped map should beat the all-zeros baseline on this toy gt
     assert loc["TP_w"] > 0.0
+
+
+def test_blend_refuses_all_zero_submission(tmp_path):
+    """Guard added 2026-09-15: if shaping collapses the whole map (a failure mode seen
+    when a pre-transform flattens the distribution), the blend must FAIL LOUDLY,
+    never write an empty submission."""
+    H = W = 64
+    gt = np.zeros((H, W), np.float32)
+    for k in range(8, 56):
+        gt[k, k] = 1.0
+    fd = tmp_path / "fold-flat"
+    fd.mkdir()
+    flat = np.full((H, W), 0.01, np.float32)          # every pixel below every floor
+    _write_tif(fd / "prob_raw.tif", flat)
+    np.savez_compressed(fd / "heldout_mc0.npz", pred=flat.astype(np.float16),
+                        gt=gt.astype(np.uint8))
+    (fd / "manifest.json").write_text(json.dumps({"models": [{"file": "m.pt", "dti": 0.01}]}))
+    _write_tif(tmp_path / "labels.tif", gt)
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("""
+training: {alpha: 0.2, beta: 0.8}
+metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-7}
+""")
+    r = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "blend_submission.py"),
+         "--folds", str(fd), "--config", str(cfg), "--labels", str(tmp_path / "labels.tif"),
+         "--out", str(tmp_path / "sub.tif"), "--report", str(tmp_path / "rep.json")],
+        capture_output=True, text=True, timeout=600)
+    assert r.returncode != 0 and "collapsed" in (r.stderr + r.stdout), "all-zero submission must abort the blend"
