@@ -95,6 +95,22 @@ def test_candidate_new_faults_are_the_components_away_from_the_catalog():
     assert candidate_new_faults(pred3, cat, R=R, thr=0.5, min_px=1)["n_novel_components"] == 1
 
 
+def test_novel_component_px_matches_bboxes_largest_first():
+    """Regression (session 6): novel_bboxes is largest-first and min_px-filtered, but
+    novel_component_px used to be the last 25 component ids in label order, unfiltered —
+    the two fields could disagree.  Both now derive from the same boxes."""
+    cat = _blob((60, 60), 30, 5, h=1, w=10)
+    pred = np.zeros((60, 60), np.float32)
+    pred[5, 40:52] = 1.0                                     # 12 px discovery
+    pred[10, 40:46] = 1.0                                    # 6 px discovery
+    pred[15, 40:42] = 1.0                                    # 2 px speckle (below min_px)
+    out = candidate_new_faults(pred, cat, R=R, thr=0.5, min_px=3)
+    assert out["novel_component_px"] == [b["px"] for b in out["novel_bboxes"]]
+    assert out["novel_component_px"] == [12, 6]
+    assert out["novel_component_px"] == sorted(out["novel_component_px"], reverse=True)
+    assert sum(out["novel_component_px"]) == out["novel_px"]
+
+
 def test_discovery_report_is_json_safe_and_separates_the_two_universes():
     cat = _blob((50, 50), 25, 5, h=1, w=20)
     copycat = cat.copy()                       # perfect catalog reproduction ...

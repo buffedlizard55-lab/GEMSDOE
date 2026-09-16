@@ -88,7 +88,7 @@ def load_folds(fold_dirs: list[str]):
 
 def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None,
                       dilate_options=(0,)):
-    """Pooled held-out search over (t0, thin, dilate). Returns (t0*, thin*, mean_dti*, table).
+    """Pooled held-out search over (t0, thin, dilate). Returns (t0*, thin*, mean_dti*, table, dilate*).
 
     Each fold contributes DTI(shaped fold-model crop, fold gt crop); the chosen point
     maximises the MEAN over folds.  The raw (unshaped) mean is reported too so the
@@ -107,15 +107,19 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
     """
     usable = [f for f in folds if f["pred_crop"] is not None]
     if not usable:
-        return 0.3, True, float("nan"), []
+        # five values, like the success path: callers unpack (t0, thin, mean, table, dilate)
+        # and a 4-tuple here used to crash them (fixed 2026-09-16, session 6)
+        return 0.3, True, float("nan"), [], 0
     dilate_options = tuple(int(d) for d in dilate_options) or (0,)
     if pre is not None:
         # the FULL map gets `pre` before shaping, so calibration must see the same
         # transform on the fold crops - otherwise the floor is fitted to a different
         # distribution than the one it will be applied to (found by A/B, 2026-09-15:
         # post-Frangi calibration changed the whole outcome).
-        for f in usable:
-            f["pred_crop"] = pre(f["pred_crop"])
+        # Copy-on-transform, never mutate: the same fold dicts are scored again by
+        # loo_aggregation, and mutating them here applied `pre` TWICE with
+        # --calibrate loo (fixed 2026-09-16, session 6).
+        usable = [dict(f, pred_crop=pre(f["pred_crop"])) for f in usable]
     table = []
     raw_mean = float(np.mean([_dti(f["pred_crop"], f["gt_crop"], R, alpha, beta)
                               for f in usable]))
@@ -159,17 +163,6 @@ def _dti(pred, gt, R, alpha, beta):
     return float(_gt_ctx(gt, R).score(pred, alpha=alpha, beta=beta))
 
 
-def _weighted_mean(preds, ws):
-    """NaN-aware weighted mean of same-shaped crops (weights need not sum to 1)."""
-    stack = np.stack(preds).astype(np.float64)
-    w = np.asarray(ws, dtype=np.float64)
-    valid = ~np.isnan(stack)
-    num = np.tensordot(w, np.where(valid, stack, 0.0), axes=1)
-    den = np.tensordot(w, valid.astype(np.float64), axes=1)
-    out = np.where(den > 0, num / np.maximum(den, 1e-12), np.nan)
-    return out.astype(np.float32)
-
-
 def loo_aggregation(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None,
                     dilate_options=(0,)):
     """Leave-one-fold-out audit of the aggregation step itself.
@@ -180,9 +173,17 @@ def loo_aggregation(folds, R: int, thresholds: np.ndarray, alpha: float, beta: f
     estimate of what the procedure buys on an unseen fold; the gap to the pooled number is
     the optimism.  A per-fold "best on itself" row is included as an oracle ceiling.
 
-    Fold weights are audited the same way: softmax weights fitted on the other folds (the
-    `--weights dti` rule) are applied to the fold crops and scored on fold i, next to the
-    equal-weight score on that fold.
+    LOO-fitted fold weights (softmax over the other folds' held-out DTI, the `--weights dti`
+    rule) are REPORTED per row but deliberately NOT scored: the held-out crops of different
+    folds cover different geographic windows (each fold's own compact window subset,
+    src/train.py::heldout_maps), so averaging fold j's crop with fold k's crop and scoring it
+    against fold i's ground truth mixes geographies and cannot measure the weight rule.  Until
+    2026-09-16 this function did exactly that whenever the crops happened to share a shape;
+    session 6 removed the comparison (see STATUS.md).  The valid weight-rule evidence is the
+    full-map A/B in data/evidence/runs/local-mini-ensemble/, where both rules combine the SAME
+    maps on the SAME grid.  A sound LOO weight audit needs the per-fold held-out footprints:
+    intersect test windows across folds, combine the full-raster prob maps there, score there
+    (queued in SUGGESTIONS.md).
 
     Returns None when there are fewer than 3 usable folds (nothing to leave out).
     """
@@ -190,12 +191,8 @@ def loo_aggregation(folds, R: int, thresholds: np.ndarray, alpha: float, beta: f
     if len(usable) < 3:
         return None
     if pre is not None:
-        for f in usable:                       # same transform the full map gets
-            f["pred_crop"] = pre(f["pred_crop"])
-    shapes = {f["pred_crop"].shape for f in usable}
-    same_shape = len(shapes) == 1
-    hw = min(min(s) for s in shapes)           # weights comparison uses the common window
-    sl = lambda a, k: a[:k, :k]                # noqa: E731 - centre window every fold shares
+        # same transform the full map gets; copy, never mutate (see calibrate_shaping)
+        usable = [dict(f, pred_crop=pre(f["pred_crop"])) for f in usable]
 
     rows = []
     for i, f in enumerate(usable):
@@ -220,31 +217,20 @@ def loo_aggregation(folds, R: int, thresholds: np.ndarray, alpha: float, beta: f
                    t0_self_best=t_self, thin_self_best=thin_self, dilate_self_best=dila_self,
                    dti_self_best=best_self)
 
-        # weight rule, fitted on the other folds and scored on this one
-        other = [(o, o["mean_dti"]) for o in rest if o["mean_dti"] > 0]
-        if same_shape and len(other) == len(rest):
-            ws = np.array([v for _, v in other], dtype=np.float64)
+        # LOO-fitted fold weights: reported, NOT scored (see docstring for why scoring
+        # them here mixed geographies).  The arithmetic is the --weights dti rule exactly.
+        other = [o["mean_dti"] for o in rest]
+        if all(v is not None and v > 0 for v in other):
+            ws = np.array(other, dtype=np.float64)
             ws = np.exp((ws - ws.max()) * 8.0)
             ws = ws / ws.sum()
-            preds = [sl(o["pred_crop"], hw) for o in rest]
-            gt = sl(f["gt_crop"], hw)
-            wm = _weighted_mean(preds, ws)
-            t_w, thin_w, _, _, dila_w = calibrate_shaping([dict(pred_crop=wm, gt_crop=gt)], R,
-                                                          thresholds, alpha, beta, pre=None,
-                                                          dilate_options=dilate_options)
             row.update(weights_loo=[round(float(w), 4) for w in ws],
-                       dti_loo_weighted=_dti(optimize_submission(wm, R=R, t0=float(t_w),
-                                                                 thin=bool(thin_w), hard=True,
-                                                                 gamma=1.0, dilate=int(dila_w)),
-                                             gt, R, alpha, beta),
-                       dti_loo_equal_weighted_mean=_dti(
-                           optimize_submission(_weighted_mean(preds, np.ones(len(preds))), R=R,
-                                               t0=float(t_w), thin=bool(thin_w), hard=True,
-                                               gamma=1.0, dilate=int(dila_w)), gt, R, alpha, beta))
+                       weights_loo_note=("softmax over the other folds' held-out DTI; reported, "
+                                         "not scored — folds' held-out crops cover different "
+                                         "regions, so no shared-footprint comparison exists"))
         else:
-            row.update(weights_loo=None, dti_loo_weighted=None, dti_loo_equal_weighted_mean=None,
-                       note="fold crops have different shapes" if not same_shape
-                            else "some folds report no held-out DTI")
+            row.update(weights_loo=None,
+                       weights_loo_note="some folds report no positive held-out DTI")
         rows.append(row)
 
     mean = lambda k: (float(np.mean([r[k] for r in rows if r.get(k) is not None]))
@@ -256,17 +242,20 @@ def loo_aggregation(folds, R: int, thresholds: np.ndarray, alpha: float, beta: f
         mean_dti_self_best_oracle=mean("dti_self_best"),
         gain_loo_over_unshaped=(None if dti_loo is None or dti_unshaped is None
                                 else dti_loo - dti_unshaped),
-        mean_dti_loo_weighted=mean("dti_loo_weighted"),
-        mean_dti_loo_equal_weighted_mean=mean("dti_loo_equal_weighted_mean"),
-        weight_rule_gain=(None if mean("dti_loo_weighted") is None
-                          or mean("dti_loo_equal_weighted_mean") is None
-                          else mean("dti_loo_weighted") - mean("dti_loo_equal_weighted_mean")),
+        # No LOO score for the fold-weight rule exists in this report (see docstring): the
+        # keys stay present with None so older report readers do not KeyError, but they are
+        # not measurements of anything.
+        mean_dti_loo_weighted=None,
+        mean_dti_loo_equal_weighted_mean=None,
+        weight_rule_gain=None,
+        weight_rule_note=("the fold-weight rule is fitted per row (weights_loo) but not scored: "
+                          "folds' held-out crops cover different regions. Compare weight rules on "
+                          "full-raster blends scored on the same grid instead "
+                          "(data/evidence/runs/local-mini-ensemble/)."),
         acceptance=("aggregation calibration is worth keeping when mean_dti_loo beats "
-                    "mean_dti_unshaped by > 0.01 on held-out folds, and the weight rule is worth "
-                    "using when weight_rule_gain > 0.01"),
-        note=("(t0, thin) and the fold weights are re-fitted on the five folds that are NOT being "
-              "scored, so this mean is not selection-optimistic; the pooled number reported "
-              "elsewhere is."),
+                    "mean_dti_unshaped by > 0.01 on held-out folds"),
+        note=("(t0, thin) is re-fitted on the folds that are NOT being scored, so this mean is "
+              "not selection-optimistic; the pooled number reported elsewhere is."),
     )
     return dict(rows=rows, summary=summary)
 
@@ -286,10 +275,11 @@ def main():
     ap.add_argument("--shaping-grid", type=int, default=None, help="threshold count (default: config)")
     ap.add_argument("--calibrate", choices=["pooled", "loo"], default="pooled",
                     help="'pooled' (default) fits (t0, thin) on the same held-out folds it reports - "
-                         "selection-optimistic. 'loo' ADDS a leave-one-fold-out audit: the floor and "
-                         "the fold weights are re-fitted on the five folds that are not being scored, "
-                         "so the reported mean is honest. The submission itself is unchanged (a "
-                         "single global floor cannot be fitted per fold); only the report grows.")
+                         "selection-optimistic. 'loo' ADDS a leave-one-fold-out audit: the floor is "
+                         "re-fitted on the folds that are not being scored, so the reported mean is "
+                         "honest; LOO fold weights are reported per row but not scored (folds' "
+                         "held-out crops cover different regions). The submission itself is unchanged "
+                         "(a single global floor cannot be fitted per fold); only the report grows.")
     ap.add_argument("--dilate-grid", default="0,1,2,3,4,6",
                     help="emission width candidates in pixels: the kept set is the skeleton grown by "
                          "k px. '0' = pure skeleton (previous behaviour). See "
@@ -329,6 +319,11 @@ def main():
         ws = np.exp((ws - ws.max()) * 8.0)
         ws = ws / ws.sum()
         print(f"fold weights (softmax over held-out DTI): {[round(w, 3) for w in ws]}")
+    elif args.weights == "dti":
+        # previously this fell back to equal weights SILENTLY; a requested weighting that does
+        # not happen must say so (fixed 2026-09-16, session 6)
+        print("WARNING --weights dti requested but some fold reports no positive held-out DTI; "
+              "using equal weights")
     valid = ~np.isnan(stack)
     allnan = ~valid.any(axis=0)
     vals = np.where(valid, stack, 0.0)
@@ -382,11 +377,8 @@ def main():
                   f" gain {sm['gain_loo_over_unshaped']:+.4f})")
             print(f"  mean DTI, oracle floor fitted on the scored fold : "
                   f"{sm['mean_dti_self_best_oracle']:.4f}")
-            if sm["mean_dti_loo_weighted"] is not None:
-                print(f"  fold weights fitted without the scored fold : "
-                      f"{sm['mean_dti_loo_weighted']:.4f} vs equal-weight mean on the same window "
-                      f"{sm['mean_dti_loo_equal_weighted_mean']:.4f}"
-                      f" (gain {sm['weight_rule_gain']:+.4f})")
+            print(f"  fold weights are fitted per row but not scored "
+                  f"(held-out crops cover different regions; see report note)")
             print(f"  pooled (selection-optimistic) reference : {mean_dti:.4f}")
             for r in loo["rows"]:
                 print(f"    {r['fold']:>12s}  t0_loo {r['t0_loo']:.4f} thin {str(r['thin_loo']):5s}"
