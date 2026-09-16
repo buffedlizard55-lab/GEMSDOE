@@ -1,124 +1,155 @@
 {
- "generated_utc": "2026-09-16T18:11:18Z",
+ "generated_utc": "2026-09-16T18:23:16Z",
  "script": "scripts/verify_rules_quotes.py",
- "document": {
-  "title": "Geologic Enhanced Mapping System (GEMS) Prize Official Rules",
-  "canonical_url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
-  "retrieved_via": {
-   "kind": "file",
-   "path": "/tmp/rules_canonical.pdf",
-   "bytes": 455140,
-   "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
-  },
-  "competition_rules_page": "https://www.drivendata.org/competitions/306/competition-doe-gems/rules/",
-  "problem_page": "https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/"
+ "source": {
+  "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
+  "bytes": 455140,
+  "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
  },
- "verification": {
-  "quotes_checked": 11,
-  "exact_matches": 11,
-  "all_verified": true,
-  "method": "unicode NFKC + de-hyphenation + whitespace collapse, then a substring test; a second whitespace-free comparison absorbs the word splits that PDF page breaks introduce. Paraphrase is never accepted - the quoted characters must all be present, in order."
+ "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks and whitespace collapse - no paraphrasing, no fuzzy matching",
+ "match_against_mirror": {
+  "expected_sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938",
+  "identical": true
  },
  "quotes": [
+  {
+   "id": "two_phases",
+   "section": "\u00a71.1",
+   "quote": "Participants will submit a single entry, which will be evaluated in two prize phases using a distance-weighted Tversky index.",
+   "why": "One submission is scored twice; there is no separate Phase-2 upload to optimise for.",
+   "exact_match": true
+  },
   {
    "id": "phase1_target",
    "section": "\u00a71.1",
    "quote": "In Phase 1, submissions will be evaluated against a privately withheld subset of the original new fault dataset compiled by expert reviewers.",
-   "why": "Phase 1 is scored on NEW faults, not on the existing database we can download.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "why": "The scored population is NEW faults, not the catalogue we can download.",
+   "exact_match": true
   },
   {
-   "id": "phase2_target",
+   "id": "experts_revise",
    "section": "\u00a71.1",
-   "quote": "Submissions will be reevaluated against the full, revised new fault dataset using the same distance-weighted Tversky index.",
-   "why": "Phase 2 (the $250k pool) is still scored on the NEW fault dataset - not on the public USGS catalogue. Copying the known-fault raster is therefore a trap in BOTH phases.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "quote": "After Phase 1, expert reviewers will use submitted predictions to revise the new fault dataset.",
+   "why": "Discoveries can be confirmed by experts - predictions that look like real new faults matter.",
+   "exact_match": true
   },
   {
    "id": "phase2_eligibility",
    "section": "\u00a71.1",
    "quote": "All Phase 1 competitors will be eligible to compete in Phase 2 and will be automatically submitted for consideration.",
-   "why": "No need to place top-5 in Phase 1 to win Phase 2, and one submission is used for both.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "why": "No top-5 cutoff gates the larger prize pool: Phase-1 risk-taking buys nothing.",
+   "exact_match": true
   },
   {
-   "id": "training_labels_source",
-   "section": "\u00a73.3",
-   "quote": "The training labels contain existing fault data at 100-m resolution where positively labeled pixels indicate fault presence. These labels were obtained from the INGENIOUS project's Great Basin Regional Dataset Compilation.",
-   "why": "The labels we train on are the EXISTING fault catalogue; the labels we are scored on are a different, newer population. Training labels and test labels are disjoint universes.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "id": "phase2_target",
+   "section": "\u00a71.1",
+   "quote": "Submissions will be reevaluated against the full, revised new fault dataset using the same distance-weighted Tversky index.",
+   "why": "Phase 2 is the same metric on the same population - one objective, two label revisions.",
+   "exact_match": true
   },
   {
-   "id": "submit_new_labels",
-   "section": "\u00a73.5",
-   "quote": "Submissions will be automatically evaluated using a distance-weighted Tversky index against newly created fault labels, as described on the competition website.",
-   "why": "Third, independent statement of the same fact (problem page + rules \u00a71.1 + \u00a73.5).",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "id": "prize_pools",
+   "section": "\u00a71.1",
+   "quote": "The Phase 2 prize pool of $250,000 will be distributed among the top five competitors, as judged by their performance on all fault labels in this updated label set.",
+   "why": "$250k of the $300k is decided on the revised new-fault labels; $50k in Phase 1.",
+   "exact_match": true
   },
   {
-   "id": "one_submission_two_rounds",
-   "section": "\u00a73.5",
-   "quote": "Before the end of the competition, you must choose only one submission for evaluation across both prize rounds.",
-   "why": "One raster must serve both rounds, so it cannot be tuned for a single phase.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "id": "labels_source",
+   "section": "\u00a72",
+   "quote": "The labels for this prize come from the USGS Quaternary Fault and Fold Database and from a set of newly identified faults labeled by geology experts at the National Laboratory of the Rockies (NLR) and USGS.",
+   "why": "Two populations in one sentence: the public catalogue (training) and the expert-mapped new faults (scoring).",
+   "exact_match": true
   },
   {
-   "id": "blind_private_selection",
-   "section": "\u00a73.6.2",
-   "quote": "You must choose only one submission to use for scoring across both prize rounds, and you must make your decision without knowledge of your scores on the private test set.",
-   "why": "Private-set scores are hidden; the public leaderboard is a partial, differently-weighted sample, so it cannot be over-fitted.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
-  },
-  {
-   "id": "weekly_limit",
+   "id": "ranking_basis",
    "section": "\u00a73.2",
-   "quote": "You can make multiple submissions, subject to the limits specified on the competition website (three submissions per week).",
-   "why": "Three scored submissions per week is the only unbiased feedback channel available.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "quote": "Second-round prize rankings will be determined by running the selected final submissions against the complete updated test set created by expert review.",
+   "why": "Phase 2 ground truth is the *complete updated* set - expert new faults, not the old database.",
+   "exact_match": true
+  },
+  {
+   "id": "features_source",
+   "section": "\u00a72",
+   "quote": "The feature data for this prize come from the recently released Geoscience Data Acquisition for Western Nevada (GeoDAWN)",
+   "why": "The features are the GeoDAWN geophysics (lidar/magnetic/radiometric), i.e. what the experts themselves mapped the new faults from.",
+   "exact_match": true
   },
   {
    "id": "dem_is_a_feature",
    "section": "\u00a72",
    "quote": "In addition, the feature data also contain U.S. Geological Survey (USGS) Digital Elevation Model (DEM) elevation data at 1-m resolution.",
-   "why": "1 m DEM derivatives are explicitly part of the intended feature data (they are not yet used by our training configs).",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "why": "The 1 m DEM is intended input data, not an external extra - it is admissible.",
+   "exact_match": true
+  },
+  {
+   "id": "single_geotiff",
+   "section": "\u00a73.2",
+   "quote": "You must submit a single GeoTIFF with a single raster layer at 100-meter resolution containing your model's predictions of fault locations for the entirety of the GeoDAWN study area.",
+   "why": "Submission format, exactly.",
+   "exact_match": true
+  },
+  {
+   "id": "weekly_limit",
+   "section": "\u00a73.2",
+   "quote": "You can make multiple submissions, subject to the limits specified on the competition website (three submissions per week).",
+   "why": "Three measured shots per week at the real metric - the only honest feedback available.",
+   "exact_match": true
   },
   {
    "id": "ai_disclosure",
    "section": "\u00a73.2",
    "quote": "you must indicate in the narrative (not included in the word count) the extent to which, if any, you used generative AI technology",
-   "why": "Binding disclosure requirement: this project uses AI agents, and the final narrative must say so.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "why": "Required in the final narrative; this repository documents its own AI use.",
+   "exact_match": true
   },
   {
    "id": "code_assets",
    "section": "\u00a73.2",
    "quote": "The solution assets must contain a description of the resources required to build and run the solution, and they should be able to sufficiently reproduce the winning results and generate predictions on new data samples.",
-   "why": "A leaderboard-winning entry must ship reproducible code + resource documentation, which is what this repository is for.",
-   "exact_match": true,
-   "matched_as": "substring",
-   "best_token_overlap": 0.0
+   "why": "Why every run here commits its logs, hashes, environment pins and reproduce steps.",
+   "exact_match": true
+  },
+  {
+   "id": "entry",
+   "section": "\u00a73.1",
+   "quote": "To enter the competition, you must create a profile on the DrivenData platform and agree to abide by the competition rules and restrictions.",
+   "why": "The one genuinely human step: registration, then the account-gated data tab and upload.",
+   "exact_match": true
+  },
+  {
+   "id": "citizen",
+   "section": "\u00a71.3",
+   "quote": "An individual prize competitor (who is not competing as a member of a group) must be a U.S. citizen or permanent resident.",
+   "why": "Eligibility - checked before any prize is contemplated.",
+   "exact_match": true
+  },
+  {
+   "id": "payment",
+   "section": "\u00a7A.2",
+   "quote": "Each competitor must sign and return to the prize administrator within 30 days of the date on the notice a completed NLR Request for ACH Banking Information form and a completed IRS W-9 form.",
+   "why": "What winning actually requires administratively.",
+   "exact_match": true
+  },
+  {
+   "id": "public_elements",
+   "section": "\u00a7A.4",
+   "quote": "The elements of the submission that are designated as public will become publicly available as part of this prize.",
+   "why": "Public-designated elements must contain no trade secrets; everything here is public already.",
+   "exact_match": true
+  },
+  {
+   "id": "single_award",
+   "section": "\u00a7A.3",
+   "quote": "The prize administrator will award a single dollar amount to the designated primary submitter, whether consisting of a single entity or multiple entities.",
+   "why": "Team allocation is the team's problem, not the sponsor's.",
+   "exact_match": true
   }
  ],
- "conclusion": "Both prize phases score the NEW fault dataset, which is disjoint from the existing-fault labels the competition distributes for training. Route all model selection through sources that do not assume otherwise."
+ "summary": {
+  "n_quotes": 19,
+  "n_found": 19,
+  "all_found": true
+ },
+ "conclusion": "Both prize phases are scored against the expert-mapped NEW fault dataset (Phase 1 a private subset, Phase 2 the full revised set). The catalogue in the data tab is the training labels and is not the scored population."
 }
