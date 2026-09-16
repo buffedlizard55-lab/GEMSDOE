@@ -1,0 +1,39 @@
+  t0=0        thin=1 dilate=0px -> proxy DTI 0.0144  kept 14285 px
+  t0=0        thin=1 dilate=1px -> proxy DTI 0.0205  kept 42883 px
+  t0=0        thin=1 dilate=2px -> proxy DTI 0.0256  kept 71583 px
+  t0=0        thin=1 dilate=3px -> proxy DTI 0.0312  kept 108521 px
+  t0=0        thin=1 dilate=4px -> proxy DTI 0.0340  kept 137596 px
+  t0=0        thin=1 dilate=6px -> proxy DTI 0.0395  kept 205477 px
+  t0=0.0001   thin=1 dilate=0px -> proxy DTI 0.0144  kept 14285 px
+  t0=0.0001   thin=1 dilate=1px -> proxy DTI 0.0205  kept 42883 px
+  t0=0.0001   thin=1 dilate=2px -> proxy DTI 0.0256  kept 71583 px
+  t0=0.0001   thin=1 dilate=3px -> proxy DTI 0.0312  kept 108521 px
+  t0=0.0001   thin=1 dilate=4px -> proxy DTI 0.0340  kept 137596 px
+  t0=0.0001   thin=1 dilate=6px -> proxy DTI 0.0395  kept 205477 px
+  t0=0.0020801 thin=1 dilate=0px -> proxy DTI 0.0144  kept 14285 px
+  t0=0.0020801 thin=1 dilate=1px -> proxy DTI 0.0205  kept 42883 px
+  t0=0.0020801 thin=1 dilate=2px -> proxy DTI 0.0256  kept 71583 px
+  t0=0.0020801 thin=1 dilate=3px -> proxy DTI 0.0312  kept 108521 px
+  t0=0.0020801 thin=1 dilate=4px -> proxy DTI 0.0340  kept 137596 px
+  t0=0.0020801 thin=1 dilate=6px -> proxy DTI 0.0395  kept 205477 px
+  t0=0.043268 thin=1 dilate=0px -> proxy DTI 0.0144  kept 14285 px
+  t0=0.043268 thin=1 dilate=1px -> proxy DTI 0.0205  kept 42883 px
+  t0=0.043268 thin=1 dilate=2px -> proxy DTI 0.0256  kept 71583 px
+  t0=0.043268 thin=1 dilate=3px -> proxy DTI 0.0312  kept 108521 px
+  t0=0.043268 thin=1 dilate=4px -> proxy DTI 0.0340  kept 137596 px
+  t0=0.043268 thin=1 dilate=6px -> proxy DTI 0.0395  kept 205477 px
+  t0=0.9      thin=1 dilate=0px -> proxy DTI 0.0000  kept 3 px
+  t0=0.9      thin=1 dilate=1px -> proxy DTI 0.0000  kept 11 px
+  t0=0.9      thin=1 dilate=2px -> proxy DTI 0.0000  kept 23 px
+  t0=0.9      thin=1 dilate=3px -> proxy DTI 0.0000  kept 43 px
+  t0=0.9      thin=1 dilate=4px -> proxy DTI 0.0000  kept 67 px
+  t0=0.9      thin=1 dilate=6px -> proxy DTI 0.0000  kept 139 px
+
+truth: only -> 61664 px (616.6 km of fault trace)
+as submitted: DTI 0.0478  (TP_w 7689 FP_w 549544 FN_w 53975)
+  baseline zeros                        DTI 0.0000
+  baseline blanket_ones                 DTI 0.0249
+  baseline catalogue_copy               DTI 0.0000
+  baseline catalogue_plus_submission    DTI 0.0585
+  acceptance catalogue-copy == 0: PASS
+wrote data/evidence/proxy/eval_sweep.json

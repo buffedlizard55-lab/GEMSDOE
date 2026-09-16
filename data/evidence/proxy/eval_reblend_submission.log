@@ -1,0 +1,9 @@
+
+truth: only -> 61664 px (616.6 km of fault trace)
+as submitted: DTI 0.0410  (TP_w 2350 FP_w 37269 FN_w 59314)
+  baseline zeros                        DTI 0.0000
+  baseline blanket_ones                 DTI 0.0585
+  baseline catalogue_copy               DTI 0.0000
+  baseline catalogue_plus_submission    DTI 0.0342
+  acceptance catalogue-copy == 0: PASS
+wrote data/evidence/proxy/eval_reblend_submission.json
