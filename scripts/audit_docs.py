@@ -267,6 +267,28 @@ def check_link_counts(verbose: bool) -> list[str]:
     end = html.find("Expected non-200 responses", start)
     seg = html[start:end if end > start else start + 4000]
     shown = {k: int(n) for k, n in re.findall(r'class="pill [^"]*">([A-Z_0-9]+): (\d+)<', seg)}
+    # the file must agree with itself: `problems` is exactly the set of rows whose class is
+    # neither expected-ok nor expected-non-ok, and `n_problems` is its length
+    cls = data.get("classification") or {}
+    expected = tuple(cls.get("expected_ok", ["OK"])) + tuple(cls.get("expected_non_ok",
+                                                                    ["BOT_BLOCKED",
+                                                                     "LOGIN_REQUIRED",
+                                                                     "AUTH_REQUIRED"]))
+    rows = data.get("results", [])
+    if rows:
+        derived = [r["url"] for r in rows if not str(r.get("result", "")).startswith(expected)]
+        listed = [p.get("url") for p in data.get("problems", [])]
+        if sorted(derived) != sorted(listed):
+            problems.append(f"docs/link_verification.json is internally inconsistent: "
+                            f"n_problems={data.get('n_problems')} but {len(derived)} row(s) fall "
+                            f"outside {list(expected)}")
+        if data.get("n_problems") != len(listed):
+            problems.append(f"docs/link_verification.json: n_problems={data.get('n_problems')} "
+                            f"!= len(problems)={len(listed)}")
+        if verbose and not problems:
+            print(f"  ok   link evidence self-consistent ({len(rows)} rows, "
+                  f"{len(derived)} needing review)")
+
     if shown != wanted:
         only_page = {k: v for k, v in shown.items() if wanted.get(k) != v}
         only_json = {k: v for k, v in wanted.items() if shown.get(k) != v}
