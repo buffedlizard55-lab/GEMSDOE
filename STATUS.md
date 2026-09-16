@@ -1,4 +1,59 @@
-# Project status — 2026-09-14
+# Project status — 2026-09-15 (session 3)
+
+## What changed this session
+
+1. **Strategic fact re-verified from the official page** (fetched 2026-09-15, verbatim):
+   both prize rounds score against the set of **newly-labelled** faults — Phase 1 against
+   "a privately withheld subset of the original new fault dataset compiled by expert
+   reviewers", Phase 2 against "the full, revised new fault dataset" (rules PDF §1.1,
+   <https://docs.nlr.gov/docs/fy26osti/96647.pdf>). The public `existing_faults.tif` is
+   training data, NOT the scoring target. `docs/METRIC_STRATEGY.md` §4 now states the
+   consequence: copying the known-fault raster (which scores 0.9999 against itself) is a
+   trap, and every local DTI number is a plumbing monitor, not a leaderboard proxy.
+
+2. **Reference solution cross-verification (new, line-by-line)**: fetched the official
+   reference notebook and compared its executed output against our runner-measured
+   evidence: **19/19 band descriptions in `gems-geodawn-numerical-features.tif` match the
+   notebook output exactly** (names, order, wording), CRS/resolution/nodata/shape agree,
+   and the notebook confirms `numeric_features.tif` naming + plain min-max normalisation +
+   device-fallback order. This independently ties our acquired files to the official ones.
+
+3. **The parallel ensemble pipeline is implemented and locally exercised**:
+   `configs/config_ci_ensemble.yaml` + `.github/workflows/train-ensemble.yml` run 6 MC
+   folds as 6 parallel CPU jobs (UNet++/DeepLabV3+/U-Net × resnet34 @ patch 256, 8-way
+   TTA, time-guarded so a checkpoint always exists), then a blend job averages the raw
+   fold maps, shapes ONCE with the pooled held-out (t0, thin) calibration
+   (`scripts/blend_submission.py`) and commits report + submission back to the branch.
+   New regression tests (`tests/test_ensemble.py`); full suite **23/23 green** in-sandbox.
+
+4. **Measured improvement: fold-weighted blending.** On the sandbox 2-fold mini ensemble
+   over the real 512×512 fixture window, equal weights let a weak fold (held-out 0.049)
+   bury a strong one (0.150) under the shaping floor; softmax-over-held-out-DTI weights
+   (0.691/0.309) lifted the shaped submission's informational DTI from **0.0143 → 0.0984**
+   (above the 0.0955 blanket floor). `--weights dti` is now the workflow default.
+   Evidence: `data/evidence/runs/local-mini-ensemble/` (machine-generated reports).
+
+5. **Also fixed**: per-epoch shaping-table cost (scattered 12-window bbox → whole-raster
+   EDTs; now a compact fault-bearing window run, `selection_mode: raw` for CPU folds);
+   `early_stopping_patience` was configured but never implemented — it is now;
+   `pretrained: true` now degrades to a warning instead of crashing;
+   `src/inference.py` gained `--raw` and `--override`; audit_docs now passes on the
+   formerly pseudo-URL `&hellip;` links in LIMITATIONS.md.
+
+## Blocker — GitHub auth (this sandbox)
+
+The session `GH_TOKEN` **expired mid-session** (reads through `gh api` worked for ~30
+minutes, then every call — including git-over-https pushes via the same credential
+helper — returns `Bad credentials` / `Invalid username or token`). Consequence: the work
+above is **committed locally** on `arena/01a0a738-gemsdoe` but cannot be pushed, so the
+6-fold workflow cannot be triggered from here. Owner action: reconnect GitHub in Arena
+(and `git push origin arena/01a0a738-gemsdoe`, or I will retry the push at session end).
+Everything needed to run on a human machine is already self-contained:
+`bash scripts/download_competition_data.sh && python -m src.train --config configs/config_ci_ensemble.yaml --override training.mc_id=0` per fold, or push to fire the workflow.
+
+---
+
+# Project status — 2026-09-14 (superseded below where it conflicts with the above)
 
 Supersedes the earlier note that read *"the single remaining blocker to training is data
 placement."* **That blocker is resolved.** The data was acquired, verified and used.

@@ -71,9 +71,12 @@ def load_folds(fold_dirs: list[str]):
             pc, gc = z["pred"].astype(np.float32), z["gt"].astype(np.float32)
         else:
             pc = gc = None
+        fdti = [m.get("dti") for m in man.get("models", [])]
         folds.append(dict(dir=str(d), prob=arr, pred_crop=pc, gt_crop=gc, grid=grid,
                           manifest=man, model=[m.get("file") for m in man.get("models", [])],
-                          fold_dti=[m.get("dti") for m in man.get("models", [])]))
+                          fold_dti=fdti,
+                          mean_dti=(float(np.mean([f for f in fdti if f is not None]))
+                                    if any(f is not None for f in fdti) else 0.0)))
     # grids must agree exactly — different bounds would silently misalign pixels
     for f in folds[1:]:
         if f["grid"] != folds[0]["grid"]:
@@ -120,6 +123,10 @@ def main():
     ap.add_argument("--out", default="submission.tif")
     ap.add_argument("--report", default=None, help="defaults to <out stem>_report.json")
     ap.add_argument("--shaping-grid", type=int, default=None, help="threshold count (default: config)")
+    ap.add_argument("--weights", choices=["equal", "dti"], default="equal",
+                    help="fold averaging weights. 'dti' = softmax over each fold's best "
+                         "HELD-OUT shaped DTI (mirrors src/inference.py's ensemble_weights). "
+                         "A weak fold otherwise dilutes every good one; measured 2026-09-15 on the fixture.")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
@@ -131,11 +138,27 @@ def main():
     folds = load_folds(args.folds)
     print(f"loaded {len(folds)} fold(s): {[f['dir'] for f in folds]}")
 
-    # 1. ensemble mean -------------------------------------------------------------
+    # 1. ensemble mean (equal, or softmax over fold held-out DTI when --weights dti).
+    # NaN-safe and footprint-aware: pixels where a fold is outside the data footprint
+    # average over the folds that ARE present (weighted by their weights), exactly like
+    # np.nanmean does for the equal case.
     stack = np.stack([f["prob"] for f in folds])
-    with np.errstate(invalid="ignore"):
-        allnan = np.all(np.isnan(stack), axis=0)
-        mean = np.nanmean(stack, axis=0)
+    ws = None
+    if args.weights == "dti" and all(f["mean_dti"] > 0 for f in folds):
+        ws = np.array([f["mean_dti"] for f in folds], dtype=np.float64)
+        ws = np.exp((ws - ws.max()) * 8.0)
+        ws = ws / ws.sum()
+        print(f"fold weights (softmax over held-out DTI): {[round(w, 3) for w in ws]}")
+    valid = ~np.isnan(stack)
+    allnan = ~valid.any(axis=0)
+    vals = np.where(valid, stack, 0.0)
+    if ws is None:
+        num = vals.sum(axis=0)
+        present = valid.sum(axis=0).astype(np.float64)
+    else:
+        num = np.tensordot(ws, vals, axes=1)              # sum_i w_i p_i over present folds
+        present = np.tensordot(ws, valid.astype(np.float64), axes=1)
+    mean = num / np.maximum(present, 1e-9)
     mean[allnan] = np.nan
     mean = np.clip(np.nan_to_num(mean, nan=0.0), 0.0, 1.0)   # 0 outside footprint for now
     pre_mass = float(mean[~allnan].sum())
@@ -222,7 +245,8 @@ def main():
                      unshaped_mean_heldout_dti=float(table[0]["mean_dti"]),
                      calibration_table=table),
         probability_mass=dict(pre_shaping=pre_mass, post_shaping=post_mass,
-                              collapse_ratio=(post_mass / pre_mass if pre_mass > 0 else None)),
+                              collapse_factor=(pre_mass / post_mass if post_mass > 0 else None)),
+        fold_weights=("equal" if ws is None else [round(float(w), 4) for w in ws]),
         submission=dict(path=str(out), bytes=out.stat().st_size, sha256=sha256(out),
                         grid=grid, finite_px=int(np.isfinite(q).sum()), total_px=int(q.size),
                         nonzero_px=int(np.count_nonzero(np.nan_to_num(q))),
