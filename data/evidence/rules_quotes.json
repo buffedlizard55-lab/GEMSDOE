@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:39:18Z",
+ "generated_utc": "2026-09-16T21:43:11Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
   "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
@@ -9,7 +9,98 @@
  },
  "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks, whitespace collapse and removal of page numbers at page margins - no paraphrasing, no fuzzy matching",
  "page_furniture_stripped": true,
- "page_furniture_removed": [],
+ "page_furniture_removed": [
+  {
+   "page": 2,
+   "removed": "2",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 3,
+   "removed": "3",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 4,
+   "removed": "4",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 5,
+   "removed": "5",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 6,
+   "removed": "6",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 7,
+   "removed": "7",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 8,
+   "removed": "8",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 9,
+   "removed": "9",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 10,
+   "removed": "10",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 11,
+   "removed": "11",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 12,
+   "removed": "12",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 13,
+   "removed": "13",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 14,
+   "removed": "14",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 15,
+   "removed": "15",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 16,
+   "removed": "16",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 17,
+   "removed": "17",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 18,
+   "removed": "18",
+   "why": "bare number at the top of the page"
+  },
+  {
+   "page": 19,
+   "removed": "19",
+   "why": "bare number at the top of the page"
+  }
+ ],
  "pages": [
   {
    "page": 1,
@@ -17,156 +108,194 @@
    "head": "Geologic Enhanced Mapping",
    "tail": "SEPTEMBER 2026",
    "raw_head": "Geologic Enhanced Mapping",
-   "raw_tail": "SEPTEMBER 2026"
+   "raw_tail": "SEPTEMBER 2026",
+   "raw_head_repr": "'Geologic Enhanced Mapping'",
+   "blank_lines_before_first_text": 3
   },
   {
    "page": 2,
    "chars": 633,
-   "head": "2",
+   "head": "Preface",
    "tail": "Date Modifications",
    "raw_head": "2",
-   "raw_tail": "Date Modifications"
+   "raw_tail": "Date Modifications",
+   "raw_head_repr": "'2'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 3,
    "chars": 6761,
-   "head": "3",
+   "head": "Contents",
    "tail": "A.17 Platform ..................................................................",
    "raw_head": "3",
-   "raw_tail": "A.17 Platform .........................."
+   "raw_tail": "A.17 Platform ..........................",
+   "raw_head_repr": "'3'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 4,
    "chars": 2152,
-   "head": "4",
+   "head": "1 Executive Summary",
    "tail": "dataset using the same distance-weighted Tversky index.",
    "raw_head": "4",
-   "raw_tail": "dataset using the same distance-weighted"
+   "raw_tail": "dataset using the same distance-weighted",
+   "raw_head_repr": "'4'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 5,
    "chars": 1563,
-   "head": "5",
+   "head": "Phase 2",
    "tail": "recognized accrediting agency or association.",
    "raw_head": "5",
-   "raw_tail": "recognized accrediting agency or associa"
+   "raw_tail": "recognized accrediting agency or associa",
+   "raw_head_repr": "'5'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 6,
    "chars": 3651,
-   "head": "6",
+   "head": "Ineligible entities:",
    "tail": "is subject to change.",
    "raw_head": "6",
-   "raw_tail": "is subject to change."
+   "raw_tail": "is subject to change.",
+   "raw_head_repr": "'6'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 7,
    "chars": 3069,
-   "head": "7",
+   "head": "To be eligible, an individual authorized to represent the competitor must agree ",
    "tail": "mapping and modeling that will, in turn, assist geothermal and critical mineral ",
    "raw_head": "7",
-   "raw_tail": "mapping and modeling that will, in turn,"
+   "raw_tail": "mapping and modeling that will, in turn,",
+   "raw_head_repr": "'7'",
+   "blank_lines_before_first_text": 2
   },
   {
    "page": 8,
    "chars": 2459,
-   "head": "8",
+   "head": "work is vital to accelerate discoveries of new, commercially viable hidden geoth",
    "tail": "Survey. Accessed December 22, 2025. https://doi.org/10.5066/P93LGLVQ.",
    "raw_head": "8",
-   "raw_tail": "Survey. Accessed December 22, 2025. http"
+   "raw_tail": "Survey. Accessed December 22, 2025. http",
+   "raw_head_repr": "'8'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 9,
    "chars": 3212,
-   "head": "9",
+   "head": "The GEMS Prize is a competition with $300,000 in cash prizes. This competition f",
    "tail": "updated test set created by expert review.",
    "raw_head": "9",
-   "raw_tail": "updated test set created by expert revie"
+   "raw_tail": "updated test set created by expert revie",
+   "raw_head_repr": "'9'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 10,
    "chars": 2914,
-   "head": "10",
+   "head": "\u25cf Solution verification and delivery \u2014 Prize finalists will also submit their so",
    "tail": "Repository. GBCGE, NBMG, UNR. https://doi.org/10.15121/1881483.",
    "raw_head": "10",
-   "raw_tail": "Repository. GBCGE, NBMG, UNR. https://do"
+   "raw_tail": "Repository. GBCGE, NBMG, UNR. https://do",
+   "raw_head_repr": "'10'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 11,
    "chars": 3020,
-   "head": "11",
+   "head": "3.4 Feedback",
    "tail": "overfitting to the public test set.  The set of faults included in the public te",
    "raw_head": "11",
-   "raw_tail": "overfitting to the public test set.  The"
+   "raw_tail": "overfitting to the public test set.  The",
+   "raw_head_repr": "'11'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 12,
    "chars": 1558,
-   "head": "12",
+   "head": "relative weight of faults in both test datasets will be determined by the compet",
    "tail": "One such platform for connection will be provided via the DrivenData community f",
    "raw_head": "12",
-   "raw_tail": "One such platform for connection will be"
+   "raw_tail": "One such platform for connection will be",
+   "raw_head_repr": "'12'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 13,
    "chars": 2655,
-   "head": "13",
+   "head": "Appendix A: Additional Terms and Conditions",
    "tail": "RELATED TO THE PRIZE.",
    "raw_head": "13",
-   "raw_tail": "RELATED TO THE PRIZE."
+   "raw_tail": "RELATED TO THE PRIZE.",
+   "raw_head_repr": "'13'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 14,
    "chars": 2917,
-   "head": "14",
+   "head": "A.2 Verification for Payments",
    "tail": "trade secrets or confidential, proprietary, or privileged information:",
    "raw_head": "14",
-   "raw_tail": "trade secrets or confidential, proprieta"
+   "raw_tail": "trade secrets or confidential, proprieta",
+   "raw_head_repr": "'14'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 15,
    "chars": 3504,
-   "head": "15",
+   "head": "Notice of Restriction on Disclosure and Use of Data: Pages [list applicable page",
    "tail": "exhibition and other exploitation in any manner and in all media, whether now",
    "raw_head": "15",
-   "raw_tail": "exhibition and other exploitation in any"
+   "raw_tail": "exhibition and other exploitation in any",
+   "raw_head_repr": "'15'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 16,
    "chars": 2973,
-   "head": "16",
+   "head": "existing or hereafter discovered, throughout the world",
    "tail": "responsible for this prize, the judge has determined that no liability insurance",
    "raw_head": "16",
-   "raw_tail": "responsible for this prize, the judge ha"
+   "raw_tail": "responsible for this prize, the judge ha",
+   "raw_head_repr": "'16'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 17,
    "chars": 3056,
-   "head": "17",
+   "head": "insured will be required of competitors to compete in this competition per 15 U.",
    "tail": "will select no competitors to be winners and will award no prize money.",
    "raw_head": "17",
-   "raw_tail": "will select no competitors to be winners"
+   "raw_tail": "will select no competitors to be winners",
+   "raw_head_repr": "'17'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 18,
    "chars": 3345,
-   "head": "18",
+   "head": "All applications submitted to DOE are subject to a due diligence review.",
    "tail": "in the manner most pertinent to their participation in the prize competition. Pa",
    "raw_head": "18",
-   "raw_tail": "in the manner most pertinent to their pa"
+   "raw_tail": "in the manner most pertinent to their pa",
+   "raw_head_repr": "'18'",
+   "blank_lines_before_first_text": 1
   },
   {
    "page": 19,
    "chars": 1338,
-   "head": "19",
+   "head": "asked to provide DOE with information on their planned activities so that DOE ca",
    "tail": "This is the end of the rules document; thank you for reading.",
    "raw_head": "19",
-   "raw_tail": "This is the end of the rules document; t"
+   "raw_tail": "This is the end of the rules document; t",
+   "raw_head_repr": "'19'",
+   "blank_lines_before_first_text": 1
   }
  ],
  "extracted_text": {
   "path": "data/evidence/rules_extracted_text.txt",
-  "chars": 49935
+  "chars": 49888
  },
  "match_against_mirror": {
   "expected_sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938",
@@ -339,14 +468,7 @@
    "section": "\u00a73.6.2",
    "quote": "The set of faults included in the public test dataset and the relative weight of faults in both test datasets will be determined by the competition organizers before the start of the competition.",
    "why": "Public/private composition and fault weighting are the organizers' choice and are fixed before the start - so public-LB optimising cannot reweight them.",
-   "exact_match": false,
-   "diagnostic": {
-    "prefix_len": 62,
-    "prefix_tail": "e set of faults included in the public test dataset and the ",
-    "quote_continues": "relative weight of faults in both test datasets will be determined by the competition organizers before the start of the",
-    "doc_continues": "12 relative weight of faults in both test datasets will be determined by the competition organizers before the start of ",
-    "doc_offset": 28982
-   }
+   "exact_match": true
   },
   {
    "id": "entry",
@@ -386,8 +508,8 @@
  ],
  "summary": {
   "n_quotes": 29,
-  "n_found": 28,
-  "all_found": false
+  "n_found": 29,
+  "all_found": true
  },
  "conclusion": "Both prize phases are scored against the expert-mapped NEW fault dataset (Phase 1 a private subset, Phase 2 the full revised set). The catalogue in the data tab is the training labels and is not the scored population."
 }
