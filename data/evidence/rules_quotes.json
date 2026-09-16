@@ -1,0 +1,124 @@
+{
+ "generated_utc": "2026-09-16T18:06:06Z",
+ "script": "scripts/verify_rules_quotes.py",
+ "document": {
+  "title": "Geologic Enhanced Mapping System (GEMS) Prize Official Rules",
+  "canonical_url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
+  "retrieved_via": {
+   "kind": "file",
+   "path": "/tmp/rules_canonical.pdf",
+   "bytes": 455140,
+   "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
+  },
+  "competition_rules_page": "https://www.drivendata.org/competitions/306/competition-doe-gems/rules/",
+  "problem_page": "https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/"
+ },
+ "verification": {
+  "quotes_checked": 11,
+  "exact_matches": 11,
+  "all_verified": true,
+  "method": "unicode NFKC + de-hyphenation + whitespace collapse, then a substring test; a second whitespace-free comparison absorbs the word splits that PDF page breaks introduce. Paraphrase is never accepted - the quoted characters must all be present, in order."
+ },
+ "quotes": [
+  {
+   "id": "phase1_target",
+   "section": "\u00a71.1",
+   "quote": "In Phase 1, submissions will be evaluated against a privately withheld subset of the original new fault dataset compiled by expert reviewers.",
+   "why": "Phase 1 is scored on NEW faults, not on the existing database we can download.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "phase2_target",
+   "section": "\u00a71.1",
+   "quote": "Submissions will be reevaluated against the full, revised new fault dataset using the same distance-weighted Tversky index.",
+   "why": "Phase 2 (the $250k pool) is still scored on the NEW fault dataset - not on the public USGS catalogue. Copying the known-fault raster is therefore a trap in BOTH phases.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "phase2_eligibility",
+   "section": "\u00a71.1",
+   "quote": "All Phase 1 competitors will be eligible to compete in Phase 2 and will be automatically submitted for consideration.",
+   "why": "No need to place top-5 in Phase 1 to win Phase 2, and one submission is used for both.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "training_labels_source",
+   "section": "\u00a73.3",
+   "quote": "The training labels contain existing fault data at 100-m resolution where positively labeled pixels indicate fault presence. These labels were obtained from the INGENIOUS project's Great Basin Regional Dataset Compilation.",
+   "why": "The labels we train on are the EXISTING fault catalogue; the labels we are scored on are a different, newer population. Training labels and test labels are disjoint universes.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "submit_new_labels",
+   "section": "\u00a73.5",
+   "quote": "Submissions will be automatically evaluated using a distance-weighted Tversky index against newly created fault labels, as described on the competition website.",
+   "why": "Third, independent statement of the same fact (problem page + rules \u00a71.1 + \u00a73.5).",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "one_submission_two_rounds",
+   "section": "\u00a73.5",
+   "quote": "Before the end of the competition, you must choose only one submission for evaluation across both prize rounds.",
+   "why": "One raster must serve both rounds, so it cannot be tuned for a single phase.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "blind_private_selection",
+   "section": "\u00a73.6.2",
+   "quote": "You must choose only one submission to use for scoring across both prize rounds, and you must make your decision without knowledge of your scores on the private test set.",
+   "why": "Private-set scores are hidden; the public leaderboard is a partial, differently-weighted sample, so it cannot be over-fitted.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "weekly_limit",
+   "section": "\u00a73.2",
+   "quote": "You can make multiple submissions, subject to the limits specified on the competition website (three submissions per week).",
+   "why": "Three scored submissions per week is the only unbiased feedback channel available.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "dem_is_a_feature",
+   "section": "\u00a72",
+   "quote": "In addition, the feature data also contain U.S. Geological Survey (USGS) Digital Elevation Model (DEM) elevation data at 1-m resolution.",
+   "why": "1 m DEM derivatives are explicitly part of the intended feature data (they are not yet used by our training configs).",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "ai_disclosure",
+   "section": "\u00a73.2",
+   "quote": "you must indicate in the narrative (not included in the word count) the extent to which, if any, you used generative AI technology",
+   "why": "Binding disclosure requirement: this project uses AI agents, and the final narrative must say so.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  },
+  {
+   "id": "code_assets",
+   "section": "\u00a73.2",
+   "quote": "The solution assets must contain a description of the resources required to build and run the solution, and they should be able to sufficiently reproduce the winning results and generate predictions on new data samples.",
+   "why": "A leaderboard-winning entry must ship reproducible code + resource documentation, which is what this repository is for.",
+   "exact_match": true,
+   "matched_as": "substring",
+   "best_token_overlap": 0.0
+  }
+ ],
+ "conclusion": "Both prize phases score the NEW fault dataset, which is disjoint from the existing-fault labels the competition distributes for training. Route all model selection through sources that do not assume otherwise."
+}
