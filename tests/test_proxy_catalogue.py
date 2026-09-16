@@ -581,3 +581,37 @@ def test_an_unexpected_fetch_exception_is_written_to_the_committed_report(tmp_pa
     assert doc["failed_stage"] == "unexpected exception"
     assert "RuntimeError: boom" in doc["failed_with"]
     assert doc["traceback_tail"], "the tail of the traceback must be preserved"
+
+
+def test_identity_line_survives_a_check_that_could_not_be_established():
+    """The print that killed four runs must never be able to kill a run again.
+
+    MEASURED 2026-09-16: `print(f"... {ident['resolved']} ...")` raised KeyError: 'resolved' whenever
+    both identity routes were refused (ScienceBase answered 403 to the runner and doi.org wants a
+    browser) - after the fetch had already done its work. Losses: four runs, each leaving a failed
+    step name and nothing else.
+    """
+    f = _load("fetch_proxy_faults")
+    unresolved = {"doi": "https://doi.org/10.5066/F7WH2N65", "item_id_in_service": "5888bf4",
+                  "match": None, "route": None,
+                  "doi_route_error": "HTTPError: HTTP Error 403: Forbidden"}
+    line = f.identity_line(unresolved)
+    assert "5888bf4" in line and "NOT ESTABLISHED" in line and "no route" in line
+    resolved = {"item_id_in_service": "5888bf4", "resolved": "https://www.sciencebase.gov/x",
+                "match": True}
+    assert "NOT ESTABLISHED" not in f.identity_line(resolved)
+
+
+def test_identity_can_come_from_the_service_own_metadata():
+    """A third route: the layer's own description names the data release."""
+    f = _load("fetch_proxy_faults")
+    doc = {"description": ("This data has been reprojected for faster display. The State Geologic "
+                           "Map Compilation (SGMC) geodatabase of the conterminous United States "
+                           "(https://doi.org/10.5066/F7WH2N65) represents a seamless, spatial "
+                           "database of 48 State geologic maps."),
+           "name": "SGMC_Structure"}
+    third = f.identity_from_layer_metadata(doc, f.SGMC_DATA_DOI)
+    assert third and third["match"] is True and "doi.org/10.5066/F7WH2N65" in third["quoted"]
+    assert third["route"].startswith("layer metadata 'description'")
+    # a service that does NOT cite the DOI must not be accepted
+    assert f.identity_from_layer_metadata({"description": "some other dataset"}, f.SGMC_DATA_DOI) is None

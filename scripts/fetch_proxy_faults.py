@@ -232,6 +232,39 @@ def service_identity(service: str) -> dict:
     return out
 
 
+def identity_from_layer_metadata(layer_meta: dict, doi: str) -> dict | None:
+    """Tie the service to the data release using the service's own description.
+
+    WHY THIS ROUTE EXISTS (MEASURED 2026-09-16): on a GitHub runner both existing routes can be
+    refused at once - doi.org answered 403 (it wants a browser) and ScienceBase answered 403 to every
+    attempt - while the ArcGIS layer metadata answers normally and carries the release DOI in its own
+    `description` and `copyrightText`.  The service naming the release it was published from is
+    evidence of the same fact, quoted here so a reviewer can see the sentence rather than trust it.
+    Returns None when the DOI is absent, so a mismatch is never mistaken for a match.
+    """
+    for field in ("description", "copyrightText", "name"):
+        text = str(layer_meta.get(field) or "")
+        if doi.rstrip("/") in text or doi.rstrip("/").replace("https://doi.org/", "doi:") in text:
+            i = text.find("doi.org")
+            snippet = text[max(0, i - 90): i + 60].strip() if i >= 0 else text[:150].strip()
+            return {"route": f"layer metadata '{field}' cites the release DOI", "quoted": snippet,
+                    "match": True}
+    return None
+
+
+def identity_line(ident: dict) -> str:
+    """One safe line describing an identity check, whatever fields it has.
+
+    MEASURED 2026-09-16: this line was printed as ident['resolved'], which exists only when a route
+    succeeded - so when both routes were refused (ScienceBase now 403s runners) the fetch crashed
+    with KeyError: 'resolved' AFTER doing all its work, and four runs were lost to a print statement.
+    """
+    where = ident.get("resolved") or ident.get("route") or "no route"
+    return (f"  service identity: {ident.get('item_id_in_service', '?')} via {where} -> "
+            f"{ident.get('match')}" + ("" if ident.get("match") else
+                                       "  (NOT ESTABLISHED; see the report)"))
+
+
 def raster_bbox_4326(raster: Path) -> tuple[float, float, float, float]:
     """(xmin, ymin, xmax, ymax) in EPSG:4326 for a raster's footprint."""
     import rasterio
@@ -382,9 +415,15 @@ def main() -> int:
         _write_report({"failed_stage": "service identity or layer metadata",
                        "failed_with": f"{type(exc).__name__}: {exc}"})
         raise
+    if not ident.get("match"):
+        third = identity_from_layer_metadata(layer_meta, SGMC_DATA_DOI)
+        if third:
+            ident = {**ident, **third, "match": True,
+                     "meaning": ("the FeatureServer queried is the published service of this data "
+                                 "release; the DOI routes were refused on this run, so identity "
+                                 "rests on the service's own metadata")}
     _write_report({"service_identity": ident, "layer_name": layer_meta.get("name")})
-    print(f"  service identity: {ident['item_id_in_service']} in {ident['resolved']} -> "
-          f"{ident['match']}")
+    print(identity_line(ident))
     for url, status in link_check.items():
         print(f"  doc link {status:<46} {url}")
     if any(not pr["ok"] for pr in probes):

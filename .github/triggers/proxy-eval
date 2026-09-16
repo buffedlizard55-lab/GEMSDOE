@@ -32,3 +32,10 @@ proxy-eval
 # and an unexpected exception appends its traceback to the committed report; the sweep job no longer
 # waits for the fetch to succeed, because it needs the committed proxy RASTER, not the rebuild (a
 # guard step refuses to sweep if that raster is missing).
+
+# 2026-09-16 (session 7, seventh attempt): ROOT CAUSE FOUND from the fetch.log capture -
+# KeyError: 'resolved' in the print that reports the service-identity check. It raises exactly when
+# both identity routes are refused (doi.org 403 by design, ScienceBase now 403 to runner IPs), i.e.
+# whenever the check could not be established - so four runs died AFTER doing their work, on a print
+# statement. The line is now safe, and identity has a third route: the ArcGIS layer metadata the
+# runner CAN fetch documents the release DOI in its own description.
