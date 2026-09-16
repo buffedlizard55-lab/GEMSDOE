@@ -38,11 +38,29 @@ LOGIN_HINTS = ("/login", "/accounts/login", "signin", "sign-in", "/users/sign_in
 # separately as BOT_BLOCKED_<code> and excluded from the "problems needing review" count.
 # The DOI itself remains the citable identifier regardless of what a scripted HEAD sees.
 BOT_BLOCKING_HOSTS = (
-    "doi.org", "onlinelibrary.wiley.com", "agupubs.onlinelibrary.wiley.com",
+    # sciencebase.gov added 2026-09-16 after a measured flip: the USGS ScienceBase host served
+    # 200 to the *same* runner earlier in the day and then returned 403 to EVERY request from
+    # it (all ten doi.org/10.5066/* rows and all three /catalog/item/* pages in one run), while
+    # the identical content stayed reachable through the platform page fetcher the same day.
+    # Several hosts behave like this under scripted load; the honest record is "the host
+    # refused this client", with the raw status kept in the row, not "the link is broken".
+    # Those rows are verified independently through their DOI landing pages - see
+    # data/evidence/sciencebase_dois.json - and the flip itself is an irregularity to report,
+    # not something to hide behind a silent retry.
+    "sciencebase.gov", "doi.org", "onlinelibrary.wiley.com",
+    "agupubs.onlinelibrary.wiley.com",
     "www.mdpi.com", "mdpi.com", "link.springer.com", "www.sciencedirect.com",
     "sciencedirect.com", "pubs.geoscienceworld.org", "academic.oup.com",
     "www.tandfonline.com", "tandfonline.com", "iopscience.iop.org",
 )
+
+
+# Result classes that are NOT a defect.  A 401 means credentials are required, a 403 from one of
+# BOT_BLOCKING_HOSTS means the host refused this client, LOGIN_REQUIRED is the account-gated data
+# tab - none of them says the resource is missing.  Anything else (BROKEN_*, UNREACHABLE,
+# NOT_A_URL) is a problem a human should look at.
+EXPECTED_OK = ("OK",)
+EXPECTED_NON_OK = ("BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED")
 
 
 def check(url: str, timeout: int = 45) -> dict:
@@ -123,10 +141,11 @@ def main() -> int:
         print(f"  {r['result']:34s} {r['url'][:95]}")
 
     stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    EXPECTED = ("OK", "BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED")
-    problems = [r for r in results if not r["result"].startswith(EXPECTED)]
-    expected_nonok = [r for r in results
-                      if r["result"].startswith(("BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED"))]
+    # The classification policy lives at module level so it can be asserted in tests
+    # (tests/test_links_classifier.py) instead of being re-derived by hand each time a host
+    # changes its mind about scripted clients.
+    problems = [r for r in results if not r["result"].startswith(EXPECTED_OK)]
+    expected_nonok = [r for r in results if r["result"].startswith(EXPECTED_NON_OK)]
 
     fields = list(rows[0].keys())
     for extra in ("verification_result", "verified_status", "verified_final_url", "verified_utc"):

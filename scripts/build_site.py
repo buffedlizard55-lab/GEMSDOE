@@ -195,6 +195,9 @@ def build_index(ev: dict) -> str:
                    ("<b>%d of %d matched &mdash; a quoted rule sentence no longer appears in the "
                     "document, and the verification step fails until that is resolved.</b>"
                     % (_s["n_found"], _s["n_quotes"])))
+        _u = str(src.get("canonical_url") or src.get("url") or "")
+        if not _u.startswith("http"):          # a local extraction path is not a link
+            _u = RULES
         rules_block = ('<h2>What is actually scored &mdash; the rules, verbatim</h2>\n'
                        '<p>The scored population is not the dataset we can download, and this is the'
                        ' single most consequential fact in the challenge. It is stated in prose, so'
@@ -204,9 +207,7 @@ def build_index(ev: dict) -> str:
                        ' <code>scripts/verify_rules_quotes.py</code> on a runner. %s</p>'
                        '<table><thead><tr><th>rules id</th><th>sentence as printed</th>'
                        '<th>found</th></tr></thead><tbody>%s</tbody></table>%s'
-                       % (e(src.get("url") or src.get("canonical_url") or RULES),
-                          e(src.get("url") or src.get("canonical_url") or RULES),
-                          e(str(src.get("sha256", ""))[:16]), verdict, qrows,
+                       % (_u, _u, e(str(src.get("sha256", ""))[:16]), verdict, qrows,
                           note("warn", "<b>Consequence, stated plainly.</b> The training labels in "
                                        "the data tab are the <em>existing</em> USGS Quaternary "
                                        "compilation, but <em>both</em> prize phases score the "

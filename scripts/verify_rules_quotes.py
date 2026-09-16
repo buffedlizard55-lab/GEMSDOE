@@ -37,6 +37,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# The official location of the rules, recorded in every report so that a local extraction path
+# (--pdf /tmp/rules_canonical.pdf, as the workflow uses) can never become the published link.
+RULES_URL = "https://docs.nlr.gov/docs/fy26osti/96647.pdf"
+
 # (id, section hint, exact sentence as printed, why it matters here)
 QUOTES = [
     ("two_phases", "§1.1",
@@ -167,6 +171,9 @@ def main() -> int:
     ap.add_argument("--out", default=str(ROOT / "data/evidence/rules_quotes.json"))
     ap.add_argument("--expected-sha256", default=None,
                     help="sha256 recorded for the data-tab mirror; proves the two copies are identical")
+    ap.add_argument("--source-url", default=RULES_URL,
+                    help="Official URL of the document.  Recorded separately from the extraction "
+                         "path so the site links to the publisher, never to /tmp.")
     a = ap.parse_args()
 
     sha = None
@@ -191,7 +198,8 @@ def main() -> int:
     payload = dict(
         generated_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         script="scripts/verify_rules_quotes.py",
-        source=dict(url=a.url or str(doc_path), bytes=nbytes, sha256=sha),
+        source=dict(url=a.url or str(doc_path), canonical_url=a.source_url, bytes=nbytes,
+                    sha256=sha),
         method=("verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line "
                 "breaks and whitespace collapse - no paraphrasing, no fuzzy matching"),
         match_against_mirror=dict(expected_sha256=a.expected_sha256,

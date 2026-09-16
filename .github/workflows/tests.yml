@@ -1,0 +1,74 @@
+name: Tests
+
+# =============================================================================
+# WHY THIS WORKFLOW EXISTS
+#
+# Every page of this site says how many tests pass.  Until now nothing in CI ran
+# them: the number came from whoever last ran pytest by hand, which is exactly the
+# "green claim, unmeasured" pattern that lost run 35042805806 its submission.  This
+# job runs the suite on a runner (the same environment the real runs use) so the
+# claim is enforced rather than asserted.
+#
+# Deps: numpy/scipy/rasterio/scikit-image/pyyaml/pytest for the metric, shaping,
+# writer, discovery and blend tests; torch for the tests that import src.dataset and
+# src.inference (the training/inference plumbing).  torch is installed from the CPU
+# wheel index with a PyPI fallback - the CPU build is all these tests need.
+# =============================================================================
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "arena/**"]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "tests/**"
+      - "configs/**"
+      - ".github/workflows/tests.yml"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet numpy scipy rasterio scikit-image pyyaml pytest
+          python -m pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu \
+            || python -m pip install --quiet torch
+          python - <<'PY'
+          import numpy, rasterio, skimage, torch
+          print(f"numpy {numpy.__version__} rasterio {rasterio.__version__} "
+                f"skimage {skimage.__version__} torch {torch.__version__}")
+          PY
+
+      - name: Run the test suite
+        run: |
+          set -euo pipefail
+          python -m pytest tests -q 2>&1 | tee pytest.log
+          tail -1 pytest.log
+
+      - name: Documentation audit (the same five checks the Pages deploy gates on)
+        run: |
+          set -euo pipefail
+          python scripts/audit_docs.py | tail -3
+
+      - name: Upload the pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log-${{ github.run_id }}
+          path: pytest.log
+          retention-days: 14
+          if-no-files-found: ignore

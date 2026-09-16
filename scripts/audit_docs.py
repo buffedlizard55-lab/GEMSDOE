@@ -243,6 +243,41 @@ def _f(x):
     return float(m.group(0).replace(" ", "").replace(",", "")) if m else None
 
 
+def check_link_counts(verbose: bool) -> list[str]:
+    """The published sources page must quote the counts that are in the evidence file.
+
+    WHY.  On 2026-09-16 the verification workflow rewrote docs/link_verification.json on main while
+    the already-built docs/sources.html kept the previous run's numbers (10 bot-blocks / 54 OK
+    against 16 / 51 + 3 broken).  The page was therefore asserting a measurement that no longer
+    existed - precisely the failure this project is built to avoid.  The workflow now rebuilds the
+    site after measuring, and this check makes the disagreement impossible to ship even if it does
+    not: every count rendered on the page must equal the count in the JSON it came from.
+    """
+    problems: list[str] = []
+    lv_path = ROOT / "docs/link_verification.json"
+    html_path = ROOT / "docs/sources.html"
+    if not (lv_path.exists() and html_path.exists()):
+        return problems
+    data = json.loads(lv_path.read_text(encoding="utf-8"))
+    wanted = dict(data.get("summary_counts", {}))
+    html = html_path.read_text(encoding="utf-8")
+    start = html.find("Live link verification")
+    if start < 0:
+        return ["docs/sources.html does not contain the live link verification section"]
+    end = html.find("Expected non-200 responses", start)
+    seg = html[start:end if end > start else start + 4000]
+    shown = {k: int(n) for k, n in re.findall(r'class="pill [^"]*">([A-Z_0-9]+): (\d+)<', seg)}
+    if shown != wanted:
+        only_page = {k: v for k, v in shown.items() if wanted.get(k) != v}
+        only_json = {k: v for k, v in wanted.items() if shown.get(k) != v}
+        problems.append(f"docs/sources.html link counts disagree with docs/link_verification.json: "
+                        f"page {only_page} vs evidence {only_json} "
+                        f"(regenerate with `python scripts/build_site.py`)")
+    elif verbose:
+        print(f"  ok   sources.html counts == link_verification.json ({len(wanted)} classes)")
+    return problems
+
+
 def check_tables(verbose: bool) -> list[str]:
     problems: list[str] = []
     html = (ROOT / "docs/results.html").read_text(encoding="utf-8")
@@ -381,6 +416,7 @@ def main() -> int:
     all_problems = []
     for name, fn in (("file references", check_file_refs), ("data catalog", check_catalog),
                      ("published tables vs artifacts", check_tables),
+                     ("published link counts vs evidence", check_link_counts),
                      ("published link targets", check_published_links),
                      ("url hygiene", check_urls)):
         print(f"== {name} ==")
