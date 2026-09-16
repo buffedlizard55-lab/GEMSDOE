@@ -174,7 +174,51 @@ def build_index(ev: dict) -> str:
                   f'publisher bot-blocked (expected) · <b>{lv["n_problems"]}</b> needing review. '
                   f'See <a href="sources.html">Sources</a>.</p>')
 
-    return page("Overview", "index.html", f"""
+    rules_block = ""
+    rq = ev.get("rules_quotes")
+    if rq:
+        used = ("phase1_target", "phase2_target", "phase2_eligibility", "experts_revise",
+                "labels_source", "ranking_basis")
+        qrows = "".join(
+            '<tr><td class="mono small">%s</td><td>%s</td><td class="num">%s</td></tr>' % (
+                e(q["id"]), e(q["quote"]),
+                '<span class="ok">&#10004;</span>' if q.get("exact_match") else
+                '<span class="bad">&#10008;</span>')
+            for q in rq["quotes"] if q["id"] in used)
+        src = rq.get("source") or rq.get("document", {})
+        _q = rq["quotes"]
+        _s = rq.get("summary") or dict(n_quotes=len(_q),
+                                       n_found=sum(1 for q in _q if q.get("exact_match")),
+                                       all_found=all(q.get("exact_match") for q in _q))
+        verdict = ("All %d quoted sentences matched (%s)." % (_s["n_quotes"], e(rq["generated_utc"]))
+                   if _s["all_found"] else
+                   ("<b>%d of %d matched &mdash; a quoted rule sentence no longer appears in the "
+                    "document, and the verification step fails until that is resolved.</b>"
+                    % (_s["n_found"], _s["n_quotes"])))
+        rules_block = ('<h2>What is actually scored &mdash; the rules, verbatim</h2>\n'
+                       '<p>The scored population is not the dataset we can download, and this is the'
+                       ' single most consequential fact in the challenge. It is stated in prose, so'
+                       ' it is quoted here word for word rather than paraphrased, and re-checked'
+                       ' mechanically against the official document'
+                       ' (<a href="%s">%s</a>, sha256 <span class="mono small">%s&hellip;</span>) by'
+                       ' <code>scripts/verify_rules_quotes.py</code> on a runner. %s</p>'
+                       '<table><thead><tr><th>rules id</th><th>sentence as printed</th>'
+                       '<th>found</th></tr></thead><tbody>%s</tbody></table>%s'
+                       % (e(src.get("url") or src.get("canonical_url") or RULES),
+                          e(src.get("url") or src.get("canonical_url") or RULES),
+                          e(str(src.get("sha256", ""))[:16]), verdict, qrows,
+                          note("warn", "<b>Consequence, stated plainly.</b> The training labels in "
+                                       "the data tab are the <em>existing</em> USGS Quaternary "
+                                       "compilation, but <em>both</em> prize phases score the "
+                                       "expert-mapped <em>new</em> fault dataset. A submission that "
+                                       "reproduces the catalogue earns credit only where the experts'"
+                                       " new labels coincide with it, and every DTI printed "
+                                       "elsewhere on this site is a monitor against the wrong "
+                                       "population. The same asymmetry is why the emitted line is "
+                                       "now written as a band rather than a skeleton &mdash; see the"
+                                       " <a href='metric.html#width'>width measurement</a>.")))
+
+    return page("Overview", "index.html", rules_block + f"""
 {note("ok", "<strong>How to read this site.</strong> Nothing here is written from memory. "
       "Every table is rendered by <code>scripts/build_site.py</code> from JSON that a GitHub "
       "Actions runner produced by downloading the real files and measuring them with "

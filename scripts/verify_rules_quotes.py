@@ -1,27 +1,28 @@
-#!/usr/bin/env python3
-"""Machine-verify the official-rules quotations this project's strategy rests on.
+#!/usr/bin/env python
+"""Verify the official rules line by line, and fail loudly when a sentence moves.
 
-WHY: the single most consequential fact in this competition is *what the metric is computed
-against*.  Everything else - architecture, loss, shaping, ensembling - is downstream of it.
-A quoted sentence in a PDF is exactly the kind of claim that turns into folklore if nobody
-re-checks it, so this script does not paraphrase: it extracts the text of the canonical
-official rules and asserts each quoted sentence is present *verbatim* (after normalising
-whitespace and unicode punctuation, because PDF extraction re-wraps lines and turns ' into ').
+WHY THIS EXISTS.  The single most consequential fact in this challenge is which population is
+scored, and it is stated in prose: Phase 1 scores "a privately withheld subset of the original new
+fault dataset", Phase 2 scores "the full, revised new fault dataset", while the training labels are
+the *existing* USGS Quaternary compilation.  Every strategy decision in this repository follows from
+those sentences, so they are not paraphrased anywhere - they are quoted verbatim and checked
+mechanically against the official document, with the document's sha256 recorded.
 
-Source of truth (canonical, sponsor-hosted):
-    https://docs.nlr.gov/docs/fy26osti/96647.pdf
-The competition site links the same document through its rules page:
-    https://www.drivendata.org/competitions/306/competition-doe-gems/rules/
-    -> https://www.herox.com/GEMSPrize/resource/2274
+It also settles the opposite reading, which is worth stating because it is the intuitive one: the
+pre-existing catalogue is NOT what either phase scores ("all fault labels in this updated label
+set", "the complete updated test set created by expert review").  A submission that reproduces the
+catalogue therefore earns credit only where the experts' new labels happen to coincide with it.
 
-Usage:
-    python scripts/verify_rules_quotes.py --pdf data/GEMS_96647.pdf --out data/evidence/rules_quotes.json
-    python scripts/verify_rules_quotes.py --url https://docs.nlr.gov/docs/fy26osti/96647.pdf --out ...
-    python scripts/verify_rules_quotes.py --text some_extracted.txt     # offline test
+USAGE
+    python scripts/verify_rules_quotes.py --url https://docs.nlr.gov/docs/fy26osti/96647.pdf \
+        --out data/evidence/rules_quotes.json [--expected-sha256 <sha recorded for the mirror>]
+    python scripts/verify_rules_quotes.py --pdf local.pdf --out ...
+    python scripts/verify_rules_quotes.py --text extracted.txt      (offline; no extraction step)
 
-Exit code is non-zero if any quote is missing, so it can gate CI.
+Exit code is 0 only when every quote is found verbatim (after whitespace/quote normalisation).
+The runner does the fetch: this sandbox's egress allowlist does not include docs.nlr.gov, which is
+why the check is a workflow step rather than a local one.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -34,183 +35,180 @@ import unicodedata
 import urllib.request
 from pathlib import Path
 
-CANONICAL_URL = "https://docs.nlr.gov/docs/fy26osti/96647.pdf"
-RULES_PAGE = "https://www.drivendata.org/competitions/306/competition-doe-gems/rules/"
-PROBLEM_PAGE = "https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/"
+ROOT = Path(__file__).resolve().parents[1]
 
-# (id, section, quote, why it matters for this project)
-QUOTES: list[tuple[str, str, str, str]] = [
+# (id, section hint, exact sentence as printed, why it matters here)
+QUOTES = [
+    ("two_phases", "§1.1",
+     "Participants will submit a single entry, which will be evaluated in two prize phases using a "
+     "distance-weighted Tversky index.",
+     "One submission is scored twice; there is no separate Phase-2 upload to optimise for."),
     ("phase1_target", "§1.1",
-     "In Phase 1, submissions will be evaluated against a privately withheld subset of the "
-     "original new fault dataset compiled by expert reviewers.",
-     "Phase 1 is scored on NEW faults, not on the existing database we can download."),
-    ("phase2_target", "§1.1",
-     "Submissions will be reevaluated against the full, revised new fault dataset using the "
-     "same distance-weighted Tversky index.",
-     "Phase 2 (the $250k pool) is still scored on the NEW fault dataset - not on the public "
-     "USGS catalogue. Copying the known-fault raster is therefore a trap in BOTH phases."),
+     "In Phase 1, submissions will be evaluated against a privately withheld subset of the original "
+     "new fault dataset compiled by expert reviewers.",
+     "The scored population is NEW faults, not the catalogue we can download."),
+    ("experts_revise", "§1.1",
+     "After Phase 1, expert reviewers will use submitted predictions to revise the new fault dataset.",
+     "Discoveries can be confirmed by experts - predictions that look like real new faults matter."),
     ("phase2_eligibility", "§1.1",
      "All Phase 1 competitors will be eligible to compete in Phase 2 and will be automatically "
      "submitted for consideration.",
-     "No need to place top-5 in Phase 1 to win Phase 2, and one submission is used for both."),
-    ("training_labels_source", "§3.3",
-     "The training labels contain existing fault data at 100-m resolution where positively "
-     "labeled pixels indicate fault presence. These labels were obtained from the INGENIOUS "
-     "project's Great Basin Regional Dataset Compilation.",
-     "The labels we train on are the EXISTING fault catalogue; the labels we are scored on are "
-     "a different, newer population. Training labels and test labels are disjoint universes."),
-    ("submit_new_labels", "§3.5",
-     "Submissions will be automatically evaluated using a distance-weighted Tversky index "
-     "against newly created fault labels, as described on the competition website.",
-     "Third, independent statement of the same fact (problem page + rules §1.1 + §3.5)."),
-    ("one_submission_two_rounds", "§3.5",
-     "Before the end of the competition, you must choose only one submission for evaluation "
-     "across both prize rounds.",
-     "One raster must serve both rounds, so it cannot be tuned for a single phase."),
-    ("blind_private_selection", "§3.6.2",
-     "You must choose only one submission to use for scoring across both prize rounds, and you "
-     "must make your decision without knowledge of your scores on the private test set.",
-     "Private-set scores are hidden; the public leaderboard is a partial, differently-weighted "
-     "sample, so it cannot be over-fitted."),
-    ("weekly_limit", "§3.2",
-     "You can make multiple submissions, subject to the limits specified on the competition "
-     "website (three submissions per week).",
-     "Three scored submissions per week is the only unbiased feedback channel available."),
+     "No top-5 cutoff gates the larger prize pool: Phase-1 risk-taking buys nothing."),
+    ("phase2_target", "§1.1",
+     "Submissions will be reevaluated against the full, revised new fault dataset using the same "
+     "distance-weighted Tversky index.",
+     "Phase 2 is the same metric on the same population - one objective, two label revisions."),
+    ("prize_pools", "§1.1",
+     "The Phase 2 prize pool of $250,000 will be distributed among the top five competitors, as "
+     "judged by their performance on all fault labels in this updated label set.",
+     "$250k of the $300k is decided on the revised new-fault labels; $50k in Phase 1."),
+    ("labels_source", "§2",
+     "The labels for this prize come from the USGS Quaternary Fault and Fold Database and from a set "
+     "of newly identified faults labeled by geology experts at the National Laboratory of the Rockies "
+     "(NLR) and USGS.",
+     "Two populations in one sentence: the public catalogue (training) and the expert-mapped new "
+     "faults (scoring)."),
+    ("ranking_basis", "§3.2",
+     "Second-round prize rankings will be determined by running the selected final submissions "
+     "against the complete updated test set created by expert review.",
+     "Phase 2 ground truth is the *complete updated* set - expert new faults, not the old database."),
+    ("features_source", "§2",
+     "The feature data for this prize come from the recently released Geoscience Data Acquisition "
+     "for Western Nevada (GeoDAWN)",
+     "The features are the GeoDAWN geophysics (lidar/magnetic/radiometric), i.e. what the experts "
+     "themselves mapped the new faults from."),
     ("dem_is_a_feature", "§2",
-     "In addition, the feature data also contain U.S. Geological Survey (USGS) Digital "
-     "Elevation Model (DEM) elevation data at 1-m resolution.",
-     "1 m DEM derivatives are explicitly part of the intended feature data (they are not yet "
-     "used by our training configs)."),
+     "In addition, the feature data also contain U.S. Geological Survey (USGS) Digital Elevation "
+     "Model (DEM) elevation data at 1-m resolution.",
+     "The 1 m DEM is intended input data, not an external extra - it is admissible."),
+    ("single_geotiff", "§3.2",
+     "You must submit a single GeoTIFF with a single raster layer at 100-meter resolution containing "
+     "your model's predictions of fault locations for the entirety of the GeoDAWN study area.",
+     "Submission format, exactly."),
+    ("weekly_limit", "§3.2",
+     "You can make multiple submissions, subject to the limits specified on the competition website "
+     "(three submissions per week).",
+     "Three measured shots per week at the real metric - the only honest feedback available."),
     ("ai_disclosure", "§3.2",
-     "you must indicate in the narrative (not included in the word count) the extent to which, "
-     "if any, you used generative AI technology",
-     "Binding disclosure requirement: this project uses AI agents, and the final narrative must "
-     "say so."),
+     "you must indicate in the narrative (not included in the word count) the extent to which, if "
+     "any, you used generative AI technology",
+     "Required in the final narrative; this repository documents its own AI use."),
     ("code_assets", "§3.2",
-     "The solution assets must contain a description of the resources required to build and "
-     "run the solution, and they should be able to sufficiently reproduce the winning results "
-     "and generate predictions on new data samples.",
-     "A leaderboard-winning entry must ship reproducible code + resource documentation, which "
-     "is what this repository is for."),
+     "The solution assets must contain a description of the resources required to build and run the "
+     "solution, and they should be able to sufficiently reproduce the winning results and generate "
+     "predictions on new data samples.",
+     "Why every run here commits its logs, hashes, environment pins and reproduce steps."),
+    ("entry", "§3.1",
+     "To enter the competition, you must create a profile on the DrivenData platform and agree to "
+     "abide by the competition rules and restrictions.",
+     "The one genuinely human step: registration, then the account-gated data tab and upload."),
+    ("citizen", "§1.3",
+     "An individual prize competitor (who is not competing as a member of a group) must be a U.S. "
+     "citizen or permanent resident.",
+     "Eligibility - checked before any prize is contemplated."),
+    ("payment", "§A.2",
+     "Each competitor must sign and return to the prize administrator within 30 days of the date on "
+     "the notice a completed NLR Request for ACH Banking Information form and a completed IRS W-9 "
+     "form.",
+     "What winning actually requires administratively."),
+    ("public_elements", "§A.4",
+     "The elements of the submission that are designated as public will become publicly available as "
+     "part of this prize.",
+     "Public-designated elements must contain no trade secrets; everything here is public already."),
+    ("single_award", "§A.3",
+     "The prize administrator will award a single dollar amount to the designated primary submitter, "
+     "whether consisting of a single entity or multiple entities.",
+     "Team allocation is the team's problem, not the sponsor's."),
 ]
 
 
-def _squash(s: str) -> str:
-    """Remove ALL whitespace.  PDF text extraction re-wraps lines and, across page breaks, splits
-    words ("...generate prediction" | "s on new data samples").  Comparing the whitespace-free form
-    makes verbatim checking immune to layout without accepting paraphrases."""
-    return re.sub(r"\s+", "", s)
+def norm(text: str) -> str:
+    """Normalise a document and a quote to the same form.
 
-
-def _norm(s: str) -> str:
-    """Normalise for verbatim comparison: unicode punctuation, hyphenation, whitespace."""
-    s = unicodedata.normalize("NFKC", s)
-    s = (s.replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", '"')
-          .replace("\u201d", '"').replace("\u2013", "-").replace("\u2014", "-")
+    - NFKC folds the ligatures and full-width characters PDF extraction produces
+    - curly quotes/apostrophes and en/em dashes are folded to ASCII
+    - a hyphen followed by a newline is a line break inside a word, not a hyphen
+    - all whitespace collapses to a single space
+    """
+    t = unicodedata.normalize("NFKC", text)
+    t = (t.replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", '"')
+          .replace("\u201d", '"').replace("\u2014", "-").replace("\u2013", "-")
           .replace("\u00a0", " "))
-    s = re.sub(r"-\s*\n\s*", "", s)          # de-hyphenate line breaks
-    s = re.sub(r"\s+", " ", s)               # collapse newlines/indentation
-    return s.strip()
+    t = re.sub(r"-\s*\n\s*", "", t)          # de-hyphenate across line breaks
+    t = re.sub(r"\s+", " ", t)
+    return t
 
 
-def extract_pdf_text(path: Path) -> str:
+def extract(path: Path) -> str:
+    if path.suffix.lower() == ".txt":
+        return path.read_text(encoding="utf-8", errors="replace")
     try:
         from pypdf import PdfReader
-    except ImportError:                                       # pragma: no cover
-        try:
-            from PyPDF2 import PdfReader                       # type: ignore
-        except ImportError:
-            raise SystemExit("need pypdf (pip install pypdf) to read the PDF")
+    except ImportError:                                             # pragma: no cover
+        raise SystemExit("pypdf is required to read a PDF: pip install pypdf")
     reader = PdfReader(str(path))
-    return "\n".join((p.extract_text() or "") for p in reader.pages)
+    return "\n".join((pg.extract_text() or "") for pg in reader.pages)
 
 
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def fetch(url: str, dest: Path) -> tuple[int, str]:
+    req = urllib.request.Request(url, headers={"User-Agent": "gemsdoe-rules-verify/1.0"})
+    with urllib.request.urlopen(req, timeout=120) as r:              # noqa: S310 - fixed https URL
+        data = r.read()
+    dest.write_bytes(data)
+    return len(data), hashlib.sha256(data).hexdigest()
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--pdf", help="local PDF of the official rules")
-    src.add_argument("--url", help=f"canonical URL (default {CANONICAL_URL})")
-    src.add_argument("--text", help="already-extracted text (offline)")
-    ap.add_argument("--out", default="data/evidence/rules_quotes.json")
-    args = ap.parse_args()
+    src.add_argument("--pdf")
+    src.add_argument("--text")
+    src.add_argument("--url")
+    ap.add_argument("--out", default=str(ROOT / "data/evidence/rules_quotes.json"))
+    ap.add_argument("--expected-sha256", default=None,
+                    help="sha256 recorded for the data-tab mirror; proves the two copies are identical")
+    a = ap.parse_args()
 
-    url = args.url or CANONICAL_URL
-    pdf_sha = None
-    source = {}
-    if args.text:
-        text = Path(args.text).read_text(errors="replace")
-        source = dict(kind="text", path=str(args.text))
+    sha = None
+    nbytes = None
+    if a.url:
+        tmp = Path("/tmp/rules_canonical.pdf")
+        nbytes, sha = fetch(a.url, tmp)
+        doc_path = tmp
     else:
-        if args.pdf:
-            pdf = Path(args.pdf)
-            source = dict(kind="file", path=str(pdf), bytes=pdf.stat().st_size)
-        else:
-            tmp = Path("/tmp/_rules.pdf")
-            print(f"downloading {url}")
-            urllib.request.urlretrieve(url, tmp)
-            pdf = tmp
-            source = dict(kind="url", url=url)
-        pdf_sha = sha256_file(pdf)
-        source.update(sha256=pdf_sha, bytes=pdf.stat().st_size)
-        text = extract_pdf_text(pdf)
+        doc_path = Path(a.pdf or a.text)
+        b = doc_path.read_bytes()
+        nbytes, sha = len(b), hashlib.sha256(b).hexdigest()
 
-    norm_doc = _norm(text)
-    squash_doc = _squash(norm_doc)
+    text = norm(extract(doc_path))
     results = []
-    n_ok = 0
     for qid, section, quote, why in QUOTES:
-        nq = _norm(quote)
-        ok = (nq in norm_doc) or (_squash(nq) in squash_doc)
-        how = "substring" if nq in norm_doc else ("whitespace-insensitive" if ok else "none")
-        # token-overlap fallback so a MISSING exact match reports how close it got
-        toks = set(nq.split())
-        best = 0.0
-        if not ok:
-            words = norm_doc.split()
-            n = len(nq.split())
-            for i in range(0, max(1, len(words) - n), 4):
-                cand = set(words[i:i + n])
-                if cand:
-                    best = max(best, len(toks & cand) / len(toks))
-        results.append(dict(id=qid, section=section, quote=quote, why=why,
-                            exact_match=bool(ok), matched_as=how,
-                            best_token_overlap=round(best, 4)))
-        n_ok += int(ok)
-        print(f"{'OK   ' if ok else 'MISS '} {qid:<26} {section:<6} "
-              f"overlap={best:.3f}  {quote[:60]}...")
+        found = norm(quote) in text
+        results.append(dict(id=qid, section=section, quote=quote, why=why, exact_match=bool(found)))
+        print(f"{'OK  ' if found else 'MISS'} {qid:20s} {section:6s} {quote[:72]}...")
 
-    out = dict(
+    n_found = sum(1 for r in results if r["exact_match"])
+    payload = dict(
         generated_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         script="scripts/verify_rules_quotes.py",
-        document=dict(title="Geologic Enhanced Mapping System (GEMS) Prize Official Rules",
-                      canonical_url=CANONICAL_URL, retrieved_via=source,
-                      competition_rules_page=RULES_PAGE, problem_page=PROBLEM_PAGE),
-        verification=dict(quotes_checked=len(QUOTES), exact_matches=n_ok,
-                          all_verified=bool(n_ok == len(QUOTES)),
-                          method="unicode NFKC + de-hyphenation + whitespace collapse, then a "
-                                 "substring test; a second whitespace-free comparison absorbs the "
-                                 "word splits that PDF page breaks introduce. Paraphrase is never "
-                                 "accepted - the quoted characters must all be present, in order."),
+        source=dict(url=a.url or str(doc_path), bytes=nbytes, sha256=sha),
+        method=("verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line "
+                "breaks and whitespace collapse - no paraphrasing, no fuzzy matching"),
+        match_against_mirror=dict(expected_sha256=a.expected_sha256,
+                                  identical=bool(a.expected_sha256 and sha == a.expected_sha256)),
         quotes=results,
-        conclusion=("Both prize phases score the NEW fault dataset, which is disjoint from the "
-                    "existing-fault labels the competition distributes for training. Route all "
-                    "model selection through sources that do not assume otherwise.")
-        if n_ok == len(QUOTES) else
-        ("VERIFICATION INCOMPLETE - do not rely on the quotes above until every row is verified."),
+        summary=dict(n_quotes=len(results), n_found=n_found, all_found=n_found == len(results)),
+        conclusion=("Both prize phases are scored against the expert-mapped NEW fault dataset (Phase 1 "
+                    "a private subset, Phase 2 the full revised set). The catalogue in the data tab is "
+                    "the training labels and is not the scored population."),
     )
-    op = Path(args.out)
-    op.parent.mkdir(parents=True, exist_ok=True)
-    op.write_text(json.dumps(out, indent=1))
-    print(f"\n{n_ok}/{len(QUOTES)} quotes verified verbatim -> {op}")
-    return 0 if n_ok == len(QUOTES) else 1
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=1))
+    print(f"\nwrote {out}: {n_found}/{len(results)} quotes found; sha256 {sha}")
+    if a.expected_sha256 and sha != a.expected_sha256:
+        print(f"WARNING: sha256 differs from the recorded mirror ({a.expected_sha256})", file=sys.stderr)
+    return 0 if n_found == len(results) else 1
 
 
 if __name__ == "__main__":
