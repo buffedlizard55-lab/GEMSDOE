@@ -1,0 +1,59 @@
+{
+ "generated_utc": "2026-09-16T23:23:34+00:00",
+ "generated_by": "scripts/fetch_proxy_faults.py",
+ "purpose": "reachability of the USGS documents this proxy cites, recorded on the same run that fetches the faults - written before any failure so a failed run is diagnosable from the committed evidence",
+ "links": [
+  {
+   "url": "https://pubs.usgs.gov/ds/1052/ds1052.pdf",
+   "attempts": [
+    {
+     "method": "HEAD",
+     "try": 1,
+     "status": 200
+    }
+   ],
+   "ok": true,
+   "status": 200,
+   "method": "HEAD",
+   "label": "report"
+  },
+  {
+   "url": "https://pubs.usgs.gov/ds/1052/ds20171052_appendix5.pdf",
+   "attempts": [
+    {
+     "method": "HEAD",
+     "try": 1,
+     "status": 200
+    }
+   ],
+   "ok": true,
+   "status": 200,
+   "method": "HEAD",
+   "label": "appendix5"
+  },
+  {
+   "url": "https://pubs.usgs.gov/ds/1052/ds20171052_appendix2_v1_1.pdf",
+   "attempts": [
+    {
+     "method": "HEAD",
+     "try": 1,
+     "status": 200
+    }
+   ],
+   "ok": true,
+   "status": 200,
+   "method": "HEAD",
+   "label": "appendix2"
+  }
+ ],
+ "service_identity": {
+  "doi": "https://doi.org/10.5066/F7WH2N65",
+  "item_id_in_service": "5888bf4fe4b05ccb964bab9d",
+  "match": null,
+  "route": null,
+  "doi_route_error": "HTTPError: HTTP Error 403: Forbidden",
+  "item_route_error": "RuntimeError: failed after 4 attempts: https://www.sciencebase.gov/catalog/item/5888bf4fe4b05ccb964bab9d?format=json: HTTP Error 403: Forbidden",
+  "meaning": "NOT ESTABLISHED - the service could not be tied to the DOI on this run; cite the data release only if a reviewer can reproduce the link by hand"
+ },
+ "layer_name": "SGMC_Structure"
+}
