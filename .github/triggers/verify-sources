@@ -4,3 +4,4 @@ data/evidence/inventory.json, verifies every quoted sentence of the official rul
 (scripts/verify_rules_quotes.py) and re-fetches every URL in docs/data_catalog.csv.
 Evidence lands in data/evidence/rules_quotes.json, data/evidence/rule_sources_verification.json,
 docs/link_verification.json and docs/data_catalog.verified.csv.
+# re-trigger (previous commit message carried [skip ci], which suppresses ALL workflows)
