@@ -91,8 +91,16 @@ LAYER = 1                       # SGMC_Structure
 USER_AGENT = "gemsdoe-proxy-fetch/1.0 (+https://github.com/buffedlizard55-lab/GEMSDOE)"
 
 
-def http_json(url: str, timeout: int = 180, attempts: int = 4) -> dict:
-    """GET a JSON document with retries.  Raises on HTTP error or an ArcGIS 'error' payload."""
+def http_json(url: str, timeout: int = 180, attempts: int = 4,
+              trace: list | None = None) -> dict:
+    """GET a JSON document with retries.  Raises on HTTP error or an ArcGIS 'error' payload.
+
+    MEASURED 2026-09-16 (proxy-eval runs 35161765013 and 35162064245): the fetch job died in the
+    paging loop twice, on a service that answers the same requests from elsewhere - the signature of
+    a shared-runner IP being throttled.  So a throttle is now treated as a throttle: the backoff floor
+    for 429/503 is 30 s (honouring Retry-After when the server sends one) instead of 3 s, and every
+    attempt is appended to `trace` so the caller can commit the reason if it eventually gives up.
+    """
     last = None
     for i in range(attempts):
         try:
@@ -100,13 +108,37 @@ def http_json(url: str, timeout: int = 180, attempts: int = 4) -> dict:
             with urllib.request.urlopen(req, timeout=timeout) as r:      # noqa: S310 - fixed https
                 payload = json.loads(r.read().decode("utf-8"))
             if isinstance(payload, dict) and "error" in payload:
-                raise RuntimeError(f"service error: {payload['error']}")
+                err = payload["error"]
+                code = (err or {}).get("code") if isinstance(err, dict) else None
+                raise RuntimeError(f"service error {code}: {err}")
+            if trace is not None:
+                trace.append({"url": url[:300], "try": i + 1, "ok": True})
             return payload
         except Exception as exc:                                          # noqa: BLE001
             last = exc
+            retry_after = None
+            if isinstance(exc, urllib.error.HTTPError):
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            throttled = ("429" in str(exc)) or ("503" in str(exc)) or (retry_after is not None)
+            if trace is not None:
+                trace.append({"url": url[:300], "try": i + 1, "ok": False,
+                              "why": f"{type(exc).__name__}: {exc}",
+                              "retry_after": retry_after, "throttled": bool(throttled)})
             if i < attempts - 1:
-                time.sleep(2 ** i * 3)
+                if retry_after:
+                    try:
+                        wait = max(1.0, min(300.0, float(retry_after)))
+                    except ValueError:
+                        wait = 30.0
+                else:
+                    wait = max(2 ** i * 3, 30.0 if throttled else 0.0)
+                time.sleep(wait)
     raise RuntimeError(f"failed after {attempts} attempts: {url}: {last}")
+
+
+def http_json_traced(url: str, trace: list, **kw) -> dict:
+    """`http_json` with the attempt log collected (see the throttle note above)."""
+    return http_json(url, trace=trace, **kw)
 
 
 def probe_url(url: str, attempts: int = 3, timeout: int = 60) -> dict:
@@ -274,6 +306,9 @@ def main() -> int:
                     help="raster whose CRS+bounds define the query envelope (the competition grid)")
     ap.add_argument("--out", default="data/external/sgmc_proxy_faults.geojson")
     ap.add_argument("--meta", default="data/evidence/proxy/fetch_meta.json")
+    ap.add_argument("--page-sleep", type=float, default=1.0,
+                    help="seconds between query pages (ArcGIS Online throttles bursts from shared "
+                         "runner IPs - measured 2026-09-16)")
     ap.add_argument("--link-report", default="data/evidence/proxy/fetch_links.json",
                     help="where to record the reachability probe of every cited USGS document "
                          "(written before any failure, so a failed run leaves a reason)")
@@ -333,6 +368,7 @@ def main() -> int:
         raise SystemExit(f"a documented USGS link is unreachable - fix the link, do not publish it "
                          f"(every attempt is recorded in {report_path})")
 
+    paging_trace: list = []
     if a.rule_ids:
         domain = rule_id_domain(layer_meta)
         chosen = {str(c).strip(): domain.get(str(c).strip(), f"RuleID {c} (--rule-ids override, "
@@ -355,7 +391,17 @@ def main() -> int:
     while True:
         url = build_query(a.service, a.layer, bbox, chosen, offset, a.page_size)
         urls.append(url)
-        page = http_json(url)
+        try:
+            page = http_json(url, trace=paging_trace)
+        except Exception as exc:                                          # noqa: BLE001
+            # Do not die silently: write what we were asking for and what came back, then re-raise
+            # so the run still fails (a partial proxy must never be published as the proxy).
+            _write_report({"failed_stage": "query paging",
+                           "failed_at_offset": offset,
+                           "features_kept_before_failure": len(features),
+                           "failed_with": f"{type(exc).__name__}: {exc}",
+                           "paging_trace_tail": paging_trace[-8:]})
+            raise
         batch = page.get("features", [])
         offsets.append(len(batch))
         for f in batch:
@@ -375,6 +421,12 @@ def main() -> int:
         offset += len(batch)
         if not batch or len(batch) < a.page_size or len(features) >= a.max_features:
             break
+        if a.page_sleep:
+            time.sleep(a.page_sleep)
+
+    _write_report({"query_pages": len(urls), "query_offsets": offsets,
+                   "features_kept": len(features),
+                   "paging_retries": sum(1 for t in paging_trace if not t.get("ok"))})
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

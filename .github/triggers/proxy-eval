@@ -16,3 +16,8 @@ proxy-eval
 # no committed trace; the probe now retries, falls back from HEAD to a ranged GET, and writes
 # data/evidence/proxy/fetch_links.json before it can fail. Re-run the sweep with the corrected
 # units/baseline/clipping, the extended width grid (to 12 px) and the decision step.
+
+# 2026-09-16 (session 7, fourth attempt): the query paging loop now backs off on 429/503 (30 s
+# floor, honours Retry-After), spaces pages by --page-sleep, and writes the failing offset, the
+# error and the attempt trace into data/evidence/proxy/fetch_links.json before re-raising. Both
+# previous failures happened against a service that answers the same queries from elsewhere.

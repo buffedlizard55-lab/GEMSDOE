@@ -480,3 +480,57 @@ def test_documented_link_probe_retries_falls_back_and_records_why(monkeypatch):
     assert rec2["ok"] is False
     assert len(rec2["attempts"]) == 4, "every attempt must be recorded, both methods, both rounds"
     assert all("why" in a for a in rec2["attempts"])
+
+
+def test_arcgis_throttle_is_backed_off_and_logged(monkeypatch):
+    """A 429 from ArcGIS must wait and be recorded, not fail the job on the first attempt.
+
+    MEASURED 2026-09-16: two proxy-eval runs died in the query paging loop against a service that
+    answers the same requests elsewhere - the signature of a shared-runner IP being throttled.
+    """
+    import io
+    import urllib.error
+
+    f = _load("fetch_proxy_faults")
+    calls = []
+
+    def throttled(req, timeout=None):
+        calls.append(req.full_url)
+        raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests",
+                                     {"Retry-After": "1"}, io.BytesIO(b""))
+
+    monkeypatch.setattr(f.urllib.request, "urlopen", throttled)
+    trace: list = []
+    with pytest.raises(RuntimeError, match="failed after 2 attempts"):
+        f.http_json("https://services.arcgis.com/x/query", attempts=2, trace=trace)
+    assert len(trace) == 2, "every throttled attempt must be logged"
+    assert all(t["ok"] is False and t["throttled"] for t in trace)
+    assert trace[0]["retry_after"] == "1", "Retry-After must be read, not ignored"
+    assert "429" in trace[0]["why"]
+
+
+def test_arcgis_error_payload_still_raises():
+    """An ArcGIS error payload is an error even when the HTTP status is 200."""
+    import io
+
+    f = _load("fetch_proxy_faults")
+
+    class Resp:
+        status = 200
+
+        def read(self):
+            return b'{"error": {"code": 400, "message": "Invalid query"}}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    orig = f.urllib.request.urlopen
+    f.urllib.request.urlopen = lambda req, timeout=None: Resp()
+    try:
+        with pytest.raises(RuntimeError, match="service error 400"):
+            f.http_json("https://services.arcgis.com/x/query", attempts=1)
+    finally:
+        f.urllib.request.urlopen = orig
