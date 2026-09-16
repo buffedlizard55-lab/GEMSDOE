@@ -534,3 +534,31 @@ def test_arcgis_error_payload_still_raises():
             f.http_json("https://services.arcgis.com/x/query", attempts=1)
     finally:
         f.urllib.request.urlopen = orig
+
+
+def test_rule_class_names_survive_a_metadata_payload_without_the_field_domain():
+    """The class names must be recoverable however the service serves them.
+
+    MEASURED 2026-09-16: two proxy-eval runs stopped at "no RuleIDs selected" while the RuleID
+    field domain was present in the same request fetched from elsewhere. This service also publishes
+    the identical value -> label mapping in its unique-value renderer, so that is used (with its
+    provenance recorded) rather than failing with nothing to show for it.
+    """
+    fetch = _load("fetch_proxy_faults")
+    renderer_only = {"fields": [{"name": "RuleID"}], "drawingInfo": {"renderer": {
+        "uniqueValueInfos": [{"value": "22", "label": "Fault, unknown type, certain"},
+                             {"value": "1", "label": "Undefined"}]}}}
+    domain, source = fetch.rule_id_domain_with_source(renderer_only)
+    assert domain == {"22": "Fault, unknown type, certain", "1": "Undefined"}
+    assert "renderer" in source
+    assert set(fetch.fault_rule_ids(renderer_only)) == {"22"}
+
+    field_domain = {"fields": [{"name": "RuleID", "domain": {"codedValues": [
+        {"code": 22, "name": "Fault, unknown type, certain"}]}}],
+        "drawingInfo": {"renderer": {"uniqueValueInfos": [{"value": "9", "label": "Fault, bogus"}]}}}
+    domain2, source2 = fetch.rule_id_domain_with_source(field_domain)
+    assert domain2 == {"22": "Fault, unknown type, certain"}, "the field domain wins when present"
+    assert source2.startswith("RuleID field")
+
+    empty, source3 = fetch.rule_id_domain_with_source({"fields": []})
+    assert empty == {} and source3 == "none"

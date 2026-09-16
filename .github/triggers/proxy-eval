@@ -21,3 +21,9 @@ proxy-eval
 # floor, honours Retry-After), spaces pages by --page-sleep, and writes the failing offset, the
 # error and the attempt trace into data/evidence/proxy/fetch_links.json before re-raising. Both
 # previous failures happened against a service that answers the same queries from elsewhere.
+
+# 2026-09-16 (session 7, fifth attempt): the rule-selection stage was the silent exit - two runs
+# stopped between the metadata fetch and the first query with nothing written about why. It now
+# records the selection (domain source, size, chosen classes, metadata field list, metadata keys)
+# and falls back to the layer renderer's unique-value labels, then to a previous run's ids, when the
+# RuleID field domain is absent - with the provenance recorded either way.

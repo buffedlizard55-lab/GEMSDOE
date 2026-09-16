@@ -243,14 +243,37 @@ def raster_bbox_4326(raster: Path) -> tuple[float, float, float, float]:
 
 
 def rule_id_domain(layer_meta: dict) -> dict[str, str]:
-    """The service's own RuleID coded-value domain (code -> published class name)."""
+    """The service's own RuleID coded-value domain (code -> published class name).
+
+    MEASURED 2026-09-16: this service is a "reprojected for faster display" copy whose response
+    carries the same value -> label mapping in TWO places - the RuleID field's coded-value domain and
+    the layer's unique-value renderer (`drawingInfo.renderer.uniqueValueInfos`).  Two runner runs
+    died at "no RuleIDs selected" while the field domain was present in the response fetched from
+    elsewhere, so the renderer labels are used when the field domain is missing.  Both are USGS's own
+    naming; which one supplied the classes is recorded in the run's report
+    (see `rule_id_domain_with_source`).
+    """
+    return rule_id_domain_with_source(layer_meta)[0]
+
+
+def rule_id_domain_with_source(layer_meta: dict) -> tuple[dict, str]:
+    """`rule_id_domain` plus the provenance of the names: field domain or renderer labels."""
     out: dict[str, str] = {}
-    for fld in layer_meta.get("fields", []):
+    for fld in layer_meta.get("fields", []) or []:
         if fld.get("name") != "RuleID":
             continue
         for cv in (fld.get("domain") or {}).get("codedValues", []) or []:
-            out[str(cv["code"])] = str(cv.get("name", ""))
-    return out
+            if cv.get("code") is not None:
+                out[str(cv["code"])] = str(cv.get("name", ""))
+    if out:
+        return out, "RuleID field coded-value domain"
+    infos = (((layer_meta.get("drawingInfo") or {}).get("renderer") or {})
+             .get("uniqueValueInfos") or [])
+    for cv in infos:
+        if cv.get("value") is not None:
+            out[str(cv["value"])] = str(cv.get("label", ""))
+    return out, ("layer renderer unique-value labels (the field domain was absent from this run's "
+                 "metadata)") if out else "none"
 
 
 def fault_rule_ids(layer_meta: dict, extra_names: tuple[str, ...] = ()) -> dict[str, str]:
@@ -369,18 +392,51 @@ def main() -> int:
                          f"(every attempt is recorded in {report_path})")
 
     paging_trace: list = []
+    domain, domain_source = rule_id_domain_with_source(layer_meta)
+    fallback: dict | None = None
     if a.rule_ids:
-        domain = rule_id_domain(layer_meta)
         chosen = {str(c).strip(): domain.get(str(c).strip(), f"RuleID {c} (--rule-ids override, "
                                                              "name not in the service domain)")
                   for c in a.rule_ids.split(",") if str(c).strip()}
         selection = "explicit --rule-ids (name taken from the service coded-value domain)"
     else:
         chosen = fault_rule_ids(layer_meta, extra)
-        domain, selection = chosen, "service coded-value domain, names containing 'fault'"
+        selection = "service coded-value domain, names containing 'fault'"
+        if not chosen:
+            # MEASURED 2026-09-16 (runs 35162064245, 35162278463): two runs died here, and the only
+            # record was that the script stopped between the metadata fetch and the first query -
+            # i.e. this branch, with nothing written about why.  The domain can be missing if the
+            # service answers with a partial metadata payload under load, so: fall back to the ids a
+            # previous successful run recorded against the SAME service, say so loudly in the
+            # committed report, and still refuse if there is nothing to fall back to.
+            prev_path = Path(a.meta)
+            prev = json.loads(prev_path.read_text()) if prev_path.exists() else {}
+            prev_classes = ((prev.get("query") or {}).get("rule_id_to_class") or {})
+            if prev_classes:
+                chosen = dict(prev_classes)
+                selection = ("FALLBACK: this run's layer metadata carried no RuleID coded-value "
+                             "domain, so the ids recorded by the previous run against the same "
+                             "service are used - a reviewer should re-run before trusting the "
+                             "difference")
+                fallback = {"used": True, "from": str(prev_path),
+                            "previous_generated_utc": prev.get("generated_utc"),
+                            "rule_ids": sorted(chosen, key=int)}
 
+    _write_report({"rule_selection": {
+        "selection_rule": selection, "domain_size": len(domain),
+        "domain_source": domain_source, "chosen_count": len(chosen),
+        "chosen": chosen, "fallback": fallback,
+        "layer_fields": [f.get("name") for f in (layer_meta.get("fields") or [])],
+        "layer_metadata_keys": sorted(layer_meta)[:24],
+        "layer_name": layer_meta.get("name")}})
+    if fallback:
+        print(f"  WARNING: {selection}")
     if not chosen:
-        raise SystemExit("no RuleIDs selected - inspect the layer metadata before trusting an empty proxy")
+        _write_report({"failed_stage": "rule selection",
+                       "failed_with": ("the service's RuleID coded-value domain was empty and no "
+                                       "previous run's ids were available to fall back to")})
+        raise SystemExit("no RuleIDs selected - inspect the layer metadata before trusting an empty "
+                         "proxy (the report records the metadata that produced this)")
     print(f"query envelope (EPSG:4326): {tuple(round(v, 6) for v in bbox)}")
     print(f"rule classes kept ({len(chosen)}): {json.dumps(chosen, sort_keys=True)}")
 
