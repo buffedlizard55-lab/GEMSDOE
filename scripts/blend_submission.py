@@ -84,7 +84,7 @@ def load_folds(fold_dirs: list[str]):
     return folds
 
 
-def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float):
+def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None):
     """Pooled held-out search over (t0, thin). Returns (t0*, thin*, mean_dti*, table).
 
     Each fold contributes DTI(shaped fold-model crop, fold gt crop); the chosen point
@@ -94,6 +94,13 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
     usable = [f for f in folds if f["pred_crop"] is not None]
     if not usable:
         return 0.3, True, float("nan"), []
+    if pre is not None:
+        # the FULL map gets `pre` before shaping, so calibration must see the same
+        # transform on the fold crops - otherwise the floor is fitted to a different
+        # distribution than the one it will be applied to (found by A/B, 2026-09-15:
+        # post-Frangi calibration changed the whole outcome).
+        for f in usable:
+            f["pred_crop"] = pre(f["pred_crop"])
     table = []
     raw_mean = float(np.mean([compute_distance_weighted_tversky(f["pred_crop"], f["gt_crop"],
                                                                  R_pixels=R, alpha=alpha, beta=beta)
@@ -122,6 +129,10 @@ def main():
     ap.add_argument("--labels", default=None, help="known-fault raster for the informational score")
     ap.add_argument("--out", default="submission.tif")
     ap.add_argument("--report", default=None, help="defaults to <out stem>_report.json")
+    ap.add_argument("--frangi", action="store_true",
+                    help="A/B knob: vesselness (Frangi) line enhancement on the blended mean map "
+                         "BEFORE shaping (src/postprocess.frangi_enhance). Off by default until "
+                         "measured to help on held-out calibration; see SUGGESTIONS.md.")
     ap.add_argument("--shaping-grid", type=int, default=None, help="threshold count (default: config)")
     ap.add_argument("--weights", choices=["equal", "dti"], default="equal",
                     help="fold averaging weights. 'dti' = softmax over each fold's best HELD-OUT "
@@ -167,10 +178,17 @@ def main():
     mean = np.clip(np.nan_to_num(mean, nan=0.0), 0.0, 1.0)   # 0 outside footprint for now
     pre_mass = float(mean[~allnan].sum())
 
+    enh = None
+    if args.frangi:
+        from src.postprocess import frangi_enhance
+        enh = lambda m: frangi_enhance(m, scale_range=(1, 6), scale_step=2, weight=0.35)
+        mean = enh(mean)
+        print("frangi line-enhancement applied to the blended map (A/B, consistent calibration)")
+
     # 2. pooled held-out shaping calibration ---------------------------------------
     n_grid = int(args.shaping_grid or cfg["training"].get("shaping_grid", 11))
     thr = np.linspace(0.02, 0.9, n_grid)
-    t0b, thinb, mean_dti, table = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta)
+    t0b, thinb, mean_dti, table = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta, pre=enh)
     print(f"pooled shaping: t0={t0b:.3f} thin={thinb} -> mean held-out DTI {mean_dti:.4f}"
           f" (unshaped {table[0]['mean_dti']:.4f})")
 

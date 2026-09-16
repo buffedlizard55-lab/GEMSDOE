@@ -34,7 +34,7 @@
 
 **Next (queued, in order):**
 1. Run the 6-fold ensemble workflow once GitHub auth is restored (push = trigger). Read its report from `data/evidence/runs/<id>/`, then iterate: fold count, epochs within budget, `shaping_grid` refinement (0.2–0.6 at 0.05 steps around the selected floor).
-2. A/B `frangi_filter` at the blend step only (one full-raster pass, ~15 min) — currently off in the CI ensemble config; decide by held-out calibration, not taste.
+2. ~~A/B `frangi_filter` at the blend step~~ **measured 2026-09-15: NEGATIVE on the fixture** (frangi ON: held-out 0.0991, calibration retreats to blanket; OFF: 0.1286, thin). Kept off; revisit only as a floor-gated residual on stronger models. `data/evidence/runs/local-mini-ensemble/AB_FRANGI.md`.
 3. Spatial block-holdout validation (train on two thirds by x, score the untouched third) as a harder proxy for the new-fault discovery regime than random MC windows; keep MC as the primary so numbers stay comparable to the reference.
 4. Self-training with high-confidence pseudo-labels after the first real ensemble (background sharpening; FP mass is area-proportional).
 5. 1 m DEM derivatives (code ready) on the GPU box; pretrain-on-external-GeoDAWN-regions idea needs a band-mapping plan first — flagged, not started.
