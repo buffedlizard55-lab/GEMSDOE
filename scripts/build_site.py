@@ -436,15 +436,64 @@ pixels. The per-unit discount loses to the count."""))
 <ul>
 <li><b>Be sparse, thin and confident.</b> Dilating perfect predictions by one pixel costs 12 points
 of DTI (0.9999 → 0.8818); by three pixels, 41 points.</li>
-<li><b>Thin before writing.</b> Faults are 1-px lineaments at 100 m. <code>src/submission_optim.py</code>
-applies a probability floor plus distance-R dominating thinning; the pooled held-out search in
-training selects <code>thin=True</code> essentially always.</li>
+<li><b>Thin, but not to nothing.</b> Faults are 1-px lineaments at 100 m and
+<code>src/submission_optim.py</code> applies a probability floor plus distance-R
+dominating thinning; the pooled search selects <code>thin=True</code> essentially
+always. But the width of what is kept is a separate decision, and against the public
+labels it is <em>not</em> zero &mdash; see <a href="#width">the measured width curve</a>.</li>
 <li><b>Recall still matters most among <em>correct</em> predictions</b> — DTI is near-linear in the
 fraction of faults found (0.554 → 0.794 → 0.917 for 25/50/75% precise recall).</li>
 <li><b>Beat 0.096.</b> A model scoring under the blanket-coverage floor is worse than a constant.</li>
 </ul>""")
     else:
         body.append(missing("Measured baselines.", "python scripts/metric_strategy.py"))
+
+    if ev.get("robustness"):
+        _r0 = ev["robustness"]["rows"]
+        _base = next((r for r in _r0 if r["dilate"] == 0), _r0[0])
+        _best = max(_r0, key=lambda r: max(v["mean"] for v in r["per_shift"].values()))
+        gain_txt = ("the skeleton (0 px) keeps {:,} px and scores {:.4f}, while a {}-px band keeps "
+                    "{:,} px and scores {:.4f} - the operator family, not the floor, was the binding "
+                    "constraint.".format(_base["kept_px"], _base["per_shift"]["0"]["mean"],
+                                         _best["dilate"], _best["kept_px"],
+                                         _best["per_shift"]["0"]["mean"]))
+    else:
+        gain_txt = ""
+    rb = ev.get("robustness")
+    if rb:
+        _rows = []
+        for r in rb["rows"]:
+            per = r["per_shift"]
+            _rows.append('<tr><td class="num">{}</td><td class="num">{:,}</td>{}</tr>'.format(
+                r["dilate"], r["kept_px"],
+                "".join('<td class="num">%.4f<br><span class="muted small">worst %.4f</span></td>'
+                        % (per[k]["mean"], per[k]["worst"])
+                        for k in sorted(per, key=lambda s: int(s)))))
+        cols = "".join('<th>labels shifted &plusmn;%s px</th>' % k
+                       for k in sorted(rb["rows"][0]["per_shift"], key=lambda s: int(s)))
+        body.append("""<h2 id="width">How wide should the line be? &mdash; measured</h2>
+<p>TP<sub>w</sub> takes a <em>max</em> within R = %d px, so a prediction up to that far from a
+label still earns full credit, while FP costs 0.2 per unit of mass and a missed label costs 0.8.
+That makes the <em>width</em> of the emitted line a first-class decision: a skeleton scores zero
+on a fault it missed by more than R, while a band of k pixels survives k px of localisation error.
+The scored faults are new to the expert-reviewed dataset (rules &sect;1.1/&sect;3.5) and the model
+has never seen them, so its localisation error there is strictly larger than on the catalogue.</p>
+<p>Measured on the one window where a real written submission and the official label raster
+coexist (%s): %s</p>
+<table><thead><tr><th>band (px)</th><th>pixels kept</th>%s</tr></thead><tbody>
+%s
+</tbody></table>
+%s%s""" % (
+            rb["R_pixels"], rb.get("window") or "whole raster", gain_txt, cols, "".join(_rows),
+            note("warn", "<b>What this is and is not.</b> The labels here are the <em>public "
+                         "catalogue</em>, not the scored set, and shifting them is a stress test of "
+                         "the writing operator, not a measurement of the competition metric. It is "
+                         "reported because the same asymmetry applies with more force to faults the "
+                         "model has never seen."),
+            note("info", "Because of this the shaping search now searches the emission width too "
+                         "(<code>--dilate-grid</code>), and <code>--calibrate loo</code> re-fits the "
+                         "floor on the folds that are <em>not</em> being scored, so the reported mean "
+                         "is not selection-optimistic.")))
 
     body.append(_scoring_universe(ev))
     body.append(f"""<h2>Remaining caveats</h2>
@@ -910,6 +959,7 @@ def main() -> int:
         "dem": load(ROOT / "data/dem_links.json"),
         "sb": load(ROOT / "data/evidence/sciencebase_dois.json"),
         "linkver": load(DOCS / "link_verification.json"),
+        "robustness": load(ROOT / "data/evidence/shift_robustness.json"),
         "runs": [],
     }
     rd = ROOT / "data/evidence/runs"

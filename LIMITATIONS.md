@@ -276,3 +276,14 @@ with a 6-hour job limit. Consequences actually observed:
 4. **Narrative + code-asset submission** at the deadline: the rules require the complete solution
    assets with resource documentation and a generative-AI disclosure; this repository is deliberately
    shaped to be that package, but the upload itself is human.
+
+5. **Proxies are labelled as proxies, but they are still proxies.** Four different quantities appear in
+   this repository and none of them is the competition score: (a) held-out DTI against the public
+   catalogue (the wrong population — rules §1.1 scores new faults), (b) discovery diagnostics
+   (unlabelled), (c) the shift-robustness width curve (a stress test of the writing operator, run on the
+   catalogue), and (d) the blanket-ones floor (a constant). The new LOO audit removes one specific bias —
+   fitting and scoring the floor on the same folds — and nothing more.
+6. **The emission-width stress test was run on one window.** Rows 2048–2560 × cols 1280–1792 of the
+   official grid is the only place where a committed submission and the official label raster overlap
+   locally. The 6-fold A/B runs on the runner over all six held-out crops, but the absolute numbers in
+   `data/evidence/shift_robustness.json` are single-window and are reported as such.

@@ -166,16 +166,24 @@
 
 ## 2026-09-16 — measured next experiments (each with an acceptance criterion)
 
-1. **Calibrate the aggregation rule, not just the floor.** Measured this session on the real 6-fold
-   ensemble: per-fold held-out DTI was 0.3351 / 0.2665 / 0.1780 / 0.1776 / 0.0916 / 0.0742 — a 4.5×
-   spread inside one configuration, while the blend averages them equally. Proposal: for each fold `f`,
-   read **all six** full-raster maps at fold `f`'s held-out windows (the window list is in that fold's
-   manifest) and score the *aggregate* against `f`'s held-out labels; average over folds. That makes the
-   aggregation rule (equal / median / trimmed / DTI-weighted / top-k) and the shaping floor tunable on a
-   quantity that at least matches how the map is finally assembled. *Acceptance:* the chosen rule beats
-   equal averaging by >0.01 mean held-out DTI, and the improvement survives on a second, independently
-   seeded ensemble. Note the existing counter-evidence (2-fold toy: DTI weights helped 0.014→0.098;
-   6-fold mini ensemble: they hurt 0.103→0.066) — that is why the criterion is measured, not assumed.
+1. **Aggregation calibration, leave-one-fold-out — implemented 2026-09-16, runner A/B running.**
+   `scripts/blend_submission.py --calibrate loo` re-fits the floor (and the fold-weight rule) on the
+   folds that are *not* being scored, scores the held-out one, and prints the oracle ceiling next to
+   it: the gap between the pooled and the LOO mean **is** the selection optimism, as a number instead
+   of an assumption. The same run sweeps the emission width (`--dilate-grid 0,1,2,3,4,6`).
+   *Acceptance:* keep a wider band only if the **LOO** mean improves by > 0.01 over the `dilate=0`
+   skeleton on held-out folds, and reproduce it on a second ensemble before trusting it. Existing
+   counter-evidence stands (2-fold toy: DTI weights helped 0.014→0.098; 6-fold mini ensemble: they hurt
+   0.103→0.066) — which is exactly why the criterion is the LOO number and not the pooled one.
+   Evidence lands in `data/evidence/runs/35042805806-dilate-ab/` (workflow `reblend.yml`).
+1b. **Emission width — measured 2026-09-16.** `data/evidence/shift_robustness.json` (script
+   `scripts/measure_shift_robustness.py`): on the one window where a written submission and the
+   official label raster coexist, the skeleton kept 801 px against 5,154 label px and scored 0.0555,
+   while a 6-px band scored 0.1260 (8 px: 0.1249). The curve says the *operator family*, not the floor,
+   was the binding constraint. Motivation for the scored universe: the scored faults are new to the
+   expert-reviewed dataset (rules §1.1/§3.5), never seen in training, so their localisation error is
+   strictly larger than the catalogue's — the regime where a skeleton collects nothing and a band still
+   collects the R-neighbourhood credit. Surfaces on `docs/metric.html`.
 2. **`neg_fraction` A/B.** Hermant et al. (2025) train only on fault-bearing tiles, explicitly to avoid
    "learning images without mapped faults when there should be some due to operator observation bias" —
    i.e. absence from the catalogue is not evidence of absence. Our config keeps 35 % empty windows.

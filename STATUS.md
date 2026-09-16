@@ -139,10 +139,36 @@ here.
 
 **Fold spread is wide and worth acting on** (measured, from the same report): held-out DTI per fold was
 0.3351, 0.2665, 0.1780, 0.1776, 0.0916, 0.0742 — a 4.5× spread between the best and worst fold of the
-*same* configuration. Equal averaging is therefore squeezing a weak fold into a strong one. The next
-calibration experiment (acceptance criterion in `SUGGESTIONS.md`) is to score the aggregation rule
-itself on each fold's held-out windows by reading the *other* five folds' full-raster maps there, i.e.
-a leave-one-fold-out evaluation of the blend, instead of the current per-fold calibration.
+*same* configuration. Equal averaging squeezes a weak fold into a strong one, and the pooled calibration
+that picks the floor scores the same folds it fits, so its mean is selection-optimistic. Both are now
+instrumented (`scripts/blend_submission.py`): `--calibrate loo` re-fits the floor — and the fold-weight
+rule — on the five folds that are *not* being scored, and reports the oracle ceiling next to it, so the
+optimism is a printed number instead of an assumption. Experiment `data/evidence/runs/35042805806-dilate-ab/`.
+
+**The width of the emitted line was the binding constraint, not the floor** (measured 2026-09-16,
+`data/evidence/shift_robustness.json`, script `scripts/measure_shift_robustness.py`). On the one window
+where a written submission and the official label raster coexist (rows 2048–2560, cols 1280–1792 of the
+full grid; `data/fixture/fixture_labels.tif`, 5,154 label px):
+
+| band grown around the skeleton | pixels kept | DTI (no shift) | DTI, labels shifted ±3 px |
+|---|---|---|---|
+| 0 px (what the pipeline wrote) | 801 | 0.0555 | 0.0406 |
+| 3 px | 8,063 | 0.1109 | 0.0991 |
+| 6 px | 19,908 | **0.1260** | 0.1212 |
+| 8 px | 29,249 | 0.1249 | 0.1240 |
+
+The 6-fold submission written on 2026-09-16 kept 801 px in this window against 5,154 label px: it is
+**under-covering**, and no floor can fix that — the old search could only choose between a skeleton and
+an un-thinned blob. `--dilate-grid` now searches the band width, and the reblend workflow is re-running
+the same six saved folds with it (`data/evidence/runs/35042805806-dilate-ab/`, triggered 2026-09-16).
+
+**Reading of the numbers, stated plainly.** The labels in that table are the *public catalogue*, not the
+scored set, and translating them is a stress test of the writing operator — not a measurement of the
+competition metric. It is reported because the asymmetry is structural: TP<sub>w</sub> credits a
+prediction up to R = 3 px away in full, a missed label costs 0.8 per unit, a false positive 0.2. For the
+scored faults — new to the expert-reviewed dataset (rules §1.1/§3.5), never seen in training — the
+model's localisation error is strictly larger than on the catalogue, which is exactly the regime where a
+skeleton loses everything and a band still collects credit.
 
 ## 5. Still needed (unchanged by any of the above)
 
@@ -159,3 +185,7 @@ a leave-one-fold-out evaluation of the blend, instead of the current per-fold ca
    environment pins, reproduce page, audit gates).
 5. **1 m DEM derivatives** (716 tiles already confirmed against the live USGS 3DEP bucket) and the
    proxy-catalogue evaluation of `docs/DISCOVERY_PLAN.md` §3.
+6. **The public leaderboard score itself.** Every number in this repository is a proxy: catalogue DTI is
+   the wrong universe, discovery diagnostics are unlabelled, and the width study is a stress test. Three
+   submissions a week against the real metric (rules §3.2) is the only way to replace proxies with
+   measurements, and it needs the account from item 1.
