@@ -231,16 +231,31 @@ def make_patches(
     # ---- 2. zero the test region globally, THEN extract overlapping train windows --
     Xtr_src = Xp.copy()
     ytr_src = yp.copy()
-    fp_src = (yp > 0.5)
-    # global FP weight map = 1 - max_g k(d(x,g)), computed on the TRAINING labels only
+    Xtr_src[test_mask] = 0.0
+    ytr_src[test_mask] = 0.0
+
+    # global FP weight map = 1 - max_g k(d(x,g)), computed on the TRAINING labels ONLY.
+    #
+    # LEAKAGE FIX (2026-09-15): this EDT used to run on `yp`, i.e. *before* the held-out
+    # windows were zeroed.  fpw is handed to the loss as "how much a prediction here counts
+    # as a false positive", so a value < 1 is a direct statement that a fault lies within
+    # R px.  Computing it on unzeroed labels therefore wrote the held-out fault positions
+    # into the training signal: a train window may legitimately overlap the test grid by up
+    # to 25% (see the filter below), and inside that sliver the loss was told not to
+    # penalise predictions exactly where the hidden faults are.  Measured on a synthetic
+    # 256x256 case with a fault placed only inside the test window: 196 test-region pixels
+    # carried fpw < 1 before the fix, 0 after.  Held-out DTI was consequently optimistic.
     from scipy.ndimage import distance_transform_edt
+    fp_src = (ytr_src > 0.5)
     if fp_src.any():
         d2gt = distance_transform_edt(~fp_src)
         fpw_global = 1.0 - np.maximum(1.0 - d2gt / float(R_pixels), 0.0)
     else:
         fpw_global = np.ones((Hp, Wp), np.float32)
-    Xtr_src[test_mask] = 0.0
-    ytr_src[test_mask] = 0.0
+    # inside the held-out region there is no training label to speak of; treat any
+    # prediction there as a full-weight false positive rather than inferring from
+    # neighbouring train faults that bled across the boundary.
+    fpw_global[test_mask] = 1.0
 
     cand = _windows((Hp, Wp), patch_size, train_step)
     pos, neg = [], []

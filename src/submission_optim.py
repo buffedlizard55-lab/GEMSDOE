@@ -38,7 +38,8 @@ from scipy.ndimage import binary_dilation, distance_transform_edt
 
 from .metrics import kernel_offsets
 
-__all__ = ["floor_sharpen", "dominant_thin", "optimize_submission", "search_threshold"]
+__all__ = ["floor_sharpen", "dominant_thin", "optimize_submission", "search_threshold",
+           "shaping_thresholds"]
 
 
 def floor_sharpen(p: np.ndarray, t0: float = 0.0, gamma: float = 1.0, hard: bool = True) -> np.ndarray:
@@ -108,14 +109,35 @@ def optimize_submission(p: np.ndarray, R: int = 3, t0: float = 0.3, thin: bool =
     return np.clip(q, 0.0, 1.0).astype(np.float32)
 
 
+def shaping_thresholds(n: int = 15, lo: float = 1e-4, hi: float = 0.9) -> np.ndarray:
+    """Floor candidates for the shaping search, log-spaced from `lo` to `hi`.
+
+    WHY NOT linspace(0.02, 0.9): the full-raster smoke run (Actions run 34876843912)
+    selected t0 = 0.02 -- the *first* point of the old grid.  An optimum sitting exactly on
+    a grid boundary means the grid was the constraint, not the data: an under-trained model
+    emits a low-contrast probability field whose useful separation lives well below 0.02,
+    so the search could not reach it and the reported optimum was an artefact of the
+    endpoint.  Log spacing also matches how the floor behaves -- what matters is the order
+    of magnitude of the mass being cut, and DTI changes far faster between 0.001 and 0.01
+    than between 0.5 and 0.51.
+
+    Always includes 0.0 (no floor) as an explicit reference row.
+    """
+    n = max(2, int(n))
+    grid = np.geomspace(max(1e-12, float(lo)), float(hi), n)
+    return np.unique(np.concatenate(([0.0], grid)))
+
+
 def search_threshold(p: np.ndarray, gt: np.ndarray, R: int = 3,
-                     thresholds=np.linspace(0.02, 0.9, 45), thin_options=(False, True)):
+                     thresholds=None, thin_options=(False, True)):
     """Grid search floor + thinning on HELD-OUT validation predictions (never on test).
 
     Returns (best_params, best_dti, table).  The table is what makes this auditable:
     it shows the metric's shape, so the chosen point is reviewable, not magic.
     """
     from .metrics import compute_distance_weighted_tversky
+    if thresholds is None:
+        thresholds = shaping_thresholds(45)
     table = [(float("nan"), False, float(compute_distance_weighted_tversky(p, gt, R_pixels=R)),
               float(np.nansum(p)))]                      # row 0 = unshaped reference point
     best = (-1.0, None)

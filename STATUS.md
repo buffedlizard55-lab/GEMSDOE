@@ -208,3 +208,35 @@ honours ahead of `README.md`. The generated site is live and correct at
 
 **Recommended (optional) owner action:** flip Source to "GitHub Actions" for a cleaner root
 URL. The redirect becomes harmless if you do.
+
+---
+
+## Correctness fixes to the training path (2026-09-15)
+
+Three defects found by re-reading the code against the evidence, each now covered by a
+regression test in `tests/test_metric.py` (20/22 pass in-sandbox; the 2 failures are
+`torch`-only tests — no installable CPU wheel here, the pytorch index is egress-blocked).
+
+**1. Held-out label leakage through the FP-weight map** (`src/dataset.py`).
+`fpw = 1 - max_g k(d(x,g))` is handed to the loss as "how much a prediction here counts as
+a false positive", so `fpw < 1` states that a fault lies within R px. It was computed from
+the labels *before* the test windows were zeroed. Training windows are allowed to overlap
+the test grid by up to 25%, and inside that sliver the loss was being told not to penalise
+predictions sitting exactly on the hidden faults. Held-out DTI was therefore optimistic.
+Fixed by computing the EDT on the zeroed (train-only) labels and forcing `fpw = 1` inside
+the held-out region. Synthetic check: 196 test-region pixels carried `fpw < 1` before, 0
+after. On the real fixture the corrected map now matches a train-only reference exactly
+(max abs error 0.0 across all 27 train patches).
+
+**2. The shaping floor search could not reach the optimum** (`src/submission_optim.py`).
+The full-raster smoke run (Actions run `34876843912`) selected `t0 = 0.02` — the *first*
+point of `linspace(0.02, 0.9, 15)`. An optimum pinned to a grid endpoint means the grid,
+not the data, chose it. New `shaping_thresholds()` is log-spaced from 1e-4 and always
+includes 0.0 as an explicit no-floor row. Measured on the real fixture labels with a
+low-contrast field of the kind an under-trained model emits (max p = 0.014): the old grid
+zeroes the entire submission (**DTI 0.000**, every value falls under the 0.02 floor) while
+the new grid finds **DTI 0.856** at `t0 = 0.0050`.
+
+**3. `get_model(in_channels=10)` default** (`src/models.py`) → **19**, the measured band
+count. Every caller passes it explicitly so no run was affected, but it was a trap for
+direct importers.

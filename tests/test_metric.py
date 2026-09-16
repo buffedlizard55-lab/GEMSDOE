@@ -208,6 +208,85 @@ def test_patches_have_no_label_leakage():
     assert float(res["y_test"].sum()) == float((y * test_mask).sum())
 
 
+def test_fp_weight_map_does_not_leak_heldout_labels():
+    """The FP-weight map handed to the loss must know nothing about held-out faults.
+
+    fpw = 1 - max_g k(d(x,g)) is a statement "a fault lies within R px of here".  It used
+    to be computed from the labels *before* the test windows were zeroed, so wherever a
+    training window overlapped the test grid (allowed up to 25%) the loss was told not to
+    penalise predictions exactly on the hidden faults.  Regression test for that fix.
+    """
+    from scipy.ndimage import distance_transform_edt
+
+    from src.dataset import make_patches
+    rng = np.random.default_rng(3)
+    H = W = 256
+    X = rng.random((H, W, 3)).astype(np.float32)
+    y = np.zeros((H, W), np.float32)
+    y[40:44, 20:120] = 1          # a fault in the upper-left quadrant
+    y[150:250, 150:154] = 1       # and one in the lower-right
+    res = make_patches(X, y, patch_size=128, train_step=64, test_proportion=0.5, seed=1)
+    s = res["summary"]
+    p = s["patch"]
+    Hp, Wp = s["H"], s["W"]
+    test_mask = np.zeros((Hp, Wp), bool)
+    for (i, j) in s["test_windows"]:
+        test_mask[i:i + p, j:j + p] = True
+
+    # reference built from TRAIN-ONLY labels, with the held-out region at full FP weight
+    yp = np.pad(y, ((0, Hp - H), (0, Wp - W)))
+    ytr = yp.copy()
+    ytr[test_mask] = 0.0
+    d = distance_transform_edt(~(ytr > 0.5))
+    ref = 1.0 - np.maximum(1.0 - d / 3.0, 0.0)
+    ref[test_mask] = 1.0
+
+    fpw = res["fpw_train"]
+    assert fpw.shape[0] == len(s["train_windows"])
+    for k, (i, j) in enumerate(s["train_windows"]):
+        err = float(np.abs(fpw[k] - ref[i:i + p, j:j + p]).max())
+        assert err < 1e-6, (k, (i, j), err)
+        # no train patch may carry fpw < 1 inside the held-out region
+        leaked = int(((fpw[k] < 1.0) & test_mask[i:i + p, j:j + p]).sum())
+        assert leaked == 0, (k, leaked)
+
+
+def test_shaping_grid_reaches_low_contrast_optima():
+    """The floor search must be able to pick t0 below 0.02.
+
+    The full-raster smoke run pinned t0 at 0.02 - the first point of the old
+    linspace(0.02, 0.9) grid - which means the grid, not the data, chose the optimum.  An
+    under-trained model emits a low-contrast field whose entire useful range sits below
+    that floor, so the old grid zeroes the submission outright.
+    """
+    from src.submission_optim import optimize_submission, shaping_thresholds
+
+    grid = shaping_thresholds(15)
+    assert grid[0] == 0.0                                   # explicit "no floor" reference
+    assert (grid[1:] > 0).all() and grid.max() <= 0.9
+    assert grid[grid > 0].min() <= 1e-3, grid               # must reach well below 0.02
+    assert (np.diff(grid) > 0).all()                        # sorted, unique
+
+    H = W = 96
+    gt = np.zeros((H, W), np.float32)
+    gt[48, 10:86] = 1.0
+    p = np.full((H, W), 0.002, np.float32)                  # diffuse low-contrast background
+    p[48, 10:86] = 0.011                                    # a weak but correct fault signal
+
+    def best(thresholds):
+        out = -1.0
+        for t in thresholds:
+            for thin in (False, True):
+                q = optimize_submission(p, R=3, t0=float(t), thin=thin)
+                out = max(out, compute_distance_weighted_tversky(q, gt, R_pixels=3))
+        return out
+
+    old = best(np.linspace(0.02, 0.9, 15))
+    new = best(grid)
+    assert old == 0.0, old            # old grid wipes the whole field: every value <= 0.02
+    assert new > 0.5, new             # new grid recovers the fault
+
+
 def test_augmentation_is_label_consistent():
     """A flip must map the fault line to the flipped label line (x, y, w stay aligned)."""
     from src.dataset import FaultDataset
