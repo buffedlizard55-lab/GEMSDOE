@@ -1,28 +1,37 @@
 {
-  "generated_utc": "2026-09-16T18:12:03+00:00",
+  "generated_utc": "2026-09-16T19:33:04+00:00",
   "generated_by": "scripts/verify_links.py on a GitHub-hosted runner (live HTTP)",
   "catalog": "docs/data_catalog.csv",
   "n_rows": 81,
   "n_unique_urls": 76,
   "summary_counts": {
-    "BOT_BLOCKED_403": 10,
+    "BOT_BLOCKED_403": 16,
     "AUTH_REQUIRED": 1,
-    "OK_200": 54,
-    "OK_REDIRECTED": 8,
-    "UNREACHABLE": 1,
+    "OK_200": 51,
+    "OK_REDIRECTED": 3,
     "OK_202": 1,
-    "LOGIN_REQUIRED": 1
+    "LOGIN_REQUIRED": 1,
+    "BROKEN_HTTP_403": 3
   },
-  "n_problems": 1,
+  "n_problems": 3,
   "problems": [
     {
-      "url": "https://doi.org/10.5066/P9MQRCBY",
-      "status": null,
-      "result": "UNREACHABLE",
-      "error": "TimeoutError('The read operation timed out')"
+      "url": "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23",
+      "status": 403,
+      "result": "BROKEN_HTTP_403"
+    },
+    {
+      "url": "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
+      "status": 403,
+      "result": "BROKEN_HTTP_403"
+    },
+    {
+      "url": "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43",
+      "status": 403,
+      "result": "BROKEN_HTTP_403"
     }
   ],
-  "n_expected_non_ok": 12,
+  "n_expected_non_ok": 18,
   "expected_non_ok": [
     {
       "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
@@ -56,6 +65,42 @@
     },
     {
       "url": "https://doi.org/10.1093/gji/ggad491",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P93LGLVQ",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9BZPVUC",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9MQRCBY",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9TWT2LU",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9YL58W6",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9Z6SA1Z",
       "status": 403,
       "result": "BOT_BLOCKED_403",
       "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
@@ -148,7 +193,7 @@
       "status": 200,
       "final_url": "https://community.drivendata.org/c/gems-prize-challenge/111",
       "content_type": "text/html",
-      "content_length": 14215,
+      "content_length": 14490,
       "title": "GEMS Prize Challenge - DrivenData Community",
       "redirected": false,
       "redirected_offsite": false,
@@ -195,64 +240,39 @@
     },
     {
       "url": "https://doi.org/10.5066/P93LGLVQ",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "GeoDAWN: Airborne magnetic and radiometric surveys of the northwestern Great Basin, Nevada and California - ScienceBase-Catalog",
-      "redirected": true,
-      "redirected_offsite": true,
-      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.5066/P9BZPVUC",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/6297d2fad34ec53d276c5b28",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Heat flow maps and supporting data for the Great Basin, USA - ScienceBase-Catalog",
-      "redirected": true,
-      "redirected_offsite": true,
-      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.5066/P9MQRCBY",
-      "status": null,
-      "result": "UNREACHABLE",
-      "error": "TimeoutError('The read operation timed out')"
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.5066/P9TWT2LU",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/62979746d34ec53d276c113b",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Electrical Conductance Maps of the Great Basin, USA - ScienceBase-Catalog",
-      "redirected": true,
-      "redirected_offsite": true,
-      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.5066/P9YL58W6",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/6296974dd34ec53d276bb33d",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Shapefile for slip tendency and dilation tendency calculated for Quaternary faults in the Great Basin - ScienceBase-Catalog",
-      "redirected": true,
-      "redirected_offsite": true,
-      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.5066/P9Z6SA1Z",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/628d4fabd34ef70cdba3c4a4",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Regional geophysical maps of the Great Basin, USA - ScienceBase-Catalog",
-      "redirected": true,
-      "redirected_offsite": true,
-      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://doi.org/10.5194/essd-14-381-2022",
@@ -528,8 +548,8 @@
       "status": 200,
       "final_url": "https://pypi.org/project/torch/",
       "content_type": "text/html",
-      "content_length": 258356,
-      "title": "torch \u00b7 PyPI",
+      "content_length": 3038,
+      "title": "Client Challenge",
       "redirected": false,
       "redirected_offsite": false,
       "result": "OK_200"
@@ -682,7 +702,7 @@
       "status": 200,
       "final_url": "https://www.herox.com/GEMSPrize/resource/2274",
       "content_type": "text/html",
-      "content_length": 93313,
+      "content_length": 93302,
       "title": "GEMS Prize Official Rules",
       "redirected": false,
       "redirected_offsite": false,
@@ -750,36 +770,18 @@
     },
     {
       "url": "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Quaternary Fault and Fold Database of the United States - ScienceBase-Catalog",
-      "redirected": false,
-      "redirected_offsite": false,
-      "result": "OK_200"
+      "status": 403,
+      "result": "BROKEN_HTTP_403"
     },
     {
       "url": "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "GeoDAWN: Airborne magnetic and radiometric surveys of the northwestern Great Basin, Nevada and California - ScienceBase-Catalog",
-      "redirected": false,
-      "redirected_offsite": false,
-      "result": "OK_200"
+      "status": 403,
+      "result": "BROKEN_HTTP_403"
     },
     {
       "url": "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Geothermal resource favorability: select features and predictions for the United States Great Basin curated for DOI 10.1016/j.geothermics.2025.103450 - ScienceBase-Catalog",
-      "redirected": false,
-      "redirected_offsite": false,
-      "result": "OK_200"
+      "status": 403,
+      "result": "BROKEN_HTTP_403"
     },
     {
       "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",

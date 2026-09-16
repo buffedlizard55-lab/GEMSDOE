@@ -1,15 +1,15 @@
 {
- "generated_utc": "2026-09-16T18:23:16Z",
+ "generated_utc": "2026-09-16T19:32:59Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
-  "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
+  "url": "/tmp/rules_canonical.pdf",
   "bytes": 455140,
   "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
  },
  "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks and whitespace collapse - no paraphrasing, no fuzzy matching",
  "match_against_mirror": {
-  "expected_sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938",
-  "identical": true
+  "expected_sha256": null,
+  "identical": false
  },
  "quotes": [
   {
