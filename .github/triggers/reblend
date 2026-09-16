@@ -2,3 +2,6 @@ Touching this file fire- starts the "Re-blend existing fold artifacts" workflow
 (.github/workflows/reblend.yml), which re-runs ONLY the blend step against the fold
 artifacts of run 35042805806 (those artifacts trained successfully; the blend crashed
 on the TIFF block-size bug fixed on 2026-09-16).
+
+# 2026-09-16T20:xxZ run the emission-width A/B + leave-one-fold-out aggregation audit on the
+# existing six fold artifacts (no retraining). Writes data/evidence/runs/35042805806-dilate-ab/.
