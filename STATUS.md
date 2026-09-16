@@ -1,4 +1,4 @@
-# Project status — 2026-09-16 (session 4)
+# Project status — 2026-09-16 (session 4, extended by session 5 below)
 
 Supersedes the previous `STATUS.md` (session 3, 2026-09-15). Session 3's own claims are quoted where
 this session falsified them, because the way they were falsified is the most useful thing in this file:
@@ -189,3 +189,69 @@ skeleton loses everything and a band still collects credit.
    the wrong universe, discovery diagnostics are unlabelled, and the width study is a stress test. Three
    submissions a week against the real metric (rules §3.2) is the only way to replace proxies with
    measurements, and it needs the account from item 1.
+
+---
+
+## 6. Session 5 (same day): the rules verified verbatim, and the emission width
+
+### 6.1 The scored population, now machine-verified rather than paraphrased
+
+Session 4 established that both prize phases score expert-mapped *new* faults. That conclusion has now
+been re-derived from the official PDF on a runner, sentence by sentence, by
+`scripts/verify_rules_quotes.py` (workflow `verify-rules.yml`, run
+[35134058898](https://github.com/buffedlizard55-lab/GEMSDOE/actions/runs/35134058898), 16 s):
+
+* **19 of 19 quoted sentences matched verbatim** after NFKC + quote folding + de-hyphenation +
+  whitespace collapse. No fuzzy matching; a miss fails the step and the commit.
+* The document fetched from `docs.nlr.gov/docs/fy26osti/96647.pdf` is **byte-identical** to the data-tab
+  mirror recorded in `data/evidence/inventory.json`: `sha256 50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938`,
+  455,140 B, `identical: true`.
+* Evidence: `data/evidence/rules_quotes.json` (+ `rules_quotes.log`), committed by the workflow; the home
+  page of the site renders the six decisive sentences with their found/not-found marks.
+
+The sentences that carry the strategy, quoted exactly:
+
+| id | § | sentence |
+|---|---|---|
+| `phase1_target` | 1.1 | "In Phase 1, submissions will be evaluated against a privately withheld subset of the original new fault dataset compiled by expert reviewers." |
+| `phase2_target` | 1.1 | "Submissions will be reevaluated against the full, revised new fault dataset using the same distance-weighted Tversky index." |
+| `phase2_eligibility` | 1.1 | "All Phase 1 competitors will be eligible to compete in Phase 2 and will be automatically submitted for consideration." |
+| `experts_revise` | 1.1 | "After Phase 1, expert reviewers will use submitted predictions to revise the new fault dataset." |
+| `labels_source` | 2 | "The labels for this prize come from the USGS Quaternary Fault and Fold Database and from a set of newly identified faults labeled by geology experts at the National Laboratory of the Rockies (NLR) and USGS." |
+| `ranking_basis` | 3.2 | "Second-round prize rankings will be determined by running the selected final submissions against the complete updated test set created by expert review." |
+
+Two consequences worth stating because they are easy to get backwards: the released training label
+raster is the *existing* catalogue (problem page + rules §3.3) while both phases score the *new* faults,
+so reproducing the catalogue earns credit only where the experts' new labels coincide with it; and no
+Phase-1 top-5 cutoff gated Phase-2 entry, so there is nothing to be gained by trading discovery for
+catalogue coverage.
+
+### 6.2 The emission width was the binding constraint, not the floor
+
+Measured (`data/evidence/shift_robustness.json`, script `scripts/measure_shift_robustness.py`) on the one
+window where a written submission and the official label raster coexist — full-grid rows 2048–2560 ×
+cols 1280–1792, 5,154 label pixels:
+
+| band grown around the skeleton | pixels kept | DTI (labels as-is) | DTI (labels shifted ±3 px) |
+|---|---|---|---|
+| 0 px — what the pipeline wrote | 801 | 0.0555 | 0.0406 |
+| 3 px | 8,063 | 0.1109 | 0.0991 |
+| 6 px | 19,908 | **0.1260** | 0.1212 |
+| 8 px | 29,249 | 0.1249 | 0.1240 |
+
+The submission kept 801 px against 5,154 label px in that window: it is **under-covering**, and the old
+search could not express the fix — its only two options were a pure skeleton and the un-thinned
+floor-passing blob. `scripts/blend_submission.py --dilate-grid` (default `0,1,2,3,4,6`) now searches the
+band width on the held-out crops, and `--calibrate loo` re-fits the floor — and the fold-weight rule — on
+the folds that are *not* being scored, printing the oracle ceiling next to the honest mean, so the
+selection optimism is a number instead of an assumption.
+
+Honest boundary: the labels used in that table are the public catalogue, not the scored set, and shifting
+them is a stress test of the writing operator. It is reported because the asymmetry is structural
+(TP<sub>w</sub> credits a prediction up to R = 3 px away in full; a missed label costs 0.8, a false
+positive 0.2), and because it is *most* severe exactly where the scored faults live — faults the model
+never saw in training, whose traces it cannot localise as tightly as the catalogue's.
+
+Runner A/B on the six saved folds (emission width + LOO audit, no retraining):
+`data/evidence/runs/35042805806-dilate-ab/` — workflow `reblend.yml`, run 35133590776. Its verdict decides
+the default: a wider band is kept only if the LOO mean beats the skeleton by > 0.01.
