@@ -1,33 +1,28 @@
 {
-  "generated_utc": "2026-09-16T18:06:51+00:00",
+  "generated_utc": "2026-09-16T18:12:03+00:00",
   "generated_by": "scripts/verify_links.py on a GitHub-hosted runner (live HTTP)",
   "catalog": "docs/data_catalog.csv",
   "n_rows": 81,
   "n_unique_urls": 76,
   "summary_counts": {
     "BOT_BLOCKED_403": 10,
-    "BROKEN_HTTP_401": 1,
+    "AUTH_REQUIRED": 1,
     "OK_200": 54,
     "OK_REDIRECTED": 8,
     "UNREACHABLE": 1,
     "OK_202": 1,
     "LOGIN_REQUIRED": 1
   },
-  "n_problems": 2,
+  "n_problems": 1,
   "problems": [
     {
-      "url": "https://api.github.com/search/code",
-      "status": 401,
-      "result": "BROKEN_HTTP_401"
-    },
-    {
-      "url": "https://doi.org/10.5066/P9Z6SA1Z",
+      "url": "https://doi.org/10.5066/P9MQRCBY",
       "status": null,
       "result": "UNREACHABLE",
       "error": "TimeoutError('The read operation timed out')"
     }
   ],
-  "n_expected_non_ok": 11,
+  "n_expected_non_ok": 12,
   "expected_non_ok": [
     {
       "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
@@ -40,6 +35,12 @@
       "status": 403,
       "result": "BOT_BLOCKED_403",
       "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://api.github.com/search/code",
+      "status": 401,
+      "result": "AUTH_REQUIRED",
+      "note": "endpoint requires credentials; not a broken or missing resource"
     },
     {
       "url": "https://doi.org/10.1029/2020JB021269",
@@ -117,7 +118,8 @@
     {
       "url": "https://api.github.com/search/code",
       "status": 401,
-      "result": "BROKEN_HTTP_401"
+      "result": "AUTH_REQUIRED",
+      "note": "endpoint requires credentials; not a broken or missing resource"
     },
     {
       "url": "https://apps.nationalmap.gov/downloader/",
@@ -215,14 +217,9 @@
     },
     {
       "url": "https://doi.org/10.5066/P9MQRCBY",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/64e597dfd34e736b81e198d2",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Maps of elevation trend and detrended elevation for the Great Basin, USA - ScienceBase-Catalog",
-      "redirected": true,
-      "redirected_offsite": true,
-      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
+      "status": null,
+      "result": "UNREACHABLE",
+      "error": "TimeoutError('The read operation timed out')"
     },
     {
       "url": "https://doi.org/10.5066/P9TWT2LU",
@@ -248,9 +245,14 @@
     },
     {
       "url": "https://doi.org/10.5066/P9Z6SA1Z",
-      "status": null,
-      "result": "UNREACHABLE",
-      "error": "TimeoutError('The read operation timed out')"
+      "status": 200,
+      "final_url": "https://www.sciencebase.gov/catalog/item/628d4fabd34ef70cdba3c4a4",
+      "content_type": "text/html",
+      "content_length": null,
+      "title": "Regional geophysical maps of the Great Basin, USA - ScienceBase-Catalog",
+      "redirected": true,
+      "redirected_offsite": true,
+      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
     },
     {
       "url": "https://doi.org/10.5194/essd-14-381-2022",
