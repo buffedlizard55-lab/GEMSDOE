@@ -55,7 +55,12 @@ bytes, read back.
 ## 2. What this session verified: the scoring universe (and why it changes the target)
 
 The canonical rules PDF was re-read line by line and the relevant sentences are now **machine-verified
-verbatim** rather than paraphrased: `scripts/verify_rules_quotes.py` extracts the PDF from
+verbatim** rather than paraphrased. Actions run **35132263421** (55 s) confirmed all three links in the
+chain at once: the canonical PDF at `docs.nlr.gov` is **byte-identical** to the data-tab mirror we
+inventoried (`sha256 50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938`, 455,140 B,
+`identical: true`), **11/11 quoted sentences matched verbatim**, and a re-fetch of all 76 catalog URLs
+recorded 54 `OK_200`, 8 redirects, 10 publisher bot-blocks, 1 login-walled (the data tab) and 2 items to
+review. Mechanism: `scripts/verify_rules_quotes.py` extracts the PDF from
 `https://docs.nlr.gov/docs/fy26osti/96647.pdf`, normalises whitespace/unicode, and asserts each quoted
 sentence appears; the *Verify official sources* workflow also checks that PDF's sha256 against the
 copy inventoried from the data tab (`GEMS_96647.pdf`, 455,140 B), proving the mirror and the canonical

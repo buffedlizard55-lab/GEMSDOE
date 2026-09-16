@@ -65,12 +65,22 @@ fraction of faults found (0.554 → 0.794 → 0.917 for 25/50/75% precise recall
 <p>Both prize phases are scored on the <b>new fault dataset</b> — faults that are <em>not</em> in the
 public catalogue the competition hands out for training. The training labels are the existing fault
 data. The two populations are disjoint by construction, which is the single most consequential fact
-in this competition:</p><div class="note warn">The verbatim rules quotations have not been machine-verified in
-this checkout yet. Run <code>python scripts/verify_rules_quotes.py --url
-https://docs.nlr.gov/docs/fy26osti/96647.pdf</code> (or the <em>Verify official sources</em> workflow,
-which also checks the PDF's sha256 against the inventoried data-tab copy). Until then, treat the
-statement above as a claim derived from the <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a>, not as a verified
-quotation.</div>
+in this competition:</p><div class="note ok"><b>11/11 quoted
+sentences verified verbatim</b> against <code>https://docs.nlr.gov/docs/fy26osti/96647.pdf</code>
+(sha256 <span class="mono small">50d854b1e0239fe6…</span>,
+retrieved 2026-09-16T18:06:06Z).
+Method: unicode NFKC + de-hyphenation + whitespace collapse, then a substring test; a second whitespace-free comparison absorbs the word splits that PDF page breaks introduce. Paraphrase is never accepted - the quoted characters must all be present, in order..</div><table><thead><tr><th>id</th><th>section</th><th>verbatim quotation</th>
+<th>verified</th></tr></thead><tbody><tr><td class="mono small">phase1_target</td><td>§1.1</td><td>“In Phase 1, submissions will be evaluated against a privately withheld subset of the original new fault dataset compiled by expert reviewers.”</td><td class="num">✔</td></tr><tr><td class="mono small">phase2_target</td><td>§1.1</td><td>“Submissions will be reevaluated against the full, revised new fault dataset using the same distance-weighted Tversky index.”</td><td class="num">✔</td></tr><tr><td class="mono small">phase2_eligibility</td><td>§1.1</td><td>“All Phase 1 competitors will be eligible to compete in Phase 2 and will be automatically submitted for consideration.”</td><td class="num">✔</td></tr><tr><td class="mono small">training_labels_source</td><td>§3.3</td><td>“The training labels contain existing fault data at 100-m resolution where positively labeled pixels indicate fault presence. These labels were obtained from the INGENIOUS project&#x27;s Great Basin Regional Dataset Compilation.”</td><td class="num">✔</td></tr><tr><td class="mono small">submit_new_labels</td><td>§3.5</td><td>“Submissions will be automatically evaluated using a distance-weighted Tversky index against newly created fault labels, as described on the competition website.”</td><td class="num">✔</td></tr><tr><td class="mono small">one_submission_two_rounds</td><td>§3.5</td><td>“Before the end of the competition, you must choose only one submission for evaluation across both prize rounds.”</td><td class="num">✔</td></tr><tr><td class="mono small">blind_private_selection</td><td>§3.6.2</td><td>“You must choose only one submission to use for scoring across both prize rounds, and you must make your decision without knowledge of your scores on the private test set.”</td><td class="num">✔</td></tr><tr><td class="mono small">weekly_limit</td><td>§3.2</td><td>“You can make multiple submissions, subject to the limits specified on the competition website (three submissions per week).”</td><td class="num">✔</td></tr><tr><td class="mono small">dem_is_a_feature</td><td>§2</td><td>“In addition, the feature data also contain U.S. Geological Survey (USGS) Digital Elevation Model (DEM) elevation data at 1-m resolution.”</td><td class="num">✔</td></tr><tr><td class="mono small">ai_disclosure</td><td>§3.2</td><td>“you must indicate in the narrative (not included in the word count) the extent to which, if any, you used generative AI technology”</td><td class="num">✔</td></tr><tr><td class="mono small">code_assets</td><td>§3.2</td><td>“The solution assets must contain a description of the resources required to build and run the solution, and they should be able to sufficiently reproduce the winning results and generate predictions on new data samples.”</td><td class="num">✔</td></tr></tbody></table><div class="note warn"><b>Consequence for
+everything else in this repository.</b> A model that reproduces <code>labels.tif</code> perfectly scores
+~1.0 against the catalogue and ~0 against the competition target: the scored faults are precisely the
+ones missing from the catalogue. So the catalogue DTI quoted throughout this site is a
+<em>plumbing monitor</em>, not a leaderboard proxy — useful because it proves the metric, the loss, the
+tiling and the writer agree, and <em>not</em> useful for choosing between models. The quantities that
+speak to the real objective are in <code>src/discovery.py</code>: <code>novel_fraction</code> (share of
+emitted probability mass farther than R from any catalogued fault) and
+<code>candidate_new_faults</code> (connected components of the prediction that touch no catalogued
+fault). A submission of pure noise also has <code>novel_fraction ≈ 1</code>, so those diagnostics are
+never read alone — they are read next to the catalogue DTI, the emitted area and the component sizes.</div>
 <h2>Remaining caveats</h2>
 <ul>
 <li>|G| for the hidden test set is unknown, so the <code>0.8·|G|</code> floor is unknown. Every
@@ -81,7 +91,7 @@ the first honest signal; the private split and the Phase-2 revision are hidden.<
 </ul>
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-16 18:05 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-16 18:10 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>
