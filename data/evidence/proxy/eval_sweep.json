@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:49:06+00:00",
+ "generated_utc": "2026-09-16T23:50:54+00:00",
  "generated_by": "scripts/eval_proxy_catalogue.py",
  "purpose": "score a prediction against faults the training labels do not contain (docs/DISCOVERY_PLAN.md 3b) - the only local measurement aligned with the scored 'new fault' population",
  "inputs": {
@@ -50,7 +50,7 @@
  "truth": {
   "mode": "only",
   "px": 61664,
-  "km": 616.64,
+  "km": 6166.4,
   "proxy_only_px": 61664,
   "proxy_near_label_px": 20491,
   "catalogue_coverage_of_proxy": 0.2494
@@ -59,7 +59,20 @@
   "emission_px": 5165852,
   "mass": 575330.1
  },
+ "baseline_support": {
+  "source": "labels (the competition footprint)",
+  "px": 12279160,
+  "why": "the blanket baseline is taken over this support so it does not change with the raster being scored; the metric itself sums over the whole raster, exactly as the official one does"
+ },
  "results": {
+  "as_provided": {
+   "dti": 0.047822,
+   "TP_w": 7688.689,
+   "FP_w": 549544.474,
+   "FN_w": 53975.311,
+   "mass": 575330.1,
+   "emission_px": 5165852
+  },
   "as_submitted": {
    "dti": 0.047822,
    "TP_w": 7688.689,
@@ -68,6 +81,7 @@
    "mass": 575330.1,
    "emission_px": 5165852
   },
+  "prediction_role": "the raster at --pred as provided: equals the committed submission only when --pred points at one; check inputs.pred_sha256 before quoting this as a submission score",
   "baselines": {
    "zeros": {
     "dti": 0.0,
@@ -78,6 +92,14 @@
     "emission_px": 0
    },
    "blanket_ones": {
+    "dti": 0.024901,
+    "TP_w": 61664.0,
+    "FP_w": 12073458.832,
+    "FN_w": 0.0,
+    "mass": 12279160.0,
+    "emission_px": 12279160
+   },
+   "blanket_ones_whole_grid": {
     "dti": 0.024901,
     "TP_w": 61664.0,
     "FP_w": 12073458.832,
@@ -494,6 +516,676 @@
    "skeleton_dti": 0.014425,
    "best_dti": 0.039538,
    "acceptance_rule": "change the default shaping only if a candidate beats the current default by > 0.01 proxy DTI here AND is reproduced on a second ensemble; this population is the closest measurable stand-in for the scored one, not the scored one"
+  },
+  "sensitivity": {
+   "rows": [
+    {
+     "t0": 0.0,
+     "thin": true,
+     "dilate": 6,
+     "coverage_fraction": 0.05717,
+     "FP_w": 195635.32,
+     "projected_dti": {
+      "500": 0.000723,
+      "1000": 0.001431,
+      "2500": 0.003473,
+      "5000": 0.006619,
+      "10000": 0.012102,
+      "20000": 0.020656,
+      "50000": 0.035867,
+      "100000": 0.047535,
+      "250000": 0.059064
+     }
+    },
+    {
+     "t0": 0.0001,
+     "thin": true,
+     "dilate": 6,
+     "coverage_fraction": 0.05717,
+     "FP_w": 195635.32,
+     "projected_dti": {
+      "500": 0.000723,
+      "1000": 0.001431,
+      "2500": 0.003473,
+      "5000": 0.006619,
+      "10000": 0.012102,
+      "20000": 0.020656,
+      "50000": 0.035867,
+      "100000": 0.047535,
+      "250000": 0.059064
+     }
+    },
+    {
+     "t0": 0.00208008,
+     "thin": true,
+     "dilate": 6,
+     "coverage_fraction": 0.05717,
+     "FP_w": 195635.32,
+     "projected_dti": {
+      "500": 0.000723,
+      "1000": 0.001431,
+      "2500": 0.003473,
+      "5000": 0.006619,
+      "10000": 0.012102,
+      "20000": 0.020656,
+      "50000": 0.035867,
+      "100000": 0.047535,
+      "250000": 0.059064
+     }
+    },
+    {
+     "t0": 0.0432675,
+     "thin": true,
+     "dilate": 6,
+     "coverage_fraction": 0.05717,
+     "FP_w": 195635.32,
+     "projected_dti": {
+      "500": 0.000723,
+      "1000": 0.001431,
+      "2500": 0.003473,
+      "5000": 0.006619,
+      "10000": 0.012102,
+      "20000": 0.020656,
+      "50000": 0.035867,
+      "100000": 0.047535,
+      "250000": 0.059064
+     }
+    },
+    {
+     "t0": 0.0,
+     "thin": true,
+     "dilate": 4,
+     "coverage_fraction": 0.041903,
+     "FP_w": 130916.155,
+     "projected_dti": {
+      "500": 0.000788,
+      "1000": 0.001552,
+      "2500": 0.003714,
+      "5000": 0.006932,
+      "10000": 0.012228,
+      "20000": 0.019788,
+      "50000": 0.031457,
+      "100000": 0.039154,
+      "250000": 0.04589
+     }
+    },
+    {
+     "t0": 0.0001,
+     "thin": true,
+     "dilate": 4,
+     "coverage_fraction": 0.041903,
+     "FP_w": 130916.155,
+     "projected_dti": {
+      "500": 0.000788,
+      "1000": 0.001552,
+      "2500": 0.003714,
+      "5000": 0.006932,
+      "10000": 0.012228,
+      "20000": 0.019788,
+      "50000": 0.031457,
+      "100000": 0.039154,
+      "250000": 0.04589
+     }
+    },
+    {
+     "t0": 0.00208008,
+     "thin": true,
+     "dilate": 4,
+     "coverage_fraction": 0.041903,
+     "FP_w": 130916.155,
+     "projected_dti": {
+      "500": 0.000788,
+      "1000": 0.001552,
+      "2500": 0.003714,
+      "5000": 0.006932,
+      "10000": 0.012228,
+      "20000": 0.019788,
+      "50000": 0.031457,
+      "100000": 0.039154,
+      "250000": 0.04589
+     }
+    },
+    {
+     "t0": 0.0432675,
+     "thin": true,
+     "dilate": 4,
+     "coverage_fraction": 0.041903,
+     "FP_w": 130916.155,
+     "projected_dti": {
+      "500": 0.000788,
+      "1000": 0.001552,
+      "2500": 0.003714,
+      "5000": 0.006932,
+      "10000": 0.012228,
+      "20000": 0.019788,
+      "50000": 0.031457,
+      "100000": 0.039154,
+      "250000": 0.04589
+     }
+    },
+    {
+     "t0": 0.0,
+     "thin": true,
+     "dilate": 3,
+     "coverage_fraction": 0.03558,
+     "FP_w": 103170.515,
+     "projected_dti": {
+      "500": 0.000846,
+      "1000": 0.001659,
+      "2500": 0.003927,
+      "5000": 0.007211,
+      "10000": 0.012395,
+      "20000": 0.01935,
+      "50000": 0.029169,
+      "100000": 0.035108,
+      "250000": 0.039994
+     }
+    },
+    {
+     "t0": 0.0001,
+     "thin": true,
+     "dilate": 3,
+     "coverage_fraction": 0.03558,
+     "FP_w": 103170.515,
+     "projected_dti": {
+      "500": 0.000846,
+      "1000": 0.001659,
+      "2500": 0.003927,
+      "5000": 0.007211,
+      "10000": 0.012395,
+      "20000": 0.01935,
+      "50000": 0.029169,
+      "100000": 0.035108,
+      "250000": 0.039994
+     }
+    },
+    {
+     "t0": 0.00208008,
+     "thin": true,
+     "dilate": 3,
+     "coverage_fraction": 0.03558,
+     "FP_w": 103170.515,
+     "projected_dti": {
+      "500": 0.000846,
+      "1000": 0.001659,
+      "2500": 0.003927,
+      "5000": 0.007211,
+      "10000": 0.012395,
+      "20000": 0.01935,
+      "50000": 0.029169,
+      "100000": 0.035108,
+      "250000": 0.039994
+     }
+    },
+    {
+     "t0": 0.0432675,
+     "thin": true,
+     "dilate": 3,
+     "coverage_fraction": 0.03558,
+     "FP_w": 103170.515,
+     "projected_dti": {
+      "500": 0.000846,
+      "1000": 0.001659,
+      "2500": 0.003927,
+      "5000": 0.007211,
+      "10000": 0.012395,
+      "20000": 0.01935,
+      "50000": 0.029169,
+      "100000": 0.035108,
+      "250000": 0.039994
+     }
+    },
+    {
+     "t0": 0.0,
+     "thin": true,
+     "dilate": 2,
+     "coverage_fraction": 0.026276,
+     "FP_w": 68166.062,
+     "projected_dti": {
+      "500": 0.000936,
+      "1000": 0.00182,
+      "2500": 0.004198,
+      "5000": 0.00744,
+      "10000": 0.012117,
+      "20000": 0.017671,
+      "50000": 0.024376,
+      "100000": 0.027906,
+      "250000": 0.030561
+     }
+    },
+    {
+     "t0": 0.0001,
+     "thin": true,
+     "dilate": 2,
+     "coverage_fraction": 0.026276,
+     "FP_w": 68166.062,
+     "projected_dti": {
+      "500": 0.000936,
+      "1000": 0.00182,
+      "2500": 0.004198,
+      "5000": 0.00744,
+      "10000": 0.012117,
+      "20000": 0.017671,
+      "50000": 0.024376,
+      "100000": 0.027906,
+      "250000": 0.030561
+     }
+    },
+    {
+     "t0": 0.00208008,
+     "thin": true,
+     "dilate": 2,
+     "coverage_fraction": 0.026276,
+     "FP_w": 68166.062,
+     "projected_dti": {
+      "500": 0.000936,
+      "1000": 0.00182,
+      "2500": 0.004198,
+      "5000": 0.00744,
+      "10000": 0.012117,
+      "20000": 0.017671,
+      "50000": 0.024376,
+      "100000": 0.027906,
+      "250000": 0.030561
+     }
+    },
+    {
+     "t0": 0.0432675,
+     "thin": true,
+     "dilate": 2,
+     "coverage_fraction": 0.026276,
+     "FP_w": 68166.062,
+     "projected_dti": {
+      "500": 0.000936,
+      "1000": 0.00182,
+      "2500": 0.004198,
+      "5000": 0.00744,
+      "10000": 0.012117,
+      "20000": 0.017671,
+      "50000": 0.024376,
+      "100000": 0.027906,
+      "250000": 0.030561
+     }
+    },
+    {
+     "t0": 0.0,
+     "thin": true,
+     "dilate": 1,
+     "coverage_fraction": 0.019229,
+     "FP_w": 40850.058,
+     "projected_dti": {
+      "500": 0.001122,
+      "1000": 0.002143,
+      "2500": 0.004722,
+      "5000": 0.007888,
+      "10000": 0.011864,
+      "20000": 0.015861,
+      "50000": 0.01988,
+      "100000": 0.021715,
+      "250000": 0.022987
+     }
+    },
+    {
+     "t0": 0.0001,
+     "thin": true,
+     "dilate": 1,
+     "coverage_fraction": 0.019229,
+     "FP_w": 40850.058,
+     "projected_dti": {
+      "500": 0.001122,
+      "1000": 0.002143,
+      "2500": 0.004722,
+      "5000": 0.007888,
+      "10000": 0.011864,
+      "20000": 0.015861,
+      "50000": 0.01988,
+      "100000": 0.021715,
+      "250000": 0.022987
+     }
+    },
+    {
+     "t0": 0.00208008,
+     "thin": true,
+     "dilate": 1,
+     "coverage_fraction": 0.019229,
+     "FP_w": 40850.058,
+     "projected_dti": {
+      "500": 0.001122,
+      "1000": 0.002143,
+      "2500": 0.004722,
+      "5000": 0.007888,
+      "10000": 0.011864,
+      "20000": 0.015861,
+      "50000": 0.01988,
+      "100000": 0.021715,
+      "250000": 0.022987
+     }
+    },
+    {
+     "t0": 0.0432675,
+     "thin": true,
+     "dilate": 1,
+     "coverage_fraction": 0.019229,
+     "FP_w": 40850.058,
+     "projected_dti": {
+      "500": 0.001122,
+      "1000": 0.002143,
+      "2500": 0.004722,
+      "5000": 0.007888,
+      "10000": 0.011864,
+      "20000": 0.015861,
+      "50000": 0.01988,
+      "100000": 0.021715,
+      "250000": 0.022987
+     }
+    },
+    {
+     "t0": 0.0,
+     "thin": true,
+     "dilate": 0,
+     "coverage_fraction": 0.012212,
+     "FP_w": 13609.84,
+     "projected_dti": {
+      "500": 0.001955,
+      "1000": 0.003465,
+      "2500": 0.006457,
+      "5000": 0.009067,
+      "10000": 0.011363,
+      "20000": 0.013011,
+      "50000": 0.014251,
+      "100000": 0.014719,
+      "250000": 0.015014
+     }
+    },
+    {
+     "t0": 0.0001,
+     "thin": true,
+     "dilate": 0,
+     "coverage_fraction": 0.012212,
+     "FP_w": 13609.84,
+     "projected_dti": {
+      "500": 0.001955,
+      "1000": 0.003465,
+      "2500": 0.006457,
+      "5000": 0.009067,
+      "10000": 0.011363,
+      "20000": 0.013011,
+      "50000": 0.014251,
+      "100000": 0.014719,
+      "250000": 0.015014
+     }
+    },
+    {
+     "t0": 0.00208008,
+     "thin": true,
+     "dilate": 0,
+     "coverage_fraction": 0.012212,
+     "FP_w": 13609.84,
+     "projected_dti": {
+      "500": 0.001955,
+      "1000": 0.003465,
+      "2500": 0.006457,
+      "5000": 0.009067,
+      "10000": 0.011363,
+      "20000": 0.013011,
+      "50000": 0.014251,
+      "100000": 0.014719,
+      "250000": 0.015014
+     }
+    },
+    {
+     "t0": 0.0432675,
+     "thin": true,
+     "dilate": 0,
+     "coverage_fraction": 0.012212,
+     "FP_w": 13609.84,
+     "projected_dti": {
+      "500": 0.001955,
+      "1000": 0.003465,
+      "2500": 0.006457,
+      "5000": 0.009067,
+      "10000": 0.011363,
+      "20000": 0.013011,
+      "50000": 0.014251,
+      "100000": 0.014719,
+      "250000": 0.015014
+     }
+    },
+    {
+     "t0": 0.9,
+     "thin": true,
+     "dilate": 6,
+     "coverage_fraction": 3.2e-05,
+     "FP_w": 129.36,
+     "projected_dti": {
+      "500": 3.8e-05,
+      "1000": 3.9e-05,
+      "2500": 4e-05,
+      "5000": 4e-05,
+      "10000": 4e-05,
+      "20000": 4e-05,
+      "50000": 4.1e-05,
+      "100000": 4.1e-05,
+      "250000": 4.1e-05
+     }
+    },
+    {
+     "t0": 0.9,
+     "thin": true,
+     "dilate": 4,
+     "coverage_fraction": 1.9e-05,
+     "FP_w": 64.317,
+     "projected_dti": {
+      "500": 2.3e-05,
+      "1000": 2.4e-05,
+      "2500": 2.4e-05,
+      "5000": 2.4e-05,
+      "10000": 2.4e-05,
+      "20000": 2.4e-05,
+      "50000": 2.4e-05,
+      "100000": 2.4e-05,
+      "250000": 2.4e-05
+     }
+    },
+    {
+     "t0": 0.9,
+     "thin": true,
+     "dilate": 3,
+     "coverage_fraction": 1e-05,
+     "FP_w": 42.355,
+     "projected_dti": {
+      "500": 1.2e-05,
+      "1000": 1.2e-05,
+      "2500": 1.2e-05,
+      "5000": 1.2e-05,
+      "10000": 1.2e-05,
+      "20000": 1.2e-05,
+      "50000": 1.2e-05,
+      "100000": 1.2e-05,
+      "250000": 1.2e-05
+     }
+    },
+    {
+     "t0": 0.9,
+     "thin": true,
+     "dilate": 0,
+     "coverage_fraction": 0.0,
+     "FP_w": 3.0,
+     "projected_dti": {
+      "500": 0.0,
+      "1000": 0.0,
+      "2500": 0.0,
+      "5000": 0.0,
+      "10000": 0.0,
+      "20000": 0.0,
+      "50000": 0.0,
+      "100000": 0.0,
+      "250000": 0.0
+     }
+    },
+    {
+     "t0": 0.9,
+     "thin": true,
+     "dilate": 1,
+     "coverage_fraction": 0.0,
+     "FP_w": 11.0,
+     "projected_dti": {
+      "500": 0.0,
+      "1000": 0.0,
+      "2500": 0.0,
+      "5000": 0.0,
+      "10000": 0.0,
+      "20000": 0.0,
+      "50000": 0.0,
+      "100000": 0.0,
+      "250000": 0.0
+     }
+    },
+    {
+     "t0": 0.9,
+     "thin": true,
+     "dilate": 2,
+     "coverage_fraction": 0.0,
+     "FP_w": 23.0,
+     "projected_dti": {
+      "500": 0.0,
+      "1000": 0.0,
+      "2500": 0.0,
+      "5000": 0.0,
+      "10000": 0.0,
+      "20000": 0.0,
+      "50000": 0.0,
+      "100000": 0.0,
+      "250000": 0.0
+     }
+    }
+   ],
+   "per_size": [
+    {
+     "truth_px": 500,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 0,
+     "best_dti": 0.001955,
+     "skeleton_dti": 0.001955,
+     "best_is_wider_than_skeleton": false,
+     "gain_over_skeleton": 0.0,
+     "passes_acceptance": false
+    },
+    {
+     "truth_px": 1000,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 0,
+     "best_dti": 0.003465,
+     "skeleton_dti": 0.003465,
+     "best_is_wider_than_skeleton": false,
+     "gain_over_skeleton": 0.0,
+     "passes_acceptance": false
+    },
+    {
+     "truth_px": 2500,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 0,
+     "best_dti": 0.006457,
+     "skeleton_dti": 0.006457,
+     "best_is_wider_than_skeleton": false,
+     "gain_over_skeleton": 0.0,
+     "passes_acceptance": false
+    },
+    {
+     "truth_px": 5000,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 0,
+     "best_dti": 0.009067,
+     "skeleton_dti": 0.009067,
+     "best_is_wider_than_skeleton": false,
+     "gain_over_skeleton": 0.0,
+     "passes_acceptance": false
+    },
+    {
+     "truth_px": 10000,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 3,
+     "best_dti": 0.012395,
+     "skeleton_dti": 0.011363,
+     "best_is_wider_than_skeleton": true,
+     "gain_over_skeleton": 0.001032,
+     "passes_acceptance": false
+    },
+    {
+     "truth_px": 20000,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 6,
+     "best_dti": 0.020656,
+     "skeleton_dti": 0.013011,
+     "best_is_wider_than_skeleton": true,
+     "gain_over_skeleton": 0.007645,
+     "passes_acceptance": false
+    },
+    {
+     "truth_px": 50000,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 6,
+     "best_dti": 0.035867,
+     "skeleton_dti": 0.014251,
+     "best_is_wider_than_skeleton": true,
+     "gain_over_skeleton": 0.021616,
+     "passes_acceptance": true
+    },
+    {
+     "truth_px": 100000,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 6,
+     "best_dti": 0.047535,
+     "skeleton_dti": 0.014719,
+     "best_is_wider_than_skeleton": true,
+     "gain_over_skeleton": 0.032816,
+     "passes_acceptance": true
+    },
+    {
+     "truth_px": 250000,
+     "best_t0": 0.0,
+     "best_thin": true,
+     "best_dilate": 6,
+     "best_dti": 0.059064,
+     "skeleton_dti": 0.015014,
+     "best_is_wider_than_skeleton": true,
+     "gain_over_skeleton": 0.04405,
+     "passes_acceptance": true
+    }
+   ],
+   "verdict": {
+    "sizes_px": [
+     500,
+     1000,
+     2500,
+     5000,
+     10000,
+     20000,
+     50000,
+     100000,
+     250000
+    ],
+    "sizes_where_a_wider_band_passes": [
+     50000,
+     100000,
+     250000
+    ],
+    "sizes_where_the_skeleton_wins": [
+     500,
+     1000,
+     2500,
+     5000
+    ],
+    "acceptance_rule": "a wider band is only worth changing the default for if it beats the skeleton by more than 0.01 at a truth size that is plausible for the scored set - the proxy truth is not that size"
+   }
   }
  },
  "caveats": [

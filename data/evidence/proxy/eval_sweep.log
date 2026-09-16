@@ -29,10 +29,26 @@
   t0=0.9      thin=1 dilate=4px -> proxy DTI 0.0000  kept 67 px
   t0=0.9      thin=1 dilate=6px -> proxy DTI 0.0000  kept 139 px
 
-truth: only -> 61664 px (616.6 km of fault trace)
-as submitted: DTI 0.0478  (TP_w 7689 FP_w 549544 FN_w 53975)
+  projected onto a HIDDEN scored truth of a different size (coverage and false-positive mass held at the measured values):
+    truth px | best policy (floor/thin/band) | best DTI | skeleton DTI | gain
+         500 | 0 / 1 / 0px                 |   0.0020 |       0.0020 | +0.0000
+        1000 | 0 / 1 / 0px                 |   0.0035 |       0.0035 | +0.0000
+        2500 | 0 / 1 / 0px                 |   0.0065 |       0.0065 | +0.0000
+        5000 | 0 / 1 / 0px                 |   0.0091 |       0.0091 | +0.0000
+       10000 | 0 / 1 / 3px                 |   0.0124 |       0.0114 | +0.0010
+       20000 | 0 / 1 / 6px                 |   0.0207 |       0.0130 | +0.0076
+       50000 | 0 / 1 / 6px                 |   0.0359 |       0.0143 | +0.0216  <-- wider band passes
+      100000 | 0 / 1 / 6px                 |   0.0475 |       0.0147 | +0.0328  <-- wider band passes
+      250000 | 0 / 1 / 6px                 |   0.0591 |       0.0150 | +0.0440  <-- wider band passes
+    wider band passes at: [50000, 100000, 250000]
+    skeleton still best at: [500, 1000, 2500, 5000]
+
+truth: only -> 61664 px (6166.4 km of fault trace)
+the raster at --pred (ensemble_mean.tif), scored as provided: DTI 0.0478  (TP_w 7689 FP_w 549544 FN_w 53975)
+blanket baseline support: labels (the competition footprint) (12,279,160 px)
   baseline zeros                        DTI 0.0000
   baseline blanket_ones                 DTI 0.0249
+  baseline blanket_ones_whole_grid      DTI 0.0249
   baseline catalogue_copy               DTI 0.0000
   baseline catalogue_plus_submission    DTI 0.0585
   acceptance catalogue-copy == 0: PASS

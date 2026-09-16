@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:49:08+00:00",
+ "generated_utc": "2026-09-16T23:50:56+00:00",
  "generated_by": "scripts/eval_proxy_catalogue.py",
  "purpose": "score a prediction against faults the training labels do not contain (docs/DISCOVERY_PLAN.md 3b) - the only local measurement aligned with the scored 'new fault' population",
  "inputs": {
@@ -50,7 +50,7 @@
  "truth": {
   "mode": "only",
   "px": 61664,
-  "km": 616.64,
+  "km": 6166.4,
   "proxy_only_px": 61664,
   "proxy_near_label_px": 20491,
   "catalogue_coverage_of_proxy": 0.2494
@@ -59,7 +59,20 @@
   "emission_px": 39517,
   "mass": 39517.0
  },
+ "baseline_support": {
+  "source": "labels (the competition footprint)",
+  "px": 12279160,
+  "why": "the blanket baseline is taken over this support so it does not change with the raster being scored; the metric itself sums over the whole raster, exactly as the official one does"
+ },
  "results": {
+  "as_provided": {
+   "dti": 0.041041,
+   "TP_w": 2349.827,
+   "FP_w": 37269.074,
+   "FN_w": 59314.173,
+   "mass": 39517.0,
+   "emission_px": 39517
+  },
   "as_submitted": {
    "dti": 0.041041,
    "TP_w": 2349.827,
@@ -68,6 +81,7 @@
    "mass": 39517.0,
    "emission_px": 39517
   },
+  "prediction_role": "the raster at --pred as provided: equals the committed submission only when --pred points at one; check inputs.pred_sha256 before quoting this as a submission score",
   "baselines": {
    "zeros": {
     "dti": 0.0,
@@ -78,12 +92,20 @@
     "emission_px": 0
    },
    "blanket_ones": {
-    "dti": 0.058504,
-    "TP_w": 61650.333,
-    "FP_w": 4960570.122,
-    "FN_w": 13.667,
-    "mass": 5165852.0,
-    "emission_px": 5165852
+    "dti": 0.024901,
+    "TP_w": 61664.0,
+    "FP_w": 12073458.832,
+    "FN_w": 0.0,
+    "mass": 12279160.0,
+    "emission_px": 12279160
+   },
+   "blanket_ones_whole_grid": {
+    "dti": 0.024901,
+    "TP_w": 61664.0,
+    "FP_w": 12073458.832,
+    "FN_w": 0.0,
+    "mass": 12279160.0,
+    "emission_px": 12279160
    },
    "catalogue_copy": {
     "dti": 0.0,
