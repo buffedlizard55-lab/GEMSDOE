@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:30:02Z",
+ "generated_utc": "2026-09-16T21:34:17Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
   "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
@@ -8,6 +8,10 @@
   "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
  },
  "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks and whitespace collapse - no paraphrasing, no fuzzy matching",
+ "extracted_text": {
+  "path": "data/evidence/rules_extracted_text.txt",
+  "chars": 49936
+ },
  "match_against_mirror": {
   "expected_sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938",
   "identical": true
@@ -179,7 +183,14 @@
    "section": "\u00a73.6.2",
    "quote": "The set of faults included in the public test dataset and the relative weight of faults in both test datasets will be determined by the competition organizers before the start of the competition.",
    "why": "Public/private composition and fault weighting are the organizers' choice and are fixed before the start - so public-LB optimising cannot reweight them.",
-   "exact_match": false
+   "exact_match": false,
+   "diagnostic": {
+    "prefix_len": 62,
+    "prefix_tail": "e set of faults included in the public test dataset and the ",
+    "quote_continues": "relative weight of faults in both test datasets will be determined by the competition organizers before the start of the",
+    "doc_continues": "12 relative weight of faults in both test datasets will be determined by the competition organizers before the start of ",
+    "doc_offset": 28982
+   }
   },
   {
    "id": "entry",
