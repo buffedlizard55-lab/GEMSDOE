@@ -435,7 +435,8 @@ sentences verified verbatim</b> against <code>{e(doc_url)}</code>
 retrieved {e(rq["generated_utc"])}).
 Method: {e(rq.get("method", ""))}.""") if all_ok else note(
         "warn", f"Quotation verification is INCOMPLETE ({n_found}/"
-                f"{n_quotes}). Do not rely on the table below until it is fixed.")
+                f"{n_quotes}) against <code>{e(doc_url)}</code>. Do not rely on the table "
+                f"below until it is fixed.")   # both branches name the document (see below)
     return head + badge + f"""<table><thead><tr><th>id</th><th>section</th><th>verbatim quotation</th>
 <th>verified</th></tr></thead><tbody>{rows}</tbody></table>""" + note("warn", """<b>Consequence for
 everything else in this repository.</b> A model that reproduces <code>labels.tif</code> perfectly scores

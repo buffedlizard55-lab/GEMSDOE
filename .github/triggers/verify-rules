@@ -8,3 +8,5 @@
 
 # 2026-09-16 (session 7): fire the rules-quote re-check for the 10 sentences added from an
 # independent extraction path, and re-verify every catalog URL including the six new SGMC rows.
+
+# 2026-09-16: re-run with --dump-text and the divergence diagnostic (quote test_set_composition MISS)
