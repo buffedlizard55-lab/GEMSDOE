@@ -41,8 +41,11 @@ on:
         description: "floor candidates in the proxy sweep"
         default: "4"
       dilate_grid:
+        # MEASURED 2026-09-16 (run 35152701740): on the new-fault-like population the proxy DTI was
+        # still rising at 6 px (0.0144 -> 0.0395 monotone), so the default grid now reaches 12 px.
+        # Cost: ~21 s per candidate on the full grid, 5 floors x 9 widths ~ 16 min (job limit 150).
         description: "emission widths (px) in the proxy sweep"
-        default: "0,1,2,3,4,6"
+        default: "0,1,2,3,4,6,8,10,12"
       extra_classes:
         description: "extra SGMC classes to include besides faults (e.g. Lineament)"
         default: ""
@@ -222,6 +225,13 @@ jobs:
             --out data/evidence/proxy/eval_reblend_submission.json --truth only \
             2>&1 | tee data/evidence/proxy/eval_reblend_submission.log
 
+      - name: Reconcile the measurements into the emission decision record
+        run: |
+          set -euo pipefail
+          python scripts/decide_emission_width.py \
+            --out data/evidence/emission_decision.json \
+            2>&1 | tee data/evidence/proxy/emission_decision.log
+
       - name: Commit the sweep evidence
         if: always()
         run: |
@@ -238,7 +248,7 @@ jobs:
           PY
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f "$D" || true
+          git add -f "$D" data/evidence/emission_decision.json || true
           git diff --cached --quiet && echo "no sweep evidence changes" || {
             git commit -m "evidence(proxy): emission-width sweep on faults absent from the labels [skip ci]"
             git pull --rebase origin "${GITHUB_REF_NAME}"
@@ -252,6 +262,7 @@ jobs:
           name: proxy-sweep-${{ github.run_id }}
           path: |
             data/evidence/proxy/
+            data/evidence/emission_decision.json
             blend_report.json
             ensemble_mean.tif
           retention-days: 30

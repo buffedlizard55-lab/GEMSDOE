@@ -6,6 +6,51 @@ this session falsified them, because the way they were falsified is the most use
 
 ---
 
+## 0. Session 7 (2026-09-16, second pass) — the rules check went green, and the width question got an answer
+
+**Green:** `verify-rules` run 35153898428 — 29/29 rule sentences verified verbatim against the
+official PDF (`data/evidence/rules_quotes.json`), with the 18 page-furniture removals recorded
+(bare page numbers, glued section numbers). The last blocker on that check was that pypdf extracts a
+page number *inside* the sentence that continues across the page break; the fix drops blank lines
+before looking for page furniture, and it is now proved end to end by a synthetic reportlab→pypdf
+PDF in CI. Tests 35153898433 and Pages 35153898486 are green on the same commit.
+
+**The width question has a third measurement, and it disagrees with the first.** `proxy-eval` run
+35152701740 swept floor × thinning × emission width on 61,664 px (6,166 km) of USGS SGMC fault trace
+that `labels.tif` does **not** contain — the closest measurable stand-in for the scored new-fault
+population. Proxy DTI rises monotonically with the width (0.0144 → 0.0395 from 0 px to 6 px), the
+opposite sign to the held-out-crop sweep (0.1903 → 0.0908). `scripts/decide_emission_width.py`
+reconciles them by projecting every measured policy onto a range of possible scored-truth sizes
+using the metric's own scaling (`DTI = TP_w/(0.2(TP_w+FP_w) + 0.8|G|)`: the wrong-mass term does not
+grow with |G|, the missing-mass term does), and writes the decision:
+**widen, but not yet** — conditions 1 and 2 met (+0.0149 on the new-fault-like population; 3/3
+plausible |G| anchors), condition 3 (second ensemble) unmet, default unchanged.
+
+**The uncomfortable number in that table:** a constant-ones submission scores **0.0585** on the
+new-fault-like population, beating the shipped skeleton's **0.0247** and every swept candidate.
+Recall is worth four times precision under α=0.2/β=0.8, so the shipped emission is not conservative,
+it is *under-emitting*. The crossover is computed and published: the skeleton stays ahead only
+below ~2,200 km of scored truth.
+
+**Three measurement defects found and fixed while reading that evidence** (each had produced a
+plausible-looking number that meant something else): the truth length was converted with 0.01 km/px
+instead of 0.1 km/px (every committed truth length was 10× short); the blanket-ones baseline was
+taken over `np.isfinite(pred)`, so its definition changed with whichever raster was scored; and the
+score of the raster handed to `--pred` was published as "as submitted", which mislabelled the
+sweep's soft ensemble map as a submission on the site's Results page. All three are fixed, pinned by
+`tests/test_proxy_catalogue.py::test_eval_units_support_and_role_are_unambiguous`, and the sweep now
+clips every candidate to the data footprint so it compares *legal* submissions.
+
+**New page:** `docs/verification.html` — the public leaderboard read directly (43 entrants; #1
+0.1972; top-5 cut ≈0.1454, read 2026-09-16), an explicit "this repository is not on it" statement,
+and a table re-checking every load-bearing external claim from its own URL
+(`data/evidence/independent_verification.json`).
+
+**Suite:** 91 passed (was 86; +3 proxy-contract tests, +2 site tests). The audit test deleted by an
+earlier slice-to-EOF edit is restored.
+
+---
+
 ## 1. What this session found: the ensemble run had produced no submission
 
 Session 3 reported: *"On success the blend job commits `data/evidence/runs/35042805806/` (blend_report.json,

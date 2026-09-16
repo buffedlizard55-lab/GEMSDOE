@@ -1,0 +1,499 @@
+{
+ "generated_utc": "2026-09-16T23:18:06+00:00",
+ "generated_by": "scripts/decide_emission_width.py",
+ "purpose": "reconcile the three disagreeing emission-width measurements and decide the shipped shaping policy on the record, using the metric's own scaling in |G|",
+ "inputs": {
+  "proxy_eval": "data/evidence/proxy/eval_submission.json",
+  "reblend_eval": "data/evidence/proxy/eval_reblend_submission.json",
+  "sweep": "data/evidence/proxy/eval_sweep.json",
+  "in_domain": "data/evidence/runs/35042805806-experiment/blend_report.json",
+  "metric": {
+   "alpha": 0.2,
+   "beta": 0.8,
+   "R_pixels": 3,
+   "R_meters": 300
+  }
+ },
+ "proxy_truth_px": 61664,
+ "policies": [
+  {
+   "policy": "shipped_skeleton_dilate0",
+   "measured_dti": 0.024685,
+   "coverage_fraction": 0.021473,
+   "wrong_mass_FP_w": 20211.052,
+   "emission_px": 21492,
+   "note": "the committed submission: t0=0.470, thin, width 0"
+  },
+  {
+   "policy": "baseline_blanket_ones",
+   "measured_dti": 0.058504,
+   "coverage_fraction": 0.999778,
+   "wrong_mass_FP_w": 4960570.122,
+   "emission_px": 5165852,
+   "note": "fill the data footprint with 1.0 - no skill, maximum recall"
+  },
+  {
+   "policy": "baseline_catalogue_plus_submission",
+   "measured_dti": 0.020272,
+   "coverage_fraction": 0.021473,
+   "wrong_mass_FP_w": 78606.052,
+   "emission_px": 79887,
+   "note": "the catalogue unioned with ours"
+  },
+  {
+   "policy": "reblend_hard_39517px",
+   "measured_dti": 0.041041,
+   "coverage_fraction": 0.038107,
+   "wrong_mass_FP_w": 37269.074,
+   "emission_px": 39517,
+   "note": "the fold pair re-blended without the pre-shaping floor"
+  },
+  {
+   "policy": "sweep_t0_0_width6px",
+   "measured_dti": 0.039538,
+   "coverage_fraction": 0.05717,
+   "wrong_mass_FP_w": 195635.32,
+   "emission_px": 205477,
+   "note": "floor 0, thinning on, width 6 px"
+  },
+  {
+   "policy": "sweep_t0_0.0432675_width6px",
+   "measured_dti": 0.039538,
+   "coverage_fraction": 0.05717,
+   "wrong_mass_FP_w": 195635.32,
+   "emission_px": 205477,
+   "note": "floor 0.0432675, thinning on, width 6 px"
+  },
+  {
+   "policy": "sweep_t0_0_width3px",
+   "measured_dti": 0.031163,
+   "coverage_fraction": 0.03558,
+   "wrong_mass_FP_w": 103170.515,
+   "emission_px": 108521,
+   "note": "floor 0, thinning on, width 3 px"
+  },
+  {
+   "policy": "sweep_t0_0.0432675_width3px",
+   "measured_dti": 0.031163,
+   "coverage_fraction": 0.03558,
+   "wrong_mass_FP_w": 103170.515,
+   "emission_px": 108521,
+   "note": "floor 0.0432675, thinning on, width 3 px"
+  },
+  {
+   "policy": "sweep_t0_0_width0px",
+   "measured_dti": 0.014425,
+   "coverage_fraction": 0.012212,
+   "wrong_mass_FP_w": 13609.84,
+   "emission_px": 14285,
+   "note": "floor 0, thinning on, width 0 px"
+  },
+  {
+   "policy": "sweep_t0_0.0432675_width0px",
+   "measured_dti": 0.014425,
+   "coverage_fraction": 0.012212,
+   "wrong_mass_FP_w": 13609.84,
+   "emission_px": 14285,
+   "note": "floor 0.0432675, thinning on, width 0 px"
+  },
+  {
+   "policy": "ensemble_soft_map",
+   "measured_dti": 0.047822,
+   "coverage_fraction": 0.124687,
+   "wrong_mass_FP_w": 549544.474,
+   "emission_px": 5165852,
+   "note": "the raw pre-shaping ensemble mean (not a legal submission: values outside the footprint are not NaN)"
+  }
+ ],
+ "crossovers": {
+  "wide_vs_shipped": {
+   "between": [
+    "shipped_skeleton_dilate0",
+    "sweep_t0_0_width6px"
+   ],
+   "crossover_px": 21328.2,
+   "reason": "shipped_skeleton_dilate0 wins below 21328.2 px (2132.8 km); sweep_t0_0_width6px wins above"
+  },
+  "widest_swept_px": 6,
+  "blanket_vs_shipped": {
+   "between": [
+    "shipped_skeleton_dilate0",
+    "baseline_blanket_ones"
+   ],
+   "crossover_px": 22056.5,
+   "reason": "shipped_skeleton_dilate0 wins below 22056.5 px (2205.6 km); baseline_blanket_ones wins above"
+  },
+  "blanket_vs_wide": {
+   "between": [
+    "sweep_t0_0_width6px",
+    "baseline_blanket_ones"
+   ],
+   "crossover_px": 23340.5,
+   "reason": "sweep_t0_0_width6px wins below 23340.5 px (2334.1 km); baseline_blanket_ones wins above"
+  }
+ },
+ "projection_table": [
+  {
+   "truth_px": 500,
+   "truth_km": 50.0,
+   "shipped_skeleton_dilate0": 0.00242,
+   "baseline_blanket_ones": 0.0005,
+   "baseline_catalogue_plus_submission": 0.00067,
+   "reblend_hard_39517px": 0.00242,
+   "sweep_t0_0_width6px": 0.00072,
+   "sweep_t0_0.0432675_width6px": 0.00072,
+   "sweep_t0_0_width3px": 0.00085,
+   "sweep_t0_0.0432675_width3px": 0.00085,
+   "sweep_t0_0_width0px": 0.00196,
+   "sweep_t0_0.0432675_width0px": 0.00196,
+   "ensemble_soft_map": 0.00057
+  },
+  {
+   "truth_px": 1000,
+   "truth_km": 100.0,
+   "shipped_skeleton_dilate0": 0.00443,
+   "baseline_blanket_ones": 0.00101,
+   "baseline_catalogue_plus_submission": 0.0013,
+   "reblend_hard_39517px": 0.00461,
+   "sweep_t0_0_width6px": 0.00143,
+   "sweep_t0_0.0432675_width6px": 0.00143,
+   "sweep_t0_0_width3px": 0.00166,
+   "sweep_t0_0.0432675_width3px": 0.00166,
+   "sweep_t0_0_width0px": 0.00346,
+   "sweep_t0_0.0432675_width0px": 0.00346,
+   "ensemble_soft_map": 0.00113
+  },
+  {
+   "truth_px": 2500,
+   "truth_km": 250.0,
+   "shipped_skeleton_dilate0": 0.00887,
+   "baseline_blanket_ones": 0.00251,
+   "baseline_catalogue_plus_submission": 0.00303,
+   "reblend_hard_39517px": 0.01006,
+   "sweep_t0_0_width6px": 0.00347,
+   "sweep_t0_0.0432675_width6px": 0.00347,
+   "sweep_t0_0_width3px": 0.00393,
+   "sweep_t0_0.0432675_width3px": 0.00393,
+   "sweep_t0_0_width0px": 0.00646,
+   "sweep_t0_0.0432675_width0px": 0.00646,
+   "ensemble_soft_map": 0.00278
+  },
+  {
+   "truth_px": 5000,
+   "truth_km": 500.0,
+   "shipped_skeleton_dilate0": 0.01331,
+   "baseline_blanket_ones": 0.00501,
+   "baseline_catalogue_plus_submission": 0.00544,
+   "reblend_hard_39517px": 0.01658,
+   "sweep_t0_0_width6px": 0.00662,
+   "sweep_t0_0.0432675_width6px": 0.00662,
+   "sweep_t0_0_width3px": 0.00721,
+   "sweep_t0_0.0432675_width3px": 0.00721,
+   "sweep_t0_0_width0px": 0.00907,
+   "sweep_t0_0.0432675_width0px": 0.00907,
+   "ensemble_soft_map": 0.00547
+  },
+  {
+   "truth_px": 10000,
+   "truth_km": 1000.0,
+   "shipped_skeleton_dilate0": 0.01777,
+   "baseline_blanket_ones": 0.00998,
+   "baseline_catalogue_plus_submission": 0.00904,
+   "reblend_hard_39517px": 0.02454,
+   "sweep_t0_0_width6px": 0.0121,
+   "sweep_t0_0.0432675_width6px": 0.0121,
+   "sweep_t0_0_width3px": 0.01239,
+   "sweep_t0_0.0432675_width3px": 0.01239,
+   "sweep_t0_0_width0px": 0.01136,
+   "sweep_t0_0.0432675_width0px": 0.01136,
+   "ensemble_soft_map": 0.01055
+  },
+  {
+   "truth_px": 20000,
+   "truth_km": 2000.0,
+   "shipped_skeleton_dilate0": 0.02134,
+   "baseline_blanket_ones": 0.01976,
+   "baseline_catalogue_plus_submission": 0.0135,
+   "reblend_hard_39517px": 0.03229,
+   "sweep_t0_0_width6px": 0.02066,
+   "sweep_t0_0.0432675_width6px": 0.02066,
+   "sweep_t0_0_width3px": 0.01935,
+   "sweep_t0_0.0432675_width3px": 0.01935,
+   "sweep_t0_0_width0px": 0.01301,
+   "sweep_t0_0.0432675_width0px": 0.01301,
+   "ensemble_soft_map": 0.01973
+  },
+  {
+   "truth_px": 26042,
+   "truth_km": 2604.2,
+   "shipped_skeleton_dilate0": 0.02238,
+   "baseline_blanket_ones": 0.02557,
+   "baseline_catalogue_plus_submission": 0.01525,
+   "reblend_hard_39517px": 0.03484,
+   "sweep_t0_0_width6px": 0.02471,
+   "sweep_t0_0.0432675_width6px": 0.02471,
+   "sweep_t0_0_width3px": 0.02225,
+   "sweep_t0_0.0432675_width3px": 0.02225,
+   "sweep_t0_0_width0px": 0.01346,
+   "sweep_t0_0.0432675_width0px": 0.01346,
+   "ensemble_soft_map": 0.02471
+  },
+  {
+   "truth_px": 30000,
+   "truth_km": 3000.0,
+   "shipped_skeleton_dilate0": 0.02287,
+   "baseline_blanket_ones": 0.02934,
+   "baseline_catalogue_plus_submission": 0.01617,
+   "reblend_hard_39517px": 0.03608,
+   "sweep_t0_0_width6px": 0.02702,
+   "sweep_t0_0.0432675_width6px": 0.02702,
+   "sweep_t0_0_width3px": 0.0238,
+   "sweep_t0_0.0432675_width3px": 0.0238,
+   "sweep_t0_0_width0px": 0.01367,
+   "sweep_t0_0.0432675_width0px": 0.01367,
+   "ensemble_soft_map": 0.02778
+  },
+  {
+   "truth_px": 50000,
+   "truth_km": 5000.0,
+   "shipped_skeleton_dilate0": 0.02426,
+   "baseline_blanket_ones": 0.04797,
+   "baseline_catalogue_plus_submission": 0.01919,
+   "reblend_hard_39517px": 0.03983,
+   "sweep_t0_0_width6px": 0.03587,
+   "sweep_t0_0.0432675_width6px": 0.03587,
+   "sweep_t0_0_width3px": 0.02917,
+   "sweep_t0_0.0432675_width3px": 0.02917,
+   "sweep_t0_0_width0px": 0.01425,
+   "sweep_t0_0.0432675_width0px": 0.01425,
+   "ensemble_soft_map": 0.04124
+  },
+  {
+   "truth_px": 60988,
+   "truth_km": 6098.8,
+   "shipped_skeleton_dilate0": 0.02467,
+   "baseline_blanket_ones": 0.0579,
+   "baseline_catalogue_plus_submission": 0.02022,
+   "reblend_hard_39517px": 0.04098,
+   "sweep_t0_0_width6px": 0.03935,
+   "sweep_t0_0.0432675_width6px": 0.03935,
+   "sweep_t0_0_width3px": 0.03106,
+   "sweep_t0_0.0432675_width3px": 0.03106,
+   "sweep_t0_0_width0px": 0.01442,
+   "sweep_t0_0.0432675_width0px": 0.01442,
+   "ensemble_soft_map": 0.04746
+  },
+  {
+   "truth_px": 61664,
+   "truth_km": 6166.4,
+   "shipped_skeleton_dilate0": 0.02469,
+   "baseline_blanket_ones": 0.0585,
+   "baseline_catalogue_plus_submission": 0.02027,
+   "reblend_hard_39517px": 0.04104,
+   "sweep_t0_0_width6px": 0.03954,
+   "sweep_t0_0.0432675_width6px": 0.03954,
+   "sweep_t0_0_width3px": 0.03116,
+   "sweep_t0_0.0432675_width3px": 0.03116,
+   "sweep_t0_0_width0px": 0.01443,
+   "sweep_t0_0.0432675_width0px": 0.01443,
+   "ensemble_soft_map": 0.04782
+  },
+  {
+   "truth_px": 100000,
+   "truth_km": 10000.0,
+   "shipped_skeleton_dilate0": 0.02542,
+   "baseline_blanket_ones": 0.09155,
+   "baseline_catalogue_plus_submission": 0.02233,
+   "reblend_hard_39517px": 0.0432,
+   "sweep_t0_0_width6px": 0.04753,
+   "sweep_t0_0.0432675_width6px": 0.04753,
+   "sweep_t0_0_width3px": 0.03511,
+   "sweep_t0_0.0432675_width3px": 0.03511,
+   "sweep_t0_0_width0px": 0.01472,
+   "sweep_t0_0.0432675_width0px": 0.01472,
+   "ensemble_soft_map": 0.06481
+  },
+  {
+   "truth_px": 250000,
+   "truth_km": 25000.0,
+   "shipped_skeleton_dilate0": 0.02617,
+   "baseline_blanket_ones": 0.20123,
+   "baseline_catalogue_plus_submission": 0.02476,
+   "reblend_hard_39517px": 0.0455,
+   "sweep_t0_0_width6px": 0.05906,
+   "sweep_t0_0.0432675_width6px": 0.05906,
+   "sweep_t0_0_width3px": 0.03999,
+   "sweep_t0_0.0432675_width3px": 0.03999,
+   "sweep_t0_0_width0px": 0.01501,
+   "sweep_t0_0.0432675_width0px": 0.01501,
+   "ensemble_soft_map": 0.0986
+  }
+ ],
+ "plausible_scored_truth": {
+  "assumption_density_km_per_km2": 0.05022,
+  "assumption_geodawn_area_km2": 51857.0,
+  "assumption_aoi_area_km2": 122791.6,
+  "anchors": [
+   {
+    "name": "same density over the GeoDAWN blocks",
+    "truth_px": 26042,
+    "why": "the scored faults come from the blocks the geophysics was flown over"
+   },
+   {
+    "name": "same density over the whole AOI",
+    "truth_px": 61664,
+    "why": "the measured population itself"
+   },
+   {
+    "name": "the public catalogue (labels.tif) alone",
+    "truth_px": 60988,
+    "why": "known: 6,099 km, the faults the model trained on"
+   }
+  ]
+ },
+ "in_domain_measurement": {
+  "rows": [
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 0,
+    "mean_heldout_dti": 0.04411294747575568
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 1,
+    "mean_heldout_dti": 0.0450820314135185
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 3,
+    "mean_heldout_dti": 0.04804287789214747
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 6,
+    "mean_heldout_dti": 0.04790440896178182
+   },
+   {
+    "t0": 0.469674,
+    "thin": true,
+    "dilate": 0,
+    "mean_heldout_dti": 0.19025505778573235
+   },
+   {
+    "t0": 0.469674,
+    "thin": true,
+    "dilate": 1,
+    "mean_heldout_dti": 0.1524671321483486
+   },
+   {
+    "t0": 0.469674,
+    "thin": true,
+    "dilate": 3,
+    "mean_heldout_dti": 0.11284063826692466
+   },
+   {
+    "t0": 0.469674,
+    "thin": true,
+    "dilate": 6,
+    "mean_heldout_dti": 0.09081508365620646
+   }
+  ],
+  "measures": "held-out crops of the public catalogue",
+  "caveat": "upper bound on plumbing, not on skill"
+ },
+ "verdict": {
+  "pre_registered_rule": "change the default shaping only if a candidate beats the current default by > 0.01 proxy DTI here AND is reproduced on a second ensemble; this population is the closest measurable stand-in for the scored one, not the scored one",
+  "proxy_population_ranking": [
+   "baseline_blanket_ones",
+   "ensemble_soft_map",
+   "reblend_hard_39517px",
+   "sweep_t0_0_width6px",
+   "sweep_t0_0.0432675_width6px",
+   "sweep_t0_0_width3px",
+   "sweep_t0_0.0432675_width3px",
+   "shipped_skeleton_dilate0",
+   "baseline_catalogue_plus_submission",
+   "sweep_t0_0_width0px",
+   "sweep_t0_0.0432675_width0px"
+  ],
+  "wide_vs_shipped": {
+   "between": [
+    "shipped_skeleton_dilate0",
+    "sweep_t0_0_width6px"
+   ],
+   "crossover_px": 21328.2,
+   "reason": "shipped_skeleton_dilate0 wins below 21328.2 px (2132.8 km); sweep_t0_0_width6px wins above"
+  },
+  "blanket_vs_shipped": {
+   "between": [
+    "shipped_skeleton_dilate0",
+    "baseline_blanket_ones"
+   ],
+   "crossover_px": 22056.5,
+   "reason": "shipped_skeleton_dilate0 wins below 22056.5 px (2205.6 km); baseline_blanket_ones wins above"
+  },
+  "blanket_vs_wide": {
+   "between": [
+    "sweep_t0_0_width6px",
+    "baseline_blanket_ones"
+   ],
+   "crossover_px": 23340.5,
+   "reason": "sweep_t0_0_width6px wins below 23340.5 px (2334.1 km); baseline_blanket_ones wins above"
+  },
+  "in_domain_contrast": "on the population the model trained on, the same widening costs 0.1903 -> 0.0908 (skeleton -> 6 px): the sign of the effect flips with the population, which is why neither number alone can decide it",
+  "conditions": [
+   {
+    "condition": "beats the shipped default on the new-fault-like population by > 0.01",
+    "required": "> 0.01 measured proxy DTI",
+    "measured": 0.014853,
+    "passes": true
+   },
+   {
+    "condition": "wins at the plausible scored-truth sizes (not only in the large-|G| limit)",
+    "required": "every anchor favours the wider band",
+    "measured": "3/3 anchors favour it; crossover 21,328 px (2,133 km)",
+    "passes": true
+   },
+   {
+    "condition": "reproduced on a second, independently trained ensemble",
+    "required": "same sign and > 0.01 on the second ensemble",
+    "measured": "NOT MEASURED: needs a GPU training run plus a second sweep (see SUGGESTIONS.md 7.1)",
+    "passes": false
+   }
+  ],
+  "conclusion": "widen, but not yet: the 6-px band beats the shipped skeleton on the new-fault-like population by +0.0149 (condition 1) and at 3/3 plausible scored-truth anchors (condition 2), while a scored truth below 21,328 px (2,133 km) would still favour the narrower skeleton. Condition 3 - reproduction on a second ensemble - is unmet and is the blocking item, so the shipped default is unchanged and this file is the record of why",
+  "top_priority": "beating the constant-ones baseline on the new-fault-like population is worth more than the width choice: the shipped skeleton does not beat it at any truth size above the crossover printed above, and the leaderboard's top score (0.1972) is 3.4x the blanket's 0.0585 on this population",
+  "anchor_projection": [
+   {
+    "anchor": "same density over the GeoDAWN blocks",
+    "truth_px": 26042,
+    "shipped_dti": 0.0224,
+    "wide_dti": 0.0247,
+    "wide_wins": true
+   },
+   {
+    "anchor": "same density over the whole AOI",
+    "truth_px": 61664,
+    "shipped_dti": 0.0247,
+    "wide_dti": 0.0395,
+    "wide_wins": true
+   },
+   {
+    "anchor": "the public catalogue (labels.tif) alone",
+    "truth_px": 60988,
+    "shipped_dti": 0.0247,
+    "wide_dti": 0.0393,
+    "wide_wins": true
+   }
+  ]
+ },
+ "caveats": [
+  "The projection holds coverage and wrong mass fixed while |G| changes; a model that would be retrained for a different-sized truth would not hold either.",
+  "Population C is USGS state-map surface mapping, not the expert interpretation of GeoDAWN geophysics that the prize scores. Policy comparisons only.",
+  "The scored truth size is unknowable from here; the anchors are assumptions printed as assumptions, not estimates with confidence intervals."
+ ]
+}

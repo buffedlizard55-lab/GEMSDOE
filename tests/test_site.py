@@ -121,3 +121,44 @@ def test_proxy_section_without_evidence_says_so():
     assert "not available" in html.lower()
     assert "0.0247" not in html and "0.0" not in html.split("</h2>")[0], \
         "a missing proxy must not render numbers"
+
+
+# --------------------------------------------------------------------------- verification page
+# The page added on 2026-09-16 (session 7) carries the only externally-sourced number on the site.
+# Its failure mode is worse than a missing page: a leaderboard rendered from a half-transcribed
+# snapshot, or a leaderboard shown WITHOUT the sentence saying this repository is not on it, would
+# read as a result.  These two tests pin both halves.
+def _verification_ev():
+    p = ROOT / "data/evidence/independent_verification.json"
+    if not p.exists():
+        return {}
+    return {"independent_verification": json.loads(p.read_text())}
+
+
+def test_verification_page_renders_the_leaderboard_and_the_disclaimer():
+    ev = _verification_ev()
+    if not ev:
+        import pytest
+        pytest.skip("independent verification record not present in this checkout")
+    mod = _site_mod()
+    html = mod.build_verification(ev)
+    lb = ev["independent_verification"]["competition_standing"]
+    assert f"{lb['top_dti']:.4f}" in html, "the top score is not rendered"
+    for row in lb["rows"]:
+        assert f"{row['best_public_dti']:.4f}" in html, f"rank {row['rank']} missing"
+        assert row["participant"] in html, f"rank {row['rank']} entrant missing"
+    assert f"{lb['n_ranked']} ranked entrants" in html, "the ranked-entrant count is not rendered"
+    assert "This repository is not on it." in html, "the disclaimer is missing"
+    assert lb["url"] in html, "the leaderboard link is missing"
+    # every check row must appear with its URL: an empty row is a finding, not a silent omission
+    for c in ev["independent_verification"]["checks"]:
+        assert c["url"] in html, f"check {c['id']} lost its source"
+    assert len(html) > 4000
+
+
+def test_verification_page_without_evidence_says_so_and_invents_nothing():
+    mod = _site_mod()
+    html = mod.build_verification({})
+    assert "not available" in html.lower()
+    assert "0.1972" not in html and "mzoorob" not in html, \
+        "a missing verification record must not render a leaderboard"

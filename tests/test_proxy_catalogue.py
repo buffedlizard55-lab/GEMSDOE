@@ -320,3 +320,117 @@ def test_projection_finds_the_size_at_which_the_skeleton_stops_winning():
     d = [r["projected_dti"]["1000"] for r in rows if r["dilate"] == 0][0]
     e = [r["projected_dti"]["100000"] for r in rows if r["dilate"] == 0][0]
     assert e > d
+
+
+# ---------------------------------------------------------------------------------------------
+# The scoring contract of scripts/eval_proxy_catalogue.py (2026-09-16, session 7 fixes)
+#
+# Three defects were found by inspection and are pinned here, because each one silently changed
+# what the published numbers MEAN while still producing a plausible number:
+#   (a) truth length was converted with 0.01 km/px instead of 0.1 km/px, so every committed truth
+#       length was reported 10x short (61,664 px printed as 616.6 km instead of 6,166 km);
+#   (b) the blanket-ones baseline was taken over np.isfinite(pred), so its definition - and its
+#       value - changed with whichever raster was being scored;
+#   (c) the score of the raster handed to --pred was called "as_submitted", which is only true when
+#       --pred IS the committed submission (it was not, in the shaping sweep, and the site printed
+#       that row under "this submission, as committed").
+# ---------------------------------------------------------------------------------------------
+
+def _write(path, arr, transform, dtype):
+    kw = {"nodata": np.nan} if dtype.startswith("float") else {}
+    with rasterio.open(path, "w", driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1,
+                       dtype=dtype, crs="EPSG:32611", transform=transform, **kw) as dst:
+        dst.write(arr.astype(dtype), 1)
+
+
+def test_eval_units_support_and_role_are_unambiguous(tmp_path):
+    ev = _load("eval_proxy_catalogue")
+    size = 64
+    transform = from_origin(500000.0, 4100000.0, 100.0, 100.0)
+    # a fault footprint: NaN edges (outside the data footprint), one truth trace inside
+    labels = np.full((size, size), np.nan, dtype="float32")
+    labels[8:56, 8:56] = 0.0
+    labels[20:40, 30] = 1.0                       # the catalogue lives inside the footprint
+    lab_path = tmp_path / "labels.tif"
+    _write(lab_path, labels, transform, "float32")
+    # a proxy fault absent from the catalogue (code 2), and the labelled one (code 1)
+    coded = np.zeros((size, size), dtype="uint8")
+    coded[20:40, 30] = 1
+    coded[10:50, 45] = 2
+    coded_path = tmp_path / "coded.tif"
+    _write(coded_path, coded, transform, "uint8")
+    # a prediction that is finite EVERYWHERE (an ensemble map, not a legal submission) and misses
+    # the absent fault: this is the case that made the old baseline definition ambiguous
+    pred = np.full((size, size), 1.0, dtype="float32")
+    pred[10:50, 44] = 1.0
+    p_path = tmp_path / "prob.tif"
+    _write(p_path, pred, transform, "float32")
+
+    out = tmp_path / "ev.json"
+    argv = ["eval_proxy_catalogue.py", "--pred", str(p_path), "--proxy", str(coded_path),
+            "--labels", str(lab_path), "--out", str(out)]
+    old = sys.argv
+    try:
+        sys.argv = argv
+        assert ev.main() == 0
+    finally:
+        sys.argv = old
+    rep = json.loads(out.read_text())
+
+    # (a) 100 m pixels: km = px * 0.1, and the truth is the code-2 trace only
+    assert rep["truth"]["mode"] == "only"
+    assert rep["truth"]["px"] == 40
+    assert abs(rep["truth"]["km"] - rep["truth"]["px"] * 0.1) < 1e-9
+
+    # (b) the blanket baseline is anchored to the LABEL footprint, not to the prediction
+    assert rep["baseline_support"]["source"].startswith("labels")
+    assert rep["baseline_support"]["px"] == int(np.isfinite(labels).sum())
+    assert rep["baseline_support"]["px"] < size * size          # the footprint really is smaller
+    b = rep["results"]["baselines"]
+    assert b["blanket_ones"]["dti"] > b["blanket_ones_whole_grid"]["dti"], \
+        "covering only the legal footprint must beat covering the whole grid"
+
+    # (c) the provided raster is named as such, keeps the old key as an alias, and the score of its
+    #     legal (footprint-clipped) version is recorded because it differs
+    r = rep["results"]
+    assert r["as_provided"] == r["as_submitted"], "the alias must be the same measurement"
+    assert "prediction_role" in r
+    assert "as_provided_clipped_to_footprint" in r, "mass outside the footprint must be re-scored"
+    assert r["as_provided_clipped_to_footprint"]["dti"] > r["as_provided"]["dti"], \
+        "dropping illegal out-of-footprint mass cannot hurt"
+
+
+def test_emission_decision_reconciles_the_measurements():
+    """scripts/decide_emission_width.py: the projection and crossover algebra, on hand values."""
+    dec = _load("decide_emission_width")
+    # identical to eval's project_dti for alpha+beta=1, and exact at |G| = |G_proxy|
+    row = {"policy": "p", "coverage_fraction": 0.05, "wrong_mass_FP_w": 1000.0}
+    g = 100000
+    measured = (0.05 * g) / (0.2 * (0.05 * g + 1000.0) + 0.8 * g)
+    assert abs(dec.project(row, g) - measured) < 1e-12
+    # the crossover: a cleaner policy wins below it, the wider one above it
+    clean = {"policy": "clean", "coverage_fraction": 0.05, "wrong_mass_FP_w": 1000.0}
+    wide = {"policy": "wide", "coverage_fraction": 0.15, "wrong_mass_FP_w": 30000.0}
+    x = dec.crossover(clean, wide)
+    assert x["crossover_px"] and x["crossover_px"] > 0
+    assert dec.project(clean, x["crossover_px"]) == pytest.approx(
+        dec.project(wide, x["crossover_px"]), abs=1e-9), "the curves must actually cross there"
+    assert dec.project(clean, x["crossover_px"] / 4) > dec.project(wide, x["crossover_px"] / 4)
+    assert dec.project(wide, x["crossover_px"] * 4) > dec.project(clean, x["crossover_px"] * 4)
+    # a policy that is better on both axes has no crossing (it dominates)
+    dom = {"policy": "dom", "coverage_fraction": 0.05, "wrong_mass_FP_w": 100.0}
+    assert dec.crossover(dom, clean)["crossover_px"] is None
+
+
+def test_committed_emission_decision_states_its_conditions():
+    p = ROOT / "data/evidence/emission_decision.json"
+    if not p.exists():
+        pytest.skip("emission decision not computed in this checkout")
+    d = json.loads(p.read_text())
+    conds = {c["condition"]: c for c in d["verdict"]["conditions"]}
+    assert len(conds) >= 3
+    assert any("0.01" in k for k in conds), "the pre-registered gain condition must be present"
+    assert any(c["passes"] is False for c in d["verdict"]["conditions"]), \
+        "an unmet condition (second-ensemble reproduction) must be recorded, not hidden"
+    assert d["crossovers"]["blanket_vs_shipped"]["crossover_px"] > 0
+    assert d["verdict"]["conclusion"]

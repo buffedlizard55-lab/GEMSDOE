@@ -199,12 +199,43 @@ def main() -> int:
         raise SystemExit("empty truth set - refusing to produce a number from it")
 
     ctx = GtContext(truth.astype("float32"), R_pixels=a.R)
-    res: dict = {"as_submitted": score(pred, ctx, a.R, a.alpha, a.beta, a.eps)}
+    provided = score(pred, ctx, a.R, a.alpha, a.beta, a.eps)
+    res: dict = {
+        # The raster handed to --pred, scored exactly as it is (no shaping applied here).
+        "as_provided": provided,
+        # Deprecated alias kept so evidence written before 2026-09-16 still renders.  The old name
+        # called every --pred input "the submission", which is true only when --pred IS the
+        # committed submission - it was NOT true in the shaping sweep, where --pred was the
+        # pre-shaping ensemble map, and the site displayed that row under the heading "this
+        # submission, as committed" (2026-09-16, session 7).
+        "as_submitted": provided,
+        "prediction_role": (
+            "the raster at --pred as provided: equals the committed submission only when --pred "
+            "points at one; check inputs.pred_sha256 before quoting this as a submission score"),
+    }
 
     # ---- baselines: each one answers "could this number be earned trivially?" -------------------
-    footprint = np.isfinite(pred) if np.isfinite(pred).any() else np.ones_like(pred, dtype=bool)
+    # The support for the blanket baseline must NOT depend on the prediction: `np.isfinite(pred)`
+    # made the baseline's meaning change with whatever was scored (a full-grid ensemble map gave a
+    # bigger blanket than a NaN-clipped submission), so two runs were not comparable.  Use the
+    # competition footprint instead - the finite area of the label raster, which is the raster the
+    # submission's bounds must match (rules section 3.6.2) - and record which source was used.
+    # Order matters: the label raster carries the competition footprint.  The PROXY raster is
+    # finite over the whole grid (measured: 12,279,160 of 12,279,160 px), so it is never a
+    # footprint source; with no label raster the only legal-submission support available is the
+    # prediction's own finite area, and the source string says so.
+    if labels is not None and np.isfinite(labels).any():
+        support, support_src = np.isfinite(labels), "labels (the competition footprint)"
+    elif np.isfinite(pred).any():
+        support, support_src = np.isfinite(pred), \
+            "the prediction's finite area (no label raster given, so the footprint is unknown)"
+    else:
+        support, support_src = np.ones_like(pred, dtype=bool), "whole grid (nothing is masked)"
     baselines = {"zeros": np.zeros_like(pred),
-                 "blanket_ones": footprint.astype("float32")}
+                 "blanket_ones": support.astype("float32"),
+                 # Over the WHOLE grid, i.e. also outside the data footprint, where a real
+                 # submission must be NaN: included so the size of that penalty is visible.
+                 "blanket_ones_whole_grid": np.ones_like(pred, dtype="float32")}
     if labels is not None:
         lab = np.where(np.isfinite(labels), labels, 0.0).astype("float32")
         baselines["catalogue_copy"] = (lab > 0.5).astype("float32")
@@ -213,6 +244,21 @@ def main() -> int:
     baselines["submission_skeleton_dilated_6px"] = None      # filled by the sweep when requested
     res["baselines"] = {k: score(v, ctx, a.R, a.alpha, a.beta, a.eps)
                         for k, v in baselines.items() if v is not None}
+
+    # A LEGAL submission is NaN outside the data footprint (rules section 3.6.2).  A raw ensemble
+    # map is not, so scoring it as-is charges it for mass a submission could not legally carry -
+    # and charges the sweep's blanket baseline for the whole grid.  Score the clipped version too
+    # whenever the two differ, so the policy comparison is made between legal submissions.
+    outside = support & ~np.isfinite(pred)
+    mass_outside = float(np.nansum(np.where(support, 0.0, pred)))
+    if mass_outside > 0:
+        res["as_provided_clipped_to_footprint"] = score(
+            np.where(support, pred, 0.0), ctx, a.R, a.alpha, a.beta, a.eps)
+        res["footprint_note"] = (
+            "the raster at --pred carries %.1f of mass outside the data footprint, which a legal "
+            "submission may not; 'as_provided_clipped_to_footprint' is the legal version of the "
+            "same map, and the sweep candidates are clipped before scoring for the same reason"
+            % mass_outside)
 
     # Acceptance property, asserted rather than assumed: on the proxy-only truth a perfect
     # reproduction of the catalogue must score EXACTLY zero (every truth pixel is >R from a label).
@@ -238,6 +284,7 @@ def main() -> int:
                 for d in (dilates if thin else (0,)):
                     q = optimize_submission(pred, R=a.R, t0=float(t0), thin=bool(thin),
                                             hard=True, gamma=1.0, dilate=int(d))
+                    q = np.where(support, q, np.nan).astype(np.float32)   # legal submission
                     row = {"t0": float(t0), "thin": bool(thin), "dilate": int(d)}
                     row.update(score(q, ctx, a.R, a.alpha, a.beta, a.eps))
                     row["mean_kept_px"] = int(np.count_nonzero(q))
@@ -295,11 +342,19 @@ def main() -> int:
             "metric": {"R_pixels": a.R, "R_meters": a.R * 100, "alpha": a.alpha, "beta": a.beta,
                        "eps": a.eps},
         },
-        "truth": {"mode": a.truth, "px": n_truth, "km": round(n_truth * 0.01, 3),
+        # 100 m pixels: km = px * 0.1.  MEASURED 2026-09-16: this said 0.01 everywhere, so every
+        # committed truth length was reported 10x short (61,664 px printed as 616.6 km when the
+        # proxy truth is 6,166 km).  build_proxy_catalogue.py already used px_m/1000 = 0.1 for the
+        # same quantity, so the two scripts contradicted each other by 10x.
+        "truth": {"mode": a.truth, "px": n_truth, "km": round(n_truth * 0.1, 3),
                   "proxy_only_px": int(only.sum()), "proxy_near_label_px": int(near.sum()),
                   "catalogue_coverage_of_proxy": round(
                       int(near.sum()) / max(int(near.sum()) + int(only.sum()), 1), 4)},
         "prediction": {"emission_px": sweep_px, "mass": round(float(np.nansum(pred)), 1)},
+        "baseline_support": {"source": support_src, "px": int(support.sum()),
+                             "why": ("the blanket baseline is taken over this support so it does not "
+                                     "change with the raster being scored; the metric itself sums over "
+                                     "the whole raster, exactly as the official one does")},
         "results": res,
         "caveats": [
             "Population, not score: SGMC faults are published surface mapping; the scored faults are "
@@ -315,10 +370,11 @@ def main() -> int:
     op.parent.mkdir(parents=True, exist_ok=True)
     op.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
 
-    print(f"\ntruth: {a.truth} -> {n_truth} px ({n_truth * 0.01:.1f} km of fault trace)")
-    print(f"as submitted: DTI {res['as_submitted']['dti']:.4f}  "
-          f"(TP_w {res['as_submitted']['TP_w']:.0f} FP_w {res['as_submitted']['FP_w']:.0f} "
-          f"FN_w {res['as_submitted']['FN_w']:.0f})")
+    print(f"\ntruth: {a.truth} -> {n_truth} px ({n_truth * 0.1:.1f} km of fault trace)")
+    print(f"the raster at --pred ({a.pred}), scored as provided: DTI {provided['dti']:.4f}  "
+          f"(TP_w {provided['TP_w']:.0f} FP_w {provided['FP_w']:.0f} "
+          f"FN_w {provided['FN_w']:.0f})")
+    print(f"blanket baseline support: {support_src} ({int(support.sum()):,} px)")
     for k, v in res["baselines"].items():
         print(f"  baseline {k:<28} DTI {v['dti']:.4f}")
     if "acceptance" in res:

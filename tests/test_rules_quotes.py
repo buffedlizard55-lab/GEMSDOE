@@ -239,3 +239,43 @@ def test_a_real_pdf_with_page_margin_numbers_extracts_to_a_matchable_sentence(tm
     # ...and the escape hatch still reproduces the old behaviour, defects and all
     kept = m.norm(m.extract(pdf, keep_page_furniture=True))
     assert m.norm(_WRAPPED_QUOTE) not in kept
+
+
+def test_the_strip_records_every_removal_for_audit():
+    """Nothing may be removed silently.
+
+    WHY THIS TEST EXISTS (and why it is back): the strip can only be trusted if a reviewer can see
+    exactly what it took out and why - the whole point of `--keep-page-furniture` is that the same
+    extraction is reproducible without it.  MEASURED 2026-09-16: this test was lost when a later edit
+    sliced the file to EOF from the previous test's definition; the committed report then carried
+    `page_furniture_removed: []` for a whole run without anything failing.  It is re-added here, and
+    the committed report is checked against the same contract as well, so a report that stops
+    recording removals fails the suite rather than passing quietly.
+    """
+    m = _mod()
+    record: list = []
+    trace: list = []
+    # page 12 as pypdf really emits it: its number glued to the head of the page's first line, and
+    # the next page's number at the foot.  Both are furniture; the prose between them is not.
+    text = "12 relative weight of faults\n13\n"
+    kept = m.strip_page_furniture(text, 12, record, prev_tail="and the", trace=trace)
+    assert kept == "relative weight of faults"
+    # every removal is recorded with the page it came from, the exact string removed, and the reason
+    assert record, "the strip removed text without recording it"
+    assert all(set(r) == {"page", "removed", "why"} for r in record)
+    assert sorted(r["removed"] for r in record) == ["12", "13"]
+    # a bare number at the head or foot of a page is recorded too, not just the glued case
+    record2: list = []
+    assert m.strip_page_furniture("11\nprose line\n12\n", 12, record2) == "prose line"
+    assert sorted(r["removed"] for r in record2) == ["11", "12"]
+    assert {r["page"] for r in record} == {12}
+    assert all(r["why"] for r in record)
+    # the trace keeps the raw page head so a reviewer can see what the extractor actually produced
+    assert trace and "raw_head_repr" in trace[0] and "blank_lines_before_first_text" in trace[0]
+    assert "12" in trace[0]["raw_head_repr"]
+
+    # ...and the committed report must obey the same contract when it claims a strip happened
+    rep = json.loads((ROOT / "data/evidence/rules_quotes.json").read_text())
+    if rep.get("page_furniture_stripped"):
+        assert rep.get("page_furniture_removed"), \
+            "the report says page furniture was stripped but records no removal"
