@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:30:26+00:00",
+ "generated_utc": "2026-09-16T23:52:18+00:00",
  "generated_by": "scripts/fetch_proxy_faults.py",
  "purpose": "independent fault catalogue (proxy) for the GeoDAWN footprint - stands in for the scored 'new fault' population, which is not downloadable",
  "source": {
@@ -18,15 +18,18 @@
   "license": "US public domain (USGS); no credentials used",
   "official_identity": {
    "doi": "https://doi.org/10.5066/F7WH2N65",
-   "resolved": null,
-   "item_id_in_service": null,
-   "match": null,
-   "error": "HTTPError: HTTP Error 403: Forbidden"
+   "item_id_in_service": "5888bf4fe4b05ccb964bab9d",
+   "match": true,
+   "route": "layer metadata 'description' cites the release DOI",
+   "doi_route_error": "HTTPError: HTTP Error 403: Forbidden",
+   "item_route_error": "RuntimeError: failed after 4 attempts: https://www.sciencebase.gov/catalog/item/5888bf4fe4b05ccb964bab9d?format=json: HTTP Error 403: Forbidden",
+   "meaning": "the FeatureServer queried is the published service of this data release; the DOI routes were refused on this run, so identity rests on the service's own metadata",
+   "quoted": "te Geologic Map Compilation (SGMC) geodatabase of the conterminous United States (https://doi.org/10.5066/F7WH2N65) represents a seamless, spatial dat"
   },
   "documented_links_checked": {
-   "https://pubs.usgs.gov/ds/1052/ds1052.pdf": "OK_200 (report)",
-   "https://pubs.usgs.gov/ds/1052/ds20171052_appendix5.pdf": "OK_200 (appendix5)",
-   "https://pubs.usgs.gov/ds/1052/ds20171052_appendix2_v1_1.pdf": "OK_200 (appendix2)"
+   "https://pubs.usgs.gov/ds/1052/ds1052.pdf": "OK_200 via HEAD (report)",
+   "https://pubs.usgs.gov/ds/1052/ds20171052_appendix5.pdf": "OK_200 via HEAD (appendix5)",
+   "https://pubs.usgs.gov/ds/1052/ds20171052_appendix2_v1_1.pdf": "OK_200 via HEAD (appendix2)"
   }
  },
  "query": {
