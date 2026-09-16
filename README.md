@@ -17,6 +17,14 @@
 > superseded** — in particular, the claim that competition data cannot be downloaded is no
 > longer true (it was acquired via the Actions data bridge), and the feature stack has
 > **19 bands, not the ~10** listed below. Prefer the site and `STATUS.md` where they disagree.
+>
+> **2026-09-16:** the 6-fold ensemble run that a previous session reported as successful had in fact
+> produced **no submission** (it crashed on a TIFF block-size rule; the crash was masked by a missing
+> `pipefail` and a 110-byte stub was committed as `submission.tif`). Fixed, regression-tested, and
+> re-run — see [`STATUS.md`](STATUS.md) §1. Also this session: the official rules were re-verified
+> **verbatim** and both prize phases score the *new* fault dataset, which is disjoint from the
+> `labels.tif` we train on. That changes what "better" means: read
+> [`docs/DISCOVERY_PLAN.md`](docs/DISCOVERY_PLAN.md) before optimising anything against local scores.
 
 ### Top-Leaderboard Solution Framework
 
