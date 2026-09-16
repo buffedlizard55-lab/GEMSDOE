@@ -177,6 +177,12 @@ def main() -> int:
     only = coded == CODE_ONLY
     near_px, only_px = int((coded == CODE_NEAR).sum()), int(only.sum())
     px_km = px_m / 1000.0
+    # The mask counts EVERY rasterised proxy pixel, including the 58 % of the grid that is outside
+    # the data footprint (NaN).  Coverage is therefore reported twice, and the headline number is
+    # the in-footprint one: an out-of-footprint proxy fault can never be predicted from data that
+    # does not exist there, so including it would flatter the overlap.
+    in_fp_px = near_px + only_px
+    outside_px = int(mask.sum()) - in_fp_px
 
     # Per-class accounting: how much of each published class the labels already cover.
     # Rasterised ONE CLASS AT A TIME (there are ~30 distinct RuleIDs, not ~15,000 features):
@@ -246,7 +252,10 @@ def main() -> int:
             "proxy_only_px": only_px,
             "near_label_km": round(near_px * px_km, 3),
             "proxy_only_km": round(only_px * px_km, 3),
-            "catalogue_already_covers_fraction": round(near_px / max(int(mask.sum()), 1), 4),
+            "catalogue_already_covers_fraction": round(near_px / max(in_fp_px, 1), 4),
+            "catalogue_already_covers_fraction_including_outside_footprint":
+                round(near_px / max(int(mask.sum()), 1), 4),
+            "outside_footprint_px": outside_px,
             "proxy_only_components": component_stats(only, px_km),
             "per_rule_id": {
                 rid: {"features": per_rule_feat.get(rid, 0), "proxy_only_px": px,
@@ -273,8 +282,10 @@ def main() -> int:
     sp.parent.mkdir(parents=True, exist_ok=True)
     sp.write_text(json.dumps(stats, indent=1) + "\n", encoding="utf-8")
 
-    print(f"proxy: {int(mask.sum())} px total -> {near_px} near-label, {only_px} proxy-only "
-          f"({100.0 * near_px / max(int(mask.sum()), 1):.1f} % already in the catalogue)")
+    print(f"proxy: {int(mask.sum())} px rasterised ({outside_px} outside the data footprint) -> "
+          f"in-footprint {in_fp_px}: {near_px} near-label, {only_px} proxy-only "
+          f"({100.0 * near_px / max(in_fp_px, 1):.1f} % of the in-footprint proxy is already in "
+          "the catalogue)")
     print(f"proxy-only: {component_stats(only, px_km)}")
     print(f"wrote {out} ({out.stat().st_size} bytes, sha256 {sha[:16]}...) and {sp}")
     if only_px == 0:

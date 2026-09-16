@@ -37,7 +37,15 @@ def test_scoring_universe_badge_matches_committed_evidence():
     html = mod._scoring_universe({"rules_quotes": rq})
     s = rq["summary"]
     assert f"{s['n_found']}/{s['n_quotes']}" in html, "badge does not quote the evidence counts"
-    assert "INCOMPLETE" not in html, "false INCOMPLETE warning on verified quotes"
+    # The renderer's contract, stated state-independently: WARN exactly when the evidence says the
+    # check is incomplete.  (Asserting "never warn" would make this test fail whenever a quote is
+    # genuinely wrong - it would police the evidence, not the renderer, and the evidence is policed
+    # by the Verify-workflow job that produces it.)
+    if s["all_found"]:
+        assert "INCOMPLETE" not in html, "false INCOMPLETE warning on a fully verified report"
+    else:
+        assert f"INCOMPLETE ({s['n_found']}/{s['n_quotes']})" in html, \
+            "missing quotes must be visible on the page"
     assert "/tmp/" not in html, "a local extraction path leaked into a published link"
     assert ("docs.nlr.gov" in html) or ("www.nlr.gov" in html), "no rules-PDF link rendered"
     for qid in ("phase1_target", "phase2_target", "labels_source", "ranking_basis"):

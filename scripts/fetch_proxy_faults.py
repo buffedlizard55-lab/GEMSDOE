@@ -123,19 +123,37 @@ def service_identity(service: str) -> dict:
     to that ScienceBase item.  Both facts are observed here, not asserted: if the DOI ever resolves
     somewhere that does not carry the item id, the proxy stops being traceable to USGS and this
     function says so, loudly.
+
+    MEASURED 2026-09-16: doi.org answers a scripted client with HTTP 403 (it wants a browser), so
+    the first attempt uses a browser User-Agent and the second goes straight to the ScienceBase
+    item API for the same id.  Whichever route succeeds is recorded - and if both fail the result
+    carries `match: null` rather than a comfortable-looking true.
     """
-    try:
-        landing = resolve_doi(SGMC_DATA_DOI)
-    except Exception as exc:                                              # noqa: BLE001
-        return {"doi": SGMC_DATA_DOI, "resolved": None, "item_id_in_service": None,
-                "match": None, "error": f"{type(exc).__name__}: {exc}"}
     item_id = next((tok for tok in service.split("/") if tok.startswith("SB_")), "")
     expected = item_id[3:].split("_")[0]
-    return {"doi": SGMC_DATA_DOI, "resolved": landing, "item_id_in_service": expected,
-            "match": bool(expected and expected in landing),
-            "meaning": ("the FeatureServer queried is the published service of this data release"
-                        if expected and expected in landing else
-                        "MISMATCH - the service and the DOI are not the same object; do not cite")}
+    out = {"doi": SGMC_DATA_DOI, "item_id_in_service": expected, "match": None, "route": None}
+    if not expected:
+        out["error"] = f"service name carries no ScienceBase item id: {service}"
+        return out
+    try:
+        landing = resolve_doi(SGMC_DATA_DOI)
+        out.update(route="doi.org redirect", resolved=landing,
+                   match=bool(expected in landing))
+    except Exception as exc:                                              # noqa: BLE001
+        out["doi_route_error"] = f"{type(exc).__name__}: {exc}"
+        try:
+            url = f"https://www.sciencebase.gov/catalog/item/{expected}?format=json"
+            doc = http_json(url)
+            out.update(route="sciencebase item api", resolved=url,
+                       item_title=doc.get("title"),
+                       match=bool(doc.get("id") == expected and doc.get("title")))
+        except Exception as exc2:                                         # noqa: BLE001
+            out["item_route_error"] = f"{type(exc2).__name__}: {exc2}"
+    out["meaning"] = ("the FeatureServer queried is the published service of this data release"
+                      if out["match"] else
+                      "NOT ESTABLISHED - the service could not be tied to the DOI on this run; "
+                      "cite the data release only if a reviewer can reproduce the link by hand")
+    return out
 
 
 def raster_bbox_4326(raster: Path) -> tuple[float, float, float, float]:

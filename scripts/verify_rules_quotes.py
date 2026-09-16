@@ -175,6 +175,28 @@ QUOTES = [
 ]
 
 
+def divergence(quote: str, text: str, window: int = 120) -> dict:
+    """Where does the document stop agreeing with a quote?  (bisect the longest present prefix)
+
+    Used only for quotes that failed, so a failure ships with the document's own words next to the
+    quoted ones - which is how a typo in a quote gets distinguished from a moving document.
+    """
+    lo, hi = 0, len(quote)
+    while lo < hi:                                    # longest prefix present as a substring
+        mid = (lo + hi + 1) // 2
+        if quote[:mid] in text:
+            lo = mid
+        else:
+            hi = mid - 1
+    at = text.find(quote[:lo]) if lo else -1
+    start = at + lo if at >= 0 else -1
+    return {"prefix_len": lo,
+            "prefix_tail": quote[max(0, lo - 60):lo],
+            "quote_continues": quote[lo:lo + window],
+            "doc_continues": text[start:start + window] if start >= 0 else None,
+            "doc_offset": start}
+
+
 def norm(text: str) -> str:
     """Normalise a document and a quote to the same form.
 
@@ -220,6 +242,12 @@ def main() -> int:
     ap.add_argument("--out", default=str(ROOT / "data/evidence/rules_quotes.json"))
     ap.add_argument("--expected-sha256", default=None,
                     help="sha256 recorded for the data-tab mirror; proves the two copies are identical")
+    ap.add_argument("--dump-text", default=None,
+                    help="also write the NORMALISED extracted text here (public-domain US "
+                         "government document).  Without it, every check of a quote costs a CI "
+                         "round-trip: the development sandbox cannot reach docs.nlr.gov, so the "
+                         "only way to see what the extractor actually produced is to have it "
+                         "committed.")
     ap.add_argument("--source-url", default=RULES_URL,
                     help="Official URL of the document.  Recorded separately from the extraction "
                          "path so the site links to the publisher, never to /tmp.")
@@ -237,11 +265,27 @@ def main() -> int:
         nbytes, sha = len(b), hashlib.sha256(b).hexdigest()
 
     text = norm(extract(doc_path))
+    if a.dump_text:
+        dp = Path(a.dump_text)
+        dp.parent.mkdir(parents=True, exist_ok=True)
+        dp.write_text(text, encoding="utf-8")
+        print(f"wrote the normalised document text to {dp} ({len(text)} chars)")
     results = []
     for qid, section, quote, why in QUOTES:
         found = norm(quote) in text
-        results.append(dict(id=qid, section=section, quote=quote, why=why, exact_match=bool(found)))
+        row = dict(id=qid, section=section, quote=quote, why=why, exact_match=bool(found))
+        if not found:
+            # A miss must be diagnosable from the committed evidence, not only from a job log that
+            # the development sandbox cannot even download (the Actions log host is blocked).  So
+            # report where the document diverges from the quote: the longest prefix that IS present,
+            # and the document's own text continuing from there.
+            row["diagnostic"] = divergence(norm(quote), text)
+        results.append(row)
         print(f"{'OK  ' if found else 'MISS'} {qid:20s} {section:6s} {quote[:72]}...")
+        if not found:
+            d = row["diagnostic"]
+            print(f"      longest matching prefix: {d['prefix_len']} chars: ...{d['prefix_tail']!r}")
+            print(f"      document continues with : {d['doc_continues']!r}")
 
     n_found = sum(1 for r in results if r["exact_match"])
     payload = dict(
@@ -251,6 +295,8 @@ def main() -> int:
                     sha256=sha),
         method=("verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line "
                 "breaks and whitespace collapse - no paraphrasing, no fuzzy matching"),
+        extracted_text=(dict(path=str(a.dump_text),
+                             chars=len(text)) if a.dump_text else None),
         match_against_mirror=dict(expected_sha256=a.expected_sha256,
                                   identical=bool(a.expected_sha256 and sha == a.expected_sha256)),
         quotes=results,
