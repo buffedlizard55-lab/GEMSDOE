@@ -267,6 +267,9 @@ def main():
     ap.add_argument("--sample", default=None, help="sample_submission.tif — authoritative grid for the write")
     ap.add_argument("--labels", default=None, help="known-fault raster for the informational score")
     ap.add_argument("--out", default="submission.tif")
+    ap.add_argument("--save-ensemble", default=None,
+                    help="write the pre-shaping ensemble mean (probability raster) here, so policy "
+                         "sweeps and proxy-catalogue scoring act on the map shaping consumed")
     ap.add_argument("--report", default=None, help="defaults to <out stem>_report.json")
     ap.add_argument("--frangi", action="store_true",
                     help="A/B knob: vesselness (Frangi) line enhancement on the blended mean map "
@@ -426,6 +429,27 @@ def main():
         profile = clean_profile(None, dtype="float32", crs=grid["crs"],
                                 transform=rasterio.Affine(*grid["transform"]),
                                 height=q.shape[0], width=q.shape[1])
+
+    # Optional: persist the pre-shaping ensemble mean.  Policy questions (floor, emission width,
+    # thinning) can only be re-asked on the map shaping actually consumed; re-deriving it from the
+    # shaped submission would bake the current policy into the comparison.  Written on the same grid
+    # and with the same profile rules as the submission.
+    if args.save_ensemble:
+        ens = np.asarray(mean, np.float32)
+        if ens.shape != q.shape:
+            buf = np.full(q.shape, np.nan, np.float32)
+            hh, ww = min(q.shape[0], ens.shape[0]), min(q.shape[1], ens.shape[1])
+            buf[:hh, :ww] = ens[:hh, :ww]
+            ens = buf
+        eprof = clean_profile(dict(profile), dtype="float32")
+        eprof["nodata"] = float("nan")
+        ip = Path(args.save_ensemble)
+        ip.parent.mkdir(parents=True, exist_ok=True)
+        with rasterio.open(ip, "w", **eprof) as dst:
+            dst.write(ens.astype(np.float32), 1)
+            dst.set_band_description(1, "MC-ensemble mean probability, pre-shaping")
+        print(f"wrote ensemble mean {ip} ({ip.stat().st_size} B) - the exact input to shaping, "
+              "kept so policy sweeps do not have to re-derive it")
 
     out = Path(args.out)
     # write_submission() reopens the bytes on disk and raises unless it reads back as a

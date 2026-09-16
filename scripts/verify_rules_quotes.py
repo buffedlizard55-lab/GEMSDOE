@@ -102,6 +102,55 @@ QUOTES = [
      "solution, and they should be able to sufficiently reproduce the winning results and generate "
      "predictions on new data samples.",
      "Why every run here commits its logs, hashes, environment pins and reproduce steps."),
+    # ---- added 2026-09-16 (session 7) from an INDEPENDENT network path --------------------
+    # The sentences below were read from https://docs.nlr.gov/docs/fy26osti/96647.pdf through a
+    # different fetcher from the one this workflow uses (the agent tool's PDF extractor, whose
+    # egress is not subject to the development sandbox's allowlist).  They are added here so the
+    # reading is machine-checked on every run instead of resting on a hand-read: two independent
+    # extractions agreeing verbatim is stronger evidence than either alone.  A mismatch fails the
+    # step, which is the point - `entry`/`citizen`/... below behave the same way.
+    ("prize_split", "§1.1",
+     "There will be two phases of prize awards.",
+     "Two prize rounds over one submission; the split matters for risk allocation."),
+    ("phase1_pool_amount", "§1.1",
+     "The Phase 1 pool of $50,000 will be distributed equally among the top five competitors, as "
+     "judged by their performance on the private test set of fault labels.",
+     "Phase 1 is an equal split among the top five, i.e. rank inside the top five is not paid "
+     "differently - the $250k Phase 2 ranking is where rank itself pays."),
+    ("experts_update_labels", "§1.1",
+     "A panel of experts will then use the submitted predictions to update fault labels in the region.",
+     "Submissions are read by the experts before Phase 2: a false positive that is geologically "
+     "plausible can become a label, which the metric alone does not reward."),
+    ("features_single_geotiff", "§3.3",
+     "This dataset will be provided as a single multiband GeoTIFF, with one feature per band.",
+     "19 bands in one file on one grid - band order is the only documentation of semantics."),
+    ("dem_download_instructions", "§3.3",
+     "In addition, instructions will be provided for downloading USGS DEM elevation data at 1-m "
+     "resolution for the GeoDAWN region.",
+     "The 1 m DEM is delivered as a link list (1m_DEM_links.csv / the data tab's PDF), not as "
+     "raster tiles - which is why this repo stores a verified tile inventory in data/dem_links.json."),
+    ("all_faults", "§3.3",
+     "Competitors will submit their predictions for all faults in the GeoDAWN study area as a "
+     "GeoTIFF raster at 100-m resolution.",
+     "'All faults' - not only the new ones and not only the catalogued ones."),
+    ("one_final_submission", "§3.5",
+     "Before the end of the competition, you must choose only one submission for evaluation across "
+     "both prize rounds.",
+     "One artefact must serve both rounds; nothing can be tuned for one and swapped for the other."),
+    ("one_final_per_entity", "§3.4",
+     "Each participating entity (team, organization, or individual prize competitor not on a team) "
+     "is allowed to have one final submission",
+     "Per-entity, not per-account: duplicate submissions from one entity are not a strategy."),
+    ("no_private_knowledge", "§3.6.2",
+     "You must choose only one submission to use for scoring across both prize rounds, and you must "
+     "make your decision without knowledge of your scores on the private test set.",
+     "Explicit anti-overfitting rule: the public leaderboard is the only feedback there is."),
+    ("test_set_composition", "§3.6.2",
+     "The set of faults included in the public test dataset and the relative weight of faults in "
+     "both test datasets will be determined by the competition organizers before the start of the "
+     "competition.",
+     "Public/private composition and fault weighting are the organizers' choice and are fixed "
+     "before the start - so public-LB optimising cannot reweight them."),
     ("entry", "§3.1",
      "To enter the competition, you must create a profile on the DrivenData platform and agree to "
      "abide by the competition rules and restrictions.",

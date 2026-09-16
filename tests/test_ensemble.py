@@ -338,3 +338,71 @@ def test_generate_dummy_submission_is_seeded(tmp_path):
     assert a.read_bytes() == b.read_bytes(), "same seed produced different files"
     assert a.read_bytes() != c.read_bytes(), "different seeds produced identical files"
 
+
+
+def test_save_ensemble_writes_the_pre_shaping_input(tmp_path):
+    """--save-ensemble must persist the exact map shaping consumed.
+
+    Why it matters: the proxy-catalogue sweep (scripts/eval_proxy_catalogue.py --sweep) asks
+    policy questions about the emission width on real faults the labels lack.  If it re-derived
+    the "ensemble" from the shaped submission it would score the CURRENT policy against
+    alternatives - the comparison would be rigged.  So the blend has to hand over its input.
+    """
+    H = W = 64
+    gt = np.zeros((H, W), np.float32)
+    for k in range(8, 56):
+        gt[k, k] = 1.0
+    rng = np.random.default_rng(3)
+    from scipy.ndimage import binary_dilation, gaussian_filter
+
+    folds = []
+    for fi in range(2):
+        fd = tmp_path / f"fold-{fi}"
+        fd.mkdir()
+        band = gaussian_filter(binary_dilation(gt > 0.5, iterations=1).astype(np.float32), 1.4)
+        prob = np.clip(0.02 + 0.9 * band + rng.normal(0, 0.02, (H, W)), 0, 1).astype(np.float32)
+        prob[:4, :4] = np.nan
+        _write_tif(fd / "prob_raw.tif", prob)
+        np.savez_compressed(fd / f"heldout_mc{fi}.npz",
+                            pred=prob[8:48, 8:48].astype(np.float16),
+                            gt=gt[8:48, 8:48].astype(np.uint8))
+        (fd / "manifest.json").write_text(json.dumps({"models": [{"file": f"m{fi}.pt", "dti": 0.5}]}))
+        folds.append((str(fd), prob))
+
+    _write_tif(tmp_path / "sample.tif", np.zeros((H, W), np.float32))
+    _write_tif(tmp_path / "labels.tif", gt)
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("training: {alpha: 0.2, beta: 0.8}\n"
+                   "metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, "
+                   "epsilon: 1.0e-7}\n")
+    ens_path = tmp_path / "ensemble_mean.tif"
+    r = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "blend_submission.py"),
+         "--folds", *[f for f, _ in folds], "--config", str(cfg),
+         "--sample", str(tmp_path / "sample.tif"), "--labels", str(tmp_path / "labels.tif"),
+         "--out", str(tmp_path / "submission.tif"), "--report", str(tmp_path / "report.json"),
+         "--save-ensemble", str(ens_path)],
+        capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert ens_path.exists(), "blend did not write the ensemble mean"
+
+    expect = np.nanmean(np.stack([p for _, p in folds]), axis=0)
+    with rasterio.open(ens_path) as src:
+        ens = src.read(1)
+        assert src.count == 1 and src.dtypes[0] == "float32" and src.crs.to_epsg() == 32611
+        assert (src.height, src.width) == (H, W)
+    # The blend zero-fills outside the footprint before shaping (blend_submission: "0 outside
+    # footprint for now") and re-applies NaN only when writing the submission, so the ensemble
+    # raster is finite where the submission is NaN.  That is the map shaping actually consumes, so
+    # the sweep scores exactly the pixels the pipeline scored.  Pinned here so the two files cannot
+    # drift apart silently.
+    assert np.isfinite(ens).all() and (ens[:4, :4] == 0).all(), "footprint hole: 0 in, NaN out"
+    ok = np.isfinite(expect)
+    probe = ok.copy()
+    probe[:4, :4] = False                       # nanmean of an all-NaN block is not defined
+    assert np.allclose(ens[probe], expect[probe], atol=1e-6), "ensemble raster != mean of fold maps"
+
+    # shaping is lossy by construction, so the pre-shaping map must carry at least as much mass
+    with rasterio.open(tmp_path / "submission.tif") as src:
+        sub = src.read(1)
+    assert float(np.nansum(ens)) >= float(np.nansum(sub)) - 1e-6
