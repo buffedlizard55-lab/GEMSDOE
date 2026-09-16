@@ -1,16 +1,16 @@
 {
- "generated_utc": "2026-09-16T19:37:46Z",
+ "generated_utc": "2026-09-16T21:30:02Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
-  "url": "/tmp/rules_canonical.pdf",
+  "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
   "canonical_url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
   "bytes": 455140,
   "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
  },
  "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks and whitespace collapse - no paraphrasing, no fuzzy matching",
  "match_against_mirror": {
-  "expected_sha256": null,
-  "identical": false
+  "expected_sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938",
+  "identical": true
  },
  "quotes": [
   {
@@ -112,6 +112,76 @@
    "exact_match": true
   },
   {
+   "id": "prize_split",
+   "section": "\u00a71.1",
+   "quote": "There will be two phases of prize awards.",
+   "why": "Two prize rounds over one submission; the split matters for risk allocation.",
+   "exact_match": true
+  },
+  {
+   "id": "phase1_pool_amount",
+   "section": "\u00a71.1",
+   "quote": "The Phase 1 pool of $50,000 will be distributed equally among the top five competitors, as judged by their performance on the private test set of fault labels.",
+   "why": "Phase 1 is an equal split among the top five, i.e. rank inside the top five is not paid differently - the $250k Phase 2 ranking is where rank itself pays.",
+   "exact_match": true
+  },
+  {
+   "id": "experts_update_labels",
+   "section": "\u00a71.1",
+   "quote": "A panel of experts will then use the submitted predictions to update fault labels in the region.",
+   "why": "Submissions are read by the experts before Phase 2: a false positive that is geologically plausible can become a label, which the metric alone does not reward.",
+   "exact_match": true
+  },
+  {
+   "id": "features_single_geotiff",
+   "section": "\u00a73.3",
+   "quote": "This dataset will be provided as a single multiband GeoTIFF, with one feature per band.",
+   "why": "19 bands in one file on one grid - band order is the only documentation of semantics.",
+   "exact_match": true
+  },
+  {
+   "id": "dem_download_instructions",
+   "section": "\u00a73.3",
+   "quote": "In addition, instructions will be provided for downloading USGS DEM elevation data at 1-m resolution for the GeoDAWN region.",
+   "why": "The 1 m DEM is delivered as a link list (1m_DEM_links.csv / the data tab's PDF), not as raster tiles - which is why this repo stores a verified tile inventory in data/dem_links.json.",
+   "exact_match": true
+  },
+  {
+   "id": "all_faults",
+   "section": "\u00a73.3",
+   "quote": "Competitors will submit their predictions for all faults in the GeoDAWN study area as a GeoTIFF raster at 100-m resolution.",
+   "why": "'All faults' - not only the new ones and not only the catalogued ones.",
+   "exact_match": true
+  },
+  {
+   "id": "one_final_submission",
+   "section": "\u00a73.5",
+   "quote": "Before the end of the competition, you must choose only one submission for evaluation across both prize rounds.",
+   "why": "One artefact must serve both rounds; nothing can be tuned for one and swapped for the other.",
+   "exact_match": true
+  },
+  {
+   "id": "one_final_per_entity",
+   "section": "\u00a73.4",
+   "quote": "Each participating entity (team, organization, or individual prize competitor not on a team) is allowed to have one final submission",
+   "why": "Per-entity, not per-account: duplicate submissions from one entity are not a strategy.",
+   "exact_match": true
+  },
+  {
+   "id": "no_private_knowledge",
+   "section": "\u00a73.6.2",
+   "quote": "You must choose only one submission to use for scoring across both prize rounds, and you must make your decision without knowledge of your scores on the private test set.",
+   "why": "Explicit anti-overfitting rule: the public leaderboard is the only feedback there is.",
+   "exact_match": true
+  },
+  {
+   "id": "test_set_composition",
+   "section": "\u00a73.6.2",
+   "quote": "The set of faults included in the public test dataset and the relative weight of faults in both test datasets will be determined by the competition organizers before the start of the competition.",
+   "why": "Public/private composition and fault weighting are the organizers' choice and are fixed before the start - so public-LB optimising cannot reweight them.",
+   "exact_match": false
+  },
+  {
    "id": "entry",
    "section": "\u00a73.1",
    "quote": "To enter the competition, you must create a profile on the DrivenData platform and agree to abide by the competition rules and restrictions.",
@@ -148,9 +218,9 @@
   }
  ],
  "summary": {
-  "n_quotes": 19,
-  "n_found": 19,
-  "all_found": true
+  "n_quotes": 29,
+  "n_found": 28,
+  "all_found": false
  },
  "conclusion": "Both prize phases are scored against the expert-mapped NEW fault dataset (Phase 1 a private subset, Phase 2 the full revised set). The catalogue in the data tab is the training labels and is not the scored population."
 }
