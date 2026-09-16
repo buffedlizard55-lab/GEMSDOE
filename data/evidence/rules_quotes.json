@@ -1,8 +1,9 @@
 {
- "generated_utc": "2026-09-16T19:32:59Z",
+ "generated_utc": "2026-09-16T19:37:46Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
   "url": "/tmp/rules_canonical.pdf",
+  "canonical_url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
   "bytes": 455140,
   "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
  },

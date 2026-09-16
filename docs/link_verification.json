@@ -1,37 +1,152 @@
 {
-  "generated_utc": "2026-09-16T19:33:04+00:00",
+  "generated_utc": "2026-09-16T19:37:48+00:00",
   "generated_by": "scripts/verify_links.py on a GitHub-hosted runner (live HTTP)",
   "catalog": "docs/data_catalog.csv",
   "n_rows": 81,
   "n_unique_urls": 76,
   "summary_counts": {
-    "BOT_BLOCKED_403": 16,
+    "BOT_BLOCKED_403": 19,
     "AUTH_REQUIRED": 1,
     "OK_200": 51,
     "OK_REDIRECTED": 3,
     "OK_202": 1,
-    "LOGIN_REQUIRED": 1,
-    "BROKEN_HTTP_403": 3
+    "LOGIN_REQUIRED": 1
   },
-  "n_problems": 3,
+  "n_problems": 21,
   "problems": [
+    {
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://api.github.com/search/code",
+      "status": 401,
+      "result": "AUTH_REQUIRED",
+      "note": "endpoint requires credentials; not a broken or missing resource"
+    },
+    {
+      "url": "https://doi.org/10.1029/2020JB021269",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.1080/08123985.2023.2299475",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.1093/gji/ggad491",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P93LGLVQ",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9BZPVUC",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9MQRCBY",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9TWT2LU",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9YL58W6",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.5066/P9Z6SA1Z",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/data/",
+      "status": 200,
+      "final_url": "https://www.drivendata.org/accounts/login/?next=/competitions/306/competition-doe-gems/data/",
+      "content_type": "text/html",
+      "content_length": null,
+      "title": "Login",
+      "redirected": true,
+      "redirected_offsite": false,
+      "result": "LOGIN_REQUIRED"
+    },
+    {
+      "url": "https://www.mdpi.com/2072-4292/16/7/1115",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
     {
       "url": "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     }
   ],
-  "n_expected_non_ok": 18,
+  "n_expected_non_ok": 21,
   "expected_non_ok": [
     {
       "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
@@ -118,6 +233,24 @@
     },
     {
       "url": "https://www.mdpi.com/2072-4292/16/7/1115",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43",
       "status": 403,
       "result": "BOT_BLOCKED_403",
       "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
@@ -548,8 +681,8 @@
       "status": 200,
       "final_url": "https://pypi.org/project/torch/",
       "content_type": "text/html",
-      "content_length": 3038,
-      "title": "Client Challenge",
+      "content_length": 258356,
+      "title": "torch \u00b7 PyPI",
       "redirected": false,
       "redirected_offsite": false,
       "result": "OK_200"
@@ -702,7 +835,7 @@
       "status": 200,
       "final_url": "https://www.herox.com/GEMSPrize/resource/2274",
       "content_type": "text/html",
-      "content_length": 93302,
+      "content_length": 93313,
       "title": "GEMS Prize Official Rules",
       "redirected": false,
       "redirected_offsite": false,
@@ -771,17 +904,20 @@
     {
       "url": "https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencebase.gov/catalog/item/657e1d85d34e23d3533209f7",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencebase.gov/catalog/item/66e88690d34e0606a9db9b43",
       "status": 403,
-      "result": "BROKEN_HTTP_403"
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     },
     {
       "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
