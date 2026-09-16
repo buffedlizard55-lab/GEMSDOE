@@ -27,3 +27,8 @@ proxy-eval
 # records the selection (domain source, size, chosen classes, metadata field list, metadata keys)
 # and falls back to the layer renderer's unique-value labels, then to a previous run's ids, when the
 # RuleID field domain is absent - with the provenance recorded either way.
+
+# 2026-09-16 (session 7, sixth attempt): the fetch step's output is now teed into a committed log
+# and an unexpected exception appends its traceback to the committed report; the sweep job no longer
+# waits for the fetch to succeed, because it needs the committed proxy RASTER, not the rebuild (a
+# guard step refuses to sweep if that raster is missing).

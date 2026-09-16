@@ -98,11 +98,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p data/external data/evidence/proxy
+          # The output is teed into the committed evidence: four runs failed here on 2026-09-16 and
+          # the job log is not retrievable from the development sandbox, so the step name was the
+          # only symptom.  `set -o pipefail` (above) keeps the step red when the script fails.
           python scripts/fetch_proxy_faults.py \
             --bbox-source data/labels.tif \
             --extra-classes "${{ github.event.inputs.extra_classes || '' }}" \
             --out data/external/sgmc_proxy_faults.geojson \
-            --meta data/evidence/proxy/fetch_meta.json
+            --meta data/evidence/proxy/fetch_meta.json \
+            2>&1 | tee data/evidence/proxy/fetch.log
 
       - name: Rasterise on the competition grid + split by label coverage
         run: |
@@ -162,7 +166,11 @@ jobs:
     name: emission-width sweep on the proxy population
     runs-on: ubuntu-latest
     needs: proxy
-    if: ${{ github.event.inputs.skip_sweep != '1' }}
+    # `always()` on purpose: the sweep needs the committed proxy RASTER, not the fetch that rebuilds
+    # it, and on 2026-09-16 the fetch step failed four times on the runner while the raster it had
+    # produced on an earlier run was already committed and verified.  The first step below refuses to
+    # continue if that raster is missing, so this cannot quietly sweep against nothing.
+    if: ${{ always() && github.event.inputs.skip_sweep != '1' }}
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
@@ -187,6 +195,18 @@ jobs:
           run-id: ${{ github.event.inputs.run_id || '35042805806' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
+
+      - name: Require a proxy catalogue before sweeping (committed is fine)
+        run: |
+          set -euo pipefail
+          P=data/evidence/proxy/proxy_catalogue.tif
+          test -s "$P" || { echo "::error::$P is missing - no proxy to sweep against"; exit 1; }
+          python - <<'PY'
+          import hashlib, pathlib
+          p = pathlib.Path("data/evidence/proxy/proxy_catalogue.tif")
+          print("proxy raster:", p.stat().st_size, "bytes  sha256",
+                hashlib.sha256(p.read_bytes()).hexdigest()[:16])
+          PY
 
       - name: Download the competition rasters
         run: |

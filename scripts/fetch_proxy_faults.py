@@ -558,5 +558,38 @@ def main() -> int:
     return 0
 
 
+def _run() -> int:
+    """`main()` with the traceback attached to the run's committed report.
+
+    MEASURED 2026-09-16 (runs 35161765013, 35162064245, 35162278463, 35162454814): this step failed
+    four times and each time the only outward symptom was a failed step name - the job log is not
+    retrievable from the development sandbox, and a bare traceback lives only there.  So an
+    unexpected exception is now appended to the committed JSON report before it propagates: whoever
+    reads the repository next sees the exception type, message and the last frames, not a step name.
+    """
+    import traceback
+    try:
+        return main()
+    except SystemExit:
+        raise
+    except BaseException as exc:                                          # noqa: BLE001
+        import json as _json
+        import pathlib as _pathlib
+        frames = traceback.format_exc().strip().splitlines()[-12:]
+        for cand in ("data/evidence/proxy/fetch_links.json",):
+            try:
+                q = _pathlib.Path(cand)
+                doc = _json.loads(q.read_text()) if q.exists() else {}
+                doc["failed_stage"] = doc.get("failed_stage") or "unexpected exception"
+                doc["failed_with"] = f"{type(exc).__name__}: {exc}"
+                doc["traceback_tail"] = frames
+                q.write_text(_json.dumps(doc, indent=1) + "\n", encoding="utf-8")
+                break
+            except Exception:                                              # noqa: BLE001
+                continue
+        traceback.print_exc()
+        raise SystemExit(2) from exc
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_run())

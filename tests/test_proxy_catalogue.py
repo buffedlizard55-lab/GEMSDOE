@@ -562,3 +562,22 @@ def test_rule_class_names_survive_a_metadata_payload_without_the_field_domain():
 
     empty, source3 = fetch.rule_id_domain_with_source({"fields": []})
     assert empty == {} and source3 == "none"
+
+
+def test_an_unexpected_fetch_exception_is_written_to_the_committed_report(tmp_path, monkeypatch):
+    """A crash must leave its reason in evidence, not only in a job log nobody can read.
+
+    MEASURED 2026-09-16: four proxy-eval runs failed at the fetch step and the outward symptom was
+    a step name - the sandbox cannot retrieve job logs. The traceback is now appended to the
+    committed report before the process exits non-zero.
+    """
+    f = _load("fetch_proxy_faults")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data/evidence/proxy").mkdir(parents=True)
+    monkeypatch.setattr(f, "main", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    with pytest.raises(SystemExit):
+        f._run()
+    doc = json.loads((tmp_path / "data/evidence/proxy/fetch_links.json").read_text())
+    assert doc["failed_stage"] == "unexpected exception"
+    assert "RuntimeError: boom" in doc["failed_with"]
+    assert doc["traceback_tail"], "the tail of the traceback must be preserved"
