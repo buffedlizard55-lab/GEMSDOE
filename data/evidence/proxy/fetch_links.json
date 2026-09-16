@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T23:28:58+00:00",
+ "generated_utc": "2026-09-16T23:33:10+00:00",
  "generated_by": "scripts/fetch_proxy_faults.py",
  "purpose": "reachability of the USGS documents this proxy cites, recorded on the same run that fetches the faults - written before any failure so a failed run is diagnosable from the committed evidence",
  "links": [
@@ -55,5 +55,17 @@
   "item_route_error": "RuntimeError: failed after 4 attempts: https://www.sciencebase.gov/catalog/item/5888bf4fe4b05ccb964bab9d?format=json: HTTP Error 403: Forbidden",
   "meaning": "NOT ESTABLISHED - the service could not be tied to the DOI on this run; cite the data release only if a reviewer can reproduce the link by hand"
  },
- "layer_name": "SGMC_Structure"
+ "layer_name": "SGMC_Structure",
+ "failed_stage": "unexpected exception",
+ "failed_with": "KeyError: 'resolved'",
+ "traceback_tail": [
+  "Traceback (most recent call last):",
+  "  File \"/home/runner/work/GEMSDOE/GEMSDOE/scripts/fetch_proxy_faults.py\", line 572, in _run",
+  "    return main()",
+  "           ^^^^^^",
+  "  File \"/home/runner/work/GEMSDOE/GEMSDOE/scripts/fetch_proxy_faults.py\", line 386, in main",
+  "    print(f\"  service identity: {ident['item_id_in_service']} in {ident['resolved']} -> \"",
+  "                                                                  ~~~~~^^^^^^^^^^^^",
+  "KeyError: 'resolved'"
+ ]
 }

@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/runner/work/GEMSDOE/GEMSDOE/scripts/fetch_proxy_faults.py", line 572, in _run
+    return main()
+           ^^^^^^
+  File "/home/runner/work/GEMSDOE/GEMSDOE/scripts/fetch_proxy_faults.py", line 386, in main
+    print(f"  service identity: {ident['item_id_in_service']} in {ident['resolved']} -> "
+                                                                  ~~~~~^^^^^^^^^^^^
+KeyError: 'resolved'
