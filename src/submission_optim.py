@@ -38,8 +38,8 @@ from scipy.ndimage import binary_dilation, distance_transform_edt
 
 from .metrics import kernel_offsets
 
-__all__ = ["floor_sharpen", "dominant_thin", "optimize_submission", "search_threshold",
-           "shaping_thresholds"]
+__all__ = ["floor_sharpen", "dominant_thin", "dilate_mask", "optimize_submission",
+           "search_threshold", "shaping_thresholds"]
 
 
 def floor_sharpen(p: np.ndarray, t0: float = 0.0, gamma: float = 1.0, hard: bool = True) -> np.ndarray:
@@ -100,12 +100,46 @@ def dominant_thin(mask: np.ndarray, R: int = 3, p: np.ndarray | None = None,
     return sel.astype(np.float32)
 
 
+def dilate_mask(mask: np.ndarray, radius: int = 1) -> np.ndarray:
+    """Grow a kept set by `radius` pixels (disk).
+
+    WHY A KNOB AND NOT ALWAYS THIN: thinning is optimal only if the predicted trace sits on
+    the true trace.  TP_w takes a max within R = 3 px, so a prediction that is off by up to
+    R still scores as if it were exact -- but a prediction that is off by MORE than R scores
+    nothing at all while still paying 0.2 per unit of FP mass.  Against the *catalogued*
+    faults the model localises well (it trained on them), so thin wins there.  Against the
+    *scored* faults -- new faults absent from the catalogue (rules SS1.1/SS3.5) -- the model
+    has never seen them and its localisation error is strictly larger.  Independent evidence
+    that it is at least one cell: Hermant et al. (2025) find expert-mapped Quaternary fault
+    traces and the USGS compilation differ by up to 400 m, i.e. 4 cells at 100 m.
+    Growing the kept set by k pixels buys k cells of tolerance for a bounded FP cost; the
+    right k is an empirical question, which is what `dilate` is for.  See
+    scripts/measure_shift_robustness.py for the measurement.
+    """
+    m = np.asarray(mask) > 0.5
+    if radius <= 0 or not m.any():
+        return m.astype(np.float32)
+    try:
+        from skimage.morphology import disk
+        st = disk(int(radius))
+    except Exception:                                   # pragma: no cover
+        st = None
+    return binary_dilation(m, structure=st, iterations=1 if st is not None else int(radius)
+                           ).astype(np.float32)
+
+
 def optimize_submission(p: np.ndarray, R: int = 3, t0: float = 0.3, thin: bool = True,
-                        hard: bool = True, gamma: float = 1.0) -> np.ndarray:
-    """Full shaping pipeline -> probability field ready to write as a submission."""
+                        hard: bool = True, gamma: float = 1.0, dilate: int = 0) -> np.ndarray:
+    """Full shaping pipeline -> probability field ready to write as a submission.
+
+    `dilate` (pixels, default 0 = pure skeleton) widens the kept set after thinning; see
+    dilate_mask for why the optimum against the scored universe may not be 0.
+    """
     q = floor_sharpen(p, t0=t0, gamma=gamma, hard=hard)
     if thin:
         q = dominant_thin(q, R=R, p=p)
+    if dilate:
+        q = dilate_mask(q, radius=int(dilate))
     return np.clip(q, 0.0, 1.0).astype(np.float32)
 
 
@@ -129,8 +163,9 @@ def shaping_thresholds(n: int = 15, lo: float = 1e-4, hi: float = 0.9) -> np.nda
 
 
 def search_threshold(p: np.ndarray, gt: np.ndarray, R: int = 3,
-                     thresholds=None, thin_options=(False, True)):
-    """Grid search floor + thinning on HELD-OUT validation predictions (never on test).
+                     thresholds=None, thin_options=(False, True), dilate_options=(0,)):
+    """Grid search floor + thinning (+ optional dilation) on HELD-OUT validation
+    predictions (never on test).
 
     Returns (best_params, best_dti, table).  The table is what makes this auditable:
     it shows the metric's shape, so the chosen point is reviewable, not magic.
@@ -138,14 +173,15 @@ def search_threshold(p: np.ndarray, gt: np.ndarray, R: int = 3,
     from .metrics import compute_distance_weighted_tversky
     if thresholds is None:
         thresholds = shaping_thresholds(45)
-    table = [(float("nan"), False, float(compute_distance_weighted_tversky(p, gt, R_pixels=R)),
+    table = [(float("nan"), False, 0, float(compute_distance_weighted_tversky(p, gt, R_pixels=R)),
               float(np.nansum(p)))]                      # row 0 = unshaped reference point
     best = (-1.0, None)
     for t in thresholds:
         for thin in thin_options:
-            q = optimize_submission(p, R=R, t0=float(t), thin=thin)
-            d = compute_distance_weighted_tversky(q, gt, R_pixels=R)
-            table.append((float(t), bool(thin), float(d), float(q.sum())))
-            if d > best[0]:
-                best = (d, dict(t0=float(t), thin=bool(thin)))
+            for dila in dilate_options:
+                q = optimize_submission(p, R=R, t0=float(t), thin=thin, dilate=int(dila))
+                d = compute_distance_weighted_tversky(q, gt, R_pixels=R)
+                table.append((float(t), bool(thin), int(dila), float(d), float(q.sum())))
+                if d > best[0]:
+                    best = (d, dict(t0=float(t), thin=bool(thin), dilate=int(dila)))
     return best[1], best[0], table

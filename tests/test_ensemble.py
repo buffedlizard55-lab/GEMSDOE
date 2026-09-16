@@ -117,10 +117,13 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
     rep = json.loads((tmp_path / "report.json").read_text())
     assert rep["n_folds"] == 2
     assert rep["submission"]["finite_px"] == int(np.isfinite(q).sum())
-    # row0 (unshaped reference) + |grid| x |thin| ; the grid is log-spaced and includes 0.0
-    # (src/submission_optim.shaping_thresholds), not the old 11-point linear 0.02-0.9 ramp
+    # row0 (unshaped reference) + |grid| x (|thin=False| + |thin=True| x |dilate candidates|)
+    # the grid is log-spaced and includes 0.0 (src/submission_optim.shaping_thresholds),
+    # not the old 11-point linear 0.02-0.9 ramp
     from src.submission_optim import shaping_thresholds
-    assert len(rep["shaping"]["calibration_table"]) == 1 + 2 * len(shaping_thresholds(11))
+    n_dil = len(rep["shaping"]["dilate_grid"])
+    assert len(rep["shaping"]["calibration_table"]) == 1 + len(shaping_thresholds(11)) * (1 + n_dil)
+    assert rep["shaping"]["dilate"] in rep["shaping"]["dilate_grid"]
     loc = rep["local_score_vs_known"]
     assert loc["closed_form_matches"] is True, "DTI != closed form -> identity regression"
     assert 0.0 <= loc["dti_known_faults"] <= 1.0
@@ -177,3 +180,55 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
         assert "all zeros" in str(e)
     else:
         raise AssertionError("all-zero submission must never be written")
+
+def test_blend_loo_audit_and_dilate_grid(tmp_path):
+    """The leave-one-fold-out audit and the emission-width grid (2026-09-16).
+
+    `--calibrate loo` re-fits the floor on the folds that are NOT being scored, so it needs at
+    least three of them; the audit must report a mean that is <= the oracle fitted on the
+    scored fold itself.  `--dilate-grid` must reach the report and pick a member of the grid.
+    Both are plain assertions about the artifact, not about a fixed number, so they stay true
+    as the model changes.
+    """
+    H = W = 64
+    gt = np.zeros((H, W), np.float32)
+    for k in range(8, 56):                                   # diagonal fault
+        gt[k, k] = 1.0
+    rng = np.random.default_rng(1)
+    folds = []
+    for fi in range(3):
+        fd = tmp_path / f"fold-{fi}"
+        fd.mkdir()
+        from scipy.ndimage import binary_dilation, gaussian_filter
+        band = gaussian_filter(binary_dilation(gt > 0.5, iterations=1).astype(np.float32), 1.4)
+        prob = np.clip(0.02 + 0.95 * band + rng.normal(0, 0.02, (H, W)), 0, 1).astype(np.float32)
+        _write_tif(fd / "prob_raw.tif", prob)
+        np.savez_compressed(fd / f"heldout_mc{fi}.npz",
+                            pred=prob[8:48, 8:48].astype(np.float16), gt=gt[8:48, 8:48].astype(np.uint8))
+        (fd / "manifest.json").write_text(json.dumps({"models": [{"file": f"m{fi}.pt", "dti": 0.4}]}))
+        folds.append(str(fd))
+    _write_tif(tmp_path / "sample.tif", np.zeros((H, W), np.float32))
+    _write_tif(tmp_path / "labels.tif", gt)
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("training: {alpha: 0.2, beta: 0.8}\n"
+                   "metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-7}\n")
+    rep_path = tmp_path / "report.json"
+    r = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "blend_submission.py"),
+         "--folds", *folds, "--config", str(cfg),
+         "--sample", str(tmp_path / "sample.tif"), "--labels", str(tmp_path / "labels.tif"),
+         "--out", str(tmp_path / "submission.tif"), "--report", str(rep_path),
+         "--dilate-grid", "0,1,2", "--calibrate", "loo", "--loo-grid", "3"],
+        capture_output=True, text=True, timeout=900)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = json.loads(rep_path.read_text())
+    loo = rep["aggregation_calibration"]
+    assert loo is not None and loo["summary"]["n_folds"] == 3
+    assert len(loo["rows"]) == 3
+    sm = loo["summary"]
+    assert sm["mean_dti_self_best_oracle"] >= sm["mean_dti_loo"] - 1e-9, sm
+    assert abs((sm["mean_dti_loo"] - sm["mean_dti_unshaped"]) - sm["gain_loo_over_unshaped"]) < 1e-9
+    assert "acceptance" in sm and "weight_rule_gain" in sm
+    sh = rep["shaping"]
+    assert sh["dilate_grid"] == [0, 1, 2] and sh["dilate"] in (0, 1, 2)
+

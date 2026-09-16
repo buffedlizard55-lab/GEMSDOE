@@ -41,6 +41,20 @@ on:
       shaping_grid:
         description: "number of log-spaced (t0, thin) candidates"
         default: "15"
+      dilate_grid:
+        description: "emission width candidates in px (0 = pure skeleton, the pre-2026-09-16 behaviour)"
+        default: "0,1,2,3,4,6"
+      calibrate:
+        description: "pooled | loo  (loo adds the leave-one-fold-out audit; slower)"
+        type: choice
+        options: [pooled, loo]
+        default: pooled
+      loo_grid:
+        description: "thresholds per fold for the leave-one-fold-out audit"
+        default: "7"
+      evidence_dir:
+        description: "where to commit the evidence (default: data/evidence/runs/<run_id>)"
+        default: ""
   push:
     branches: ["arena/**"]
     paths: [".github/triggers/reblend"]
@@ -110,7 +124,10 @@ jobs:
             --labels data/labels.tif \
             --out submission.tif --report blend_report.json \
             --weights "${{ github.event.inputs.weights || 'equal' }}" \
-            --shaping-grid "${{ github.event.inputs.shaping_grid || '15' }}" 2>&1 | tee blend.log
+            --shaping-grid "${{ github.event.inputs.shaping_grid || '15' }}" \
+            --dilate-grid "${{ github.event.inputs.dilate_grid || '0' }}" \
+            --calibrate "${{ github.event.inputs.calibrate || 'pooled' }}" \
+            --loo-grid "${{ github.event.inputs.loo_grid || '7' }}" 2>&1 | tee blend.log
 
       - name: Validate submission format (exit code gates the commit)
         run: |
@@ -146,7 +163,8 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          D="data/evidence/runs/${{ github.event.inputs.run_id || '35042805806' }}"
+          D="${{ github.event.inputs.evidence_dir }}"
+          [ -n "$D" ] || D="data/evidence/runs/${{ github.event.inputs.run_id || '35042805806' }}"
           mkdir -p "$D"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
