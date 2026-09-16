@@ -12,3 +12,5 @@
 # 2026-09-16: re-run with --dump-text and the divergence diagnostic (quote test_set_composition MISS)
 
 # 2026-09-16: page furniture (bare/glued page numbers) is stripped before matching, and recorded
+
+# 2026-09-16: first strip attempt removed nothing; record a per-page trace so the miss is diagnosable

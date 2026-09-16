@@ -214,8 +214,25 @@ def norm(text: str) -> str:
     return t
 
 
+def _trace_page(trace: list, page_no: int, raw: str, kept: str) -> None:
+    """Record how one page came out of the extractor, so a miss can be diagnosed from evidence.
+
+    MEASURED 2026-09-16: the first attempt at removing page furniture removed nothing at all -
+    the page number was not where the diagnostic implied it would be (top or foot of the page),
+    and no job log is readable from the development sandbox.  The trace answers the question the
+    PDF cannot be re-fetched to ask: what does each page's own text look like at its head and tail?
+    """
+    def _lines(t: str) -> list:
+        return [ln.strip() for ln in t.splitlines() if ln.strip()]
+    rk, rl = _lines(raw), _lines(kept)
+    trace.append({"page": page_no, "chars": len(raw),
+                  "head": (rl[0][:80] if rl else ""), "tail": (rl[-1][:80] if rl else ""),
+                  "raw_head": (rk[0][:40] if rk else ""), "raw_tail": (rk[-1][:40] if rk else "")})
+
+
 def strip_page_furniture(page_text: str, page_no: int | None = None,
-                         record: list | None = None, prev_tail: str | None = None) -> str:
+                         record: list | None = None, prev_tail: str | None = None,
+                         trace: list | None = None) -> str:
     """Remove page-margin furniture (a bare page number) from ONE page's extracted text.
 
     MEASURED 2026-09-16 (run 35153102372).  pypdf emits a page's number as the first line of that
@@ -253,10 +270,14 @@ def strip_page_furniture(page_text: str, page_no: int | None = None,
                                "why": "page number glued to the first line of the page "
                                       "(the previous page ends mid-sentence)"})
             lines[0] = m.group(2)
-    return "\n".join(lines)
+    kept = "\n".join(lines)
+    if trace is not None:
+        _trace_page(trace, page_no if page_no is not None else -1, page_text, kept)
+    return kept
 
 
-def extract(path: Path, keep_page_furniture: bool = False, notes: list | None = None) -> str:
+def extract(path: Path, keep_page_furniture: bool = False, notes: list | None = None,
+            trace: list | None = None) -> str:
     if path.suffix.lower() == ".txt":
         return path.read_text(encoding="utf-8", errors="replace")
     try:
@@ -266,11 +287,14 @@ def extract(path: Path, keep_page_furniture: bool = False, notes: list | None = 
     reader = PdfReader(str(path))
     pages, prev_tail = [], None
     for i, pg in enumerate(reader.pages, start=1):
-        t = pg.extract_text() or ""
+        raw = pg.extract_text() or ""
+        t = raw
         if not keep_page_furniture:
-            t = strip_page_furniture(t, i, notes, prev_tail=prev_tail)
+            t = strip_page_furniture(t, i, notes, prev_tail=prev_tail, trace=trace)
             tail_lines = [ln for ln in t.splitlines() if ln.strip()]
             prev_tail = " ".join(tail_lines[-2:]) if tail_lines else None
+        elif trace is not None:
+            _trace_page(trace, i, raw, t)
         pages.append(t)
     return "\n".join(pages)
 
@@ -318,13 +342,16 @@ def main() -> int:
         nbytes, sha = len(b), hashlib.sha256(b).hexdigest()
 
     furniture: list = []
+    page_trace: list = []
     text = norm(extract(doc_path, keep_page_furniture=a.keep_page_furniture,
-                        notes=furniture))
+                        notes=furniture, trace=page_trace))
     if a.dump_text:
         dp = Path(a.dump_text)
         dp.parent.mkdir(parents=True, exist_ok=True)
         dp.write_text(text, encoding="utf-8")
         print(f"wrote the normalised document text to {dp} ({len(text)} chars)")
+    print(f"page trace: {len(page_trace)} pages; first page head={page_trace[0]['raw_head']!r} "
+          f"tail={page_trace[0]['raw_tail']!r}") if page_trace else None
     if furniture:
         print(f"page furniture removed before matching: {len(furniture)} line(s) - "
               f"{[f['removed'] for f in furniture][:10]}"
@@ -357,6 +384,7 @@ def main() -> int:
                 "paraphrasing, no fuzzy matching"),
         page_furniture_stripped=(not a.keep_page_furniture),
         page_furniture_removed=furniture,
+        pages=page_trace,
         extracted_text=(dict(path=str(a.dump_text),
                              chars=len(text)) if a.dump_text else None),
         match_against_mirror=dict(expected_sha256=a.expected_sha256,

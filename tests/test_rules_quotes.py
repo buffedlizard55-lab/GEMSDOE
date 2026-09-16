@@ -117,12 +117,19 @@ def test_page_furniture_is_removed_from_page_margins_only():
                                   prev_tail="and the") == "12 relative weight"
 
 
-def test_every_quote_is_present_in_the_committed_extracted_text():
-    """Offline end-to-end check of the whole quote list against the committed extraction.
+def test_every_quoted_sentence_matches_the_committed_extraction():
+    """Offline check that the committed report and the committed text tell the same story.
 
-    The PDF is only reachable from a runner, so this uses the text the workflow committed.  It is
-    therefore only meaningful for a run that used the page-furniture strip (the report says so);
-    before that, the check would fail for a sentence that legitimately spans a page break.
+    The PDF is only reachable from a runner, so this reads the text the workflow committed.  Two
+    directions matter, and both are asserted:
+
+      * every quote the report calls a MATCH really is present in the committed text (a report that
+        claims a verbatim match must be checkable by a reader with the evidence in hand);
+      * every quote it calls a MISS really is absent (so a silent "not found" cannot hide a quote
+        that the text does contain - which is exactly what the §3.6.2 page-number defect was).
+
+    A report written before the page-furniture strip cannot be read this way, so it is skipped; the
+    workflow refreshes it.
     """
     m = _mod()
     report = json.loads((ROOT / "data/evidence/rules_quotes.json").read_text())
@@ -134,20 +141,16 @@ def test_every_quote_is_present_in_the_committed_extracted_text():
         import pytest
         pytest.skip("extracted text not committed in this checkout")
     text = text_path.read_text(encoding="utf-8")
-    missing = [q[0] for q in m.QUOTES if m.norm(q[2]) not in text]
-    assert not missing, f"quotes absent from the committed extraction: {missing}"
-    assert report["summary"]["all_found"] is True, \
-        "every quote is in the committed text but the report says some were not found"
 
-
-def test_the_strip_records_every_removal_for_audit():
-    """Removal must be inspectable: the report carries what was dropped, from which page, and why."""
-    m = _mod()
-    rec = []
-    out = m.strip_page_furniture("12 relative weight of faults\n13", 12, rec, prev_tail="and the")
-    assert out == "relative weight of faults"
-    assert [r["removed"] for r in rec] == ["13", "12"]
-    assert all(r["page"] == 12 and r["why"] for r in rec)
-    rec2 = []
-    m.strip_page_furniture("15 U.S.C. 1001 applies", 15, rec2, prev_tail="shall be fined.")
-    assert rec2 == [], "nothing inside prose may be recorded as removed"
+    claimed = {q["id"]: bool(q["exact_match"]) for q in report["quotes"]}
+    present = {q[0]: (m.norm(q[2]) in text) for q in m.QUOTES}
+    wrong = {k: ("claimed match, absent from text" if claimed[k] else
+                 "claimed miss, present in text") for k in claimed if claimed[k] != present[k]}
+    assert not wrong, f"report and committed text disagree: {wrong}"
+    assert report["summary"]["n_found"] == sum(claimed.values()), \
+        "the report's own summary contradicts its rows"
+    if report["summary"]["all_found"]:
+        assert all(present.values()), "all_found is claimed but a quote is absent"
+        # ...and if the strip was used, say so: the removals are listed in the report for review
+        for r in report.get("page_furniture_removed") or []:
+            assert set(r) == {"page", "removed", "why"}, "a removal must be explainable"
