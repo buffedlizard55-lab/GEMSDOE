@@ -682,6 +682,35 @@ domain) or openly licensed (INGENIOUS via OpenEI GDR). The rules permit addition
 licence allows use in the challenge and sharing with the sponsor
 (<a href="''' + PROB + '''#external-datasets">external datasets</a>).''')}"""]
 
+    sb = ev.get("sb")
+    if sb:
+        files_rows = []
+        for it in sb["items"]:
+            fl = "<br>".join(f'{e(f["name"])} <span class="muted">({e(f["size"])})</span>'
+                             for f in it.get("files", [])) or "-"
+            files_rows.append(f"""<tr>
+<td><a href="{it['sciencebase_url']}">{e(it['title'])}</a><br>
+    <code>{e(it['doi'])}</code> <span class="muted">({e(it['catalog_id'])})</span></td>
+<td>{e(it.get('citation', ''))}</td>
+<td>{fl}</td>
+<td>{e(it.get('role', ''))}</td></tr>""")
+        body.append(f"""<h2>INGENIOUS sub-datasets &mdash; direct DOI verification</h2>
+<p>Three of the catalogued external sources are USGS data releases produced for the same DOE
+project that generated the competition data. Each DOI below was followed to its ScienceBase
+landing page and the title, citation and attached files were read off that page
+({e(sb['generated_utc'])}).</p>
+<table><thead><tr><th>Release</th><th>Citation</th><th>Attached files</th><th>Role here</th></tr>
+</thead><tbody>
+{''.join(files_rows)}
+</tbody></table>
+{note("info", "<b>Irregularity, recorded not hidden.</b> " + e(sb['irregularity']))}
+{note("ok", "<b>Why this matters for the leaderboard.</b> The scored faults are the ones "
+            "<em>missing</em> from the INGENIOUS catalogue, and the detrended-elevation and "
+            "geophysics grids are that project's own fault-emphasising products: free, "
+            "public-domain, officially released, and already inside the study area. They are the "
+            "lowest-risk additional inputs to test against the negative-sampling baseline "
+            "(see <a href='results.html'>Results</a>).")}""")
+
     if lv:
         c = lv["summary_counts"]
         def _cls(k):
@@ -879,6 +908,7 @@ def main() -> int:
         "metric_strategy": load(ROOT / "data/evidence/metric_strategy.json"),
         "rules_quotes": load(ROOT / "data/evidence/rules_quotes.json"),
         "dem": load(ROOT / "data/dem_links.json"),
+        "sb": load(ROOT / "data/evidence/sciencebase_dois.json"),
         "linkver": load(DOCS / "link_verification.json"),
         "runs": [],
     }
