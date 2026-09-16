@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:34:17Z",
+ "generated_utc": "2026-09-16T21:37:41Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
   "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
@@ -7,10 +7,12 @@
   "bytes": 455140,
   "sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938"
  },
- "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks and whitespace collapse - no paraphrasing, no fuzzy matching",
+ "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks, whitespace collapse and removal of page numbers at page margins - no paraphrasing, no fuzzy matching",
+ "page_furniture_stripped": true,
+ "page_furniture_removed": [],
  "extracted_text": {
   "path": "data/evidence/rules_extracted_text.txt",
-  "chars": 49936
+  "chars": 49935
  },
  "match_against_mirror": {
   "expected_sha256": "50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938",
