@@ -10,3 +10,6 @@ docs/link_verification.json and docs/data_catalog.verified.csv.
 
 # 2026-09-16 (post-merge): regenerate the link evidence with the fixed ScienceBase classification,
 # and rebuild the site from it in the same run.
+
+# 2026-09-16 (session 7): fire the rules-quote re-check for the 10 sentences added from an
+# independent extraction path, and re-verify every catalog URL including the six new SGMC rows.

@@ -1,1 +1,4 @@
 proxy-eval
+
+# 2026-09-16 (session 7): build the independent (proxy) fault catalogue, score the
+# committed submission against faults the labels lack, and sweep the emission width there.
