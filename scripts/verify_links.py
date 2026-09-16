@@ -26,6 +26,7 @@ import json
 import re
 import urllib.error
 import urllib.parse
+from pathlib import Path
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -38,11 +39,76 @@ LOGIN_HINTS = ("/login", "/accounts/login", "signin", "sign-in", "/users/sign_in
 # separately as BOT_BLOCKED_<code> and excluded from the "problems needing review" count.
 # The DOI itself remains the citable identifier regardless of what a scripted HEAD sees.
 BOT_BLOCKING_HOSTS = (
-    "doi.org", "onlinelibrary.wiley.com", "agupubs.onlinelibrary.wiley.com",
+    # sciencebase.gov added 2026-09-16 after a measured flip: the USGS ScienceBase host served
+    # 200 to the *same* runner earlier in the day and then returned 403 to EVERY request from
+    # it (all ten doi.org/10.5066/* rows and all three /catalog/item/* pages in one run), while
+    # the identical content stayed reachable through the platform page fetcher the same day.
+    # Several hosts behave like this under scripted load; the honest record is "the host
+    # refused this client", with the raw status kept in the row, not "the link is broken".
+    # Those rows are verified independently through their DOI landing pages - see
+    # data/evidence/sciencebase_dois.json - and the flip itself is an irregularity to report,
+    # not something to hide behind a silent retry.
+    "sciencebase.gov", "doi.org", "onlinelibrary.wiley.com",
+    "agupubs.onlinelibrary.wiley.com",
     "www.mdpi.com", "mdpi.com", "link.springer.com", "www.sciencedirect.com",
     "sciencedirect.com", "pubs.geoscienceworld.org", "academic.oup.com",
     "www.tandfonline.com", "tandfonline.com", "iopscience.iop.org",
 )
+
+
+# Result classes that are NOT a defect.  A 401 means credentials are required, a 403 from one of
+# BOT_BLOCKING_HOSTS means the host refused this client, LOGIN_REQUIRED is the account-gated data
+# tab - none of them says the resource is missing.  Anything else (BROKEN_*, UNREACHABLE,
+# NOT_A_URL) is a problem a human should look at.
+EXPECTED_OK = ("OK",)
+EXPECTED_NON_OK = ("BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED")
+
+
+def classify_row(result: str, status, url: str) -> str:
+    """Map a recorded (result, status, url) onto the CURRENT policy.
+
+    Used by --reclassify: when the policy changes (a host turns out to serve 403 to scripted
+    clients, an endpoint turns out to need credentials) the measurements do not have to be thrown
+    away and re-taken - the same rows are re-derived under the new rule, and the next full run
+    re-measures them anyway.  Hand-editing a measurement is not an option; re-deriving it from the
+    recorded status is.
+    """
+    if result.startswith("BROKEN_HTTP_"):
+        code = int(str(result).rsplit("_", 1)[-1]) if str(result).rsplit("_", 1)[-1].isdigit() else status
+        host = urllib.parse.urlparse(url).netloc.lower()
+        if code == 401:
+            return "AUTH_REQUIRED"
+        if code in (401, 403, 429) and any(host == h or host.endswith("." + h)
+                                           for h in BOT_BLOCKING_HOSTS):
+            return f"BOT_BLOCKED_{code}"
+    return result
+
+
+def reseal(payload: dict) -> dict:
+    """Recompute every derived field of a link-verification payload from its own rows."""
+    results = payload.get("results", [])
+    for r in results:
+        r["result"] = classify_row(r.get("result", ""), r.get("status"), r.get("url", ""))
+    counts: dict[str, int] = {}
+    for r in results:
+        k = r["result"].split("_TO_")[0]
+        counts[k] = counts.get(k, 0) + 1
+    problems = [r for r in results if not r["result"].startswith(EXPECTED_OK + EXPECTED_NON_OK)]
+    expected_nonok = [r for r in results if r["result"].startswith(EXPECTED_NON_OK)]
+    payload["summary_counts"] = counts
+    payload["problems"] = problems
+    payload["n_problems"] = len(problems)
+    payload["expected_non_ok"] = expected_nonok
+    payload["n_expected_non_ok"] = len(expected_nonok)
+    payload["classification"] = {
+        "expected_ok": list(EXPECTED_OK),
+        "expected_non_ok": list(EXPECTED_NON_OK),
+        "requires_review": "anything else: BROKEN_*, UNREACHABLE, NOT_A_URL",
+        "note": ("A 401 means credentials are required and a 403 from a publisher or DOI resolver "
+                 "means the host refused this scripted client; LOGIN_REQUIRED is the account-gated "
+                 "data tab. None of those says the resource is missing."),
+    }
+    return payload
 
 
 def check(url: str, timeout: int = 45) -> dict:
@@ -101,10 +167,29 @@ def check(url: str, timeout: int = 45) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--reclassify", nargs="?", const="docs/link_verification.json", default=None,
+                    help="Recompute the derived fields of an existing --json-out file from its own "
+                         "recorded statuses under the current policy, without re-fetching anything. "
+                         "Use when the policy changes (a host started refusing scripted clients); the "
+                         "next full run re-measures every URL. Default path: docs/link_verification.json")
     ap.add_argument("--catalog", default="docs/data_catalog.csv")
     ap.add_argument("--json-out", default="docs/link_verification.json")
     ap.add_argument("--csv-out", default="docs/data_catalog.verified.csv")
     a = ap.parse_args()
+
+    if a.reclassify:
+        path = Path(a.reclassify)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        before = payload.get("n_problems")
+        payload = reseal(payload)
+        payload["reclassified_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        payload["reclassified_note"] = (
+            "Derived fields recomputed from the recorded per-URL statuses under the current policy "
+            "(no re-fetch). The next full run re-measures every URL.")
+        path.write_text(json.dumps(payload, indent=1))
+        print(f"{path}: problems {before} -> {payload['n_problems']}; "
+              f"counts {payload['summary_counts']}")
+        return 0
 
     with open(a.catalog, newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
@@ -123,10 +208,11 @@ def main() -> int:
         print(f"  {r['result']:34s} {r['url'][:95]}")
 
     stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    EXPECTED = ("OK", "BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED")
-    problems = [r for r in results if not r["result"].startswith(EXPECTED)]
-    expected_nonok = [r for r in results
-                      if r["result"].startswith(("BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED"))]
+    # The classification policy lives at module level so it can be asserted in tests
+    # (tests/test_links_classifier.py) instead of being re-derived by hand each time a host
+    # changes its mind about scripted clients.
+    problems = [r for r in results if not r["result"].startswith(EXPECTED_OK + EXPECTED_NON_OK)]
+    expected_nonok = [r for r in results if r["result"].startswith(EXPECTED_NON_OK)]
 
     fields = list(rows[0].keys())
     for extra in ("verification_result", "verified_status", "verified_final_url", "verified_utc"):
@@ -156,6 +242,15 @@ def main() -> int:
         "n_expected_non_ok": len(expected_nonok),
         "expected_non_ok": expected_nonok,
         "results": results,
+        "classification": {
+            "expected_ok": list(EXPECTED_OK),
+            "expected_non_ok": list(EXPECTED_NON_OK),
+            "requires_review": "anything else: BROKEN_*, UNREACHABLE, NOT_A_URL",
+            "note": ("A 401 means credentials are required and a 403 from a publisher or DOI "
+                     "resolver means the host refused this scripted client; LOGIN_REQUIRED is the "
+                     "account-gated data tab. None of those says the resource is missing, so they "
+                     "are recorded with their raw status and counted separately from problems."),
+        },
         "note": (
             "Machine-measured. LOGIN_REQUIRED (DrivenData data tab) and BOT_BLOCKED_403/401 "
             "(publishers and doi.org rejecting scripted clients) are EXPECTED and are not "

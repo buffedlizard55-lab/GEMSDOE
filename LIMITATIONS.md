@@ -308,3 +308,53 @@ with a 6-hour job limit. Consequences actually observed:
 - **Dependency audit:** `requirements.txt` lists `scikit-learn` and `matplotlib`, imported nowhere
   in `src/`/`scripts/`/`tests/` (verified by grep); harmless dead weight, left in place.
   `requirements.verified.txt` remains the install that was actually exercised here.
+
+
+---
+
+## 5. Session 7 (2026-09-16) — limitations this session ran into, and what they cost
+
+### 5.1 No GPU, and no way to place the competition rasters here
+
+Unchanged and still the single blocker for the width decision's third condition. The sandbox now has
+CPU torch 2.14 + smp installed (enough to import and to run the small tests), but a second *ensemble*
+that the pre-registered rule requires before the shaping can change needs the 400 MB feature stack
+plus hours of GPU. Everything measured this session was therefore measured on **committed evidence
+produced by GitHub runners** (fold artifacts, the SGMC proxy raster, the submission rasters), plus
+one full local re-scoring run of the committed submission against the committed proxy catalogue
+(reproduced exactly: DTI 0.0247, TP_w 1324.08, FP_w 20211.05, on 61,664 px of truth).
+
+### 5.2 The scored population's size |G| is unknown, and the width decision depends on it
+
+This is now quantified rather than hand-waved: the 6-px band overtakes the shipped skeleton only
+above 21,328 px (2,133 km) of scored truth, and the constant-ones baseline overtakes it above
+22,056 px (2,206 km). Three plausible anchors (GeoDAWN-blocks density ≈26,000 px; the measured proxy
+population 61,664 px; the public catalogue 60,988 px) all sit above the crossover — but they are
+*assumptions*: the density of expert-interpreted faults inside the flown blocks need not match the
+density of state-map fault traces over the whole AOI. A scored truth below ~2,100 km inverts the
+conclusion, so the honest state is "conditional", and the decision file says so in those words.
+
+### 5.3 The proxy population is a different population, not a leaderboard
+
+SGMC traces come from state geological mapping published for other purposes; the scored faults are
+expert interpretations of GeoDAWN magnetics, radiometrics and lidar DEM. Neither population contains
+the other (the catalogue-copy acceptance check proves the proxy is not a restatement of the labels —
+it scores exactly 0.0000 on the absent subset). The consequence: proxy DTI values in this repository
+are **not** comparable to public leaderboard scores, and a policy that wins on the proxy may still
+lose on the scored set. Cross-population *policy* comparisons are the only legitimate use.
+
+### 5.4 Verification of external claims depends on a page-reading tool, not bash
+
+Bash egress in this sandbox is limited to github.com and pypi.org; drivendata.org, sciencebase.gov,
+pubs.usgs.gov, doi.org, gdr.openei.org and nlr.gov are all refused. `fetch_page`/`web_search` reach
+them and are what the verification page is built from, but anything that requires *downloading a
+file* (the competition rasters, the QFFD geodatabase, the DEM tiles) must go through a GitHub runner.
+Two claims remain unverifiable here and are listed as such on the verification page: the metric
+worked example's PNGs (S3, not reachable) and the data tab itself (login-walled).
+
+### 5.5 Human-only steps still outstanding
+
+DrivenData account + competition enrolment (eligibility: US citizen/permanent resident), the first
+submission upload (3/week), the Pages source setting, and — if the project reaches the finalist
+stage — the reproducibility assets and generative-AI disclosure required by the rules. None of these
+can be done autonomously; each is listed in `SUGGESTIONS.md` §7.1 item 7.

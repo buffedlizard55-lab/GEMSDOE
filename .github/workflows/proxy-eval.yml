@@ -1,0 +1,269 @@
+name: Proxy catalogue (independent faults) -> evaluate submission
+
+# =============================================================================
+# THE MEASUREMENT THIS REPOSITORY WAS MISSING
+#
+# Every quality number published so far was computed against `labels.tif` - the faults the
+# catalogue ALREADY contains - while both prize phases score faults it does NOT contain
+# (rules 1.1/3.3, verified verbatim in data/evidence/rules_quotes.json).  Catalogue DTI can
+# prove plumbing but cannot choose a model.
+#
+# This workflow builds an independent fault set and scores against the part of it the training
+# labels do not cover:
+#
+#   job proxy   - fetch USGS SGMC structure polylines (DS 1052, DOI 10.3133/ds1052) for the
+#                 competition footprint, rasterise on the exact grid, split into
+#                 "already in the labels" / "absent from the labels", and score the committed
+#                 submission against the absent part with the official metric.
+#   job sweep   - re-blend the six saved fold artifacts to recover the pre-shaping ensemble map
+#                 (blend_submission.py --save-ensemble) and sweep floor x thinning x emission
+#                 width ON THE PROXY POPULATION.  This is the third and best-aligned measurement
+#                 of the emission-width question: the held-out-crop sweep said "skeleton", the
+#                 shifted-label stress test said "6 px band"; this one scores real mapped faults
+#                 that the catalogue lacks.
+#
+# Both jobs commit machine-generated evidence back to the branch (small JSON + a compact uint8
+# raster + a 512-px window fixture the sandbox can test against offline).
+#
+# Egress: services.arcgis.com and the Dropbox mirrors are reachable from a runner, not from the
+# development sandbox - same constraint as the competition-data bridge.
+# =============================================================================
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "run whose fold-* artifacts to reuse for the sweep job"
+        default: "35042805806"
+      shaping_grid:
+        # MEASURED 2026-09-16 on the full 3292x3730 grid: ~21 s per shaping candidate
+        # (floor + distance-R thinning + dilation), so the sweep is sized to the job budget:
+        # candidates = shaping_grid x len(dilate_grid) = 4 x 6 = 24 -> ~9 min.
+        description: "floor candidates in the proxy sweep"
+        default: "4"
+      dilate_grid:
+        # MEASURED 2026-09-16 (run 35152701740): on the new-fault-like population the proxy DTI was
+        # still rising at 6 px (0.0144 -> 0.0395 monotone), so the default grid now reaches 12 px.
+        # Cost: ~21 s per candidate on the full grid, 5 floors x 9 widths ~ 16 min (job limit 150).
+        description: "emission widths (px) in the proxy sweep"
+        default: "0,1,2,3,4,6,8,10,12"
+      extra_classes:
+        description: "extra SGMC classes to include besides faults (e.g. Lineament)"
+        default: ""
+      skip_sweep:
+        description: "1 = only build the proxy and score the committed submission"
+        default: "0"
+  push:
+    branches: ["arena/**"]
+    paths: [".github/triggers/proxy-eval"]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: proxy-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  proxy:
+    name: build the proxy catalogue + score the submission
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (numpy/scipy/rasterio - no torch needed)
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet numpy scipy rasterio pyyaml
+
+      - name: Download the competition rasters the proxy must align to (data-tab mirrors)
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          dl () { curl -fL --retry 3 --retry-delay 5 -o "data/$2" "$1"; echo "OK $2 $(stat -c%s "data/$2") bytes"; }
+          dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
+          dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
+          sha256sum data/*.tif | tee data/checksums.txt
+
+      - name: Fetch the independent catalogue (USGS SGMC structure)
+        run: |
+          set -euo pipefail
+          mkdir -p data/external data/evidence/proxy
+          python scripts/fetch_proxy_faults.py \
+            --bbox-source data/labels.tif \
+            --extra-classes "${{ github.event.inputs.extra_classes || '' }}" \
+            --out data/external/sgmc_proxy_faults.geojson \
+            --meta data/evidence/proxy/fetch_meta.json
+
+      - name: Rasterise on the competition grid + split by label coverage
+        run: |
+          set -euo pipefail
+          python scripts/build_proxy_catalogue.py \
+            --proxy data/external/sgmc_proxy_faults.geojson \
+            --template data/labels.tif --labels data/labels.tif \
+            --out data/evidence/proxy/proxy_catalogue.tif \
+            --stats data/evidence/proxy/proxy_stats.json \
+            --fetch-meta data/evidence/proxy/fetch_meta.json \
+            --window 2048,1280,512
+
+      - name: Score the committed submission against the proxy population
+        run: |
+          set -euo pipefail
+          S="data/evidence/runs/35042805806/submission.tif"
+          if [ -f "$S" ]; then
+            python scripts/eval_proxy_catalogue.py --pred "$S" \
+              --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
+              --out data/evidence/proxy/eval_submission.json \
+              --truth only 2>&1 | tee data/evidence/proxy/eval_submission.log
+            python scripts/eval_proxy_catalogue.py --pred "$S" \
+              --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
+              --out data/evidence/proxy/eval_submission_combined.json --truth combined || true
+          else
+            echo "::warning::no committed submission to score - the proxy build still lands"
+          fi
+
+      - name: Commit the proxy evidence (small files only)
+        if: always()
+        run: |
+          set -euo pipefail
+          set +e
+          D=data/evidence/proxy
+          # the raw GeoJSON is 10s of MB and is re-fetchable from a public service: keep the
+          # provenance meta (with its sha256) instead, so the build stays auditable without bloat
+          rm -f data/external/sgmc_proxy_faults.geojson
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$D" || true
+          git diff --cached --quiet && echo "no proxy evidence changes" || {
+            git commit -m "evidence(proxy): independent fault catalogue built and scored [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          }
+
+      - name: Upload proxy artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-catalogue-${{ github.run_id }}
+          path: data/evidence/proxy/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  sweep:
+    name: emission-width sweep on the proxy population
+    runs-on: ubuntu-latest
+    needs: proxy
+    if: ${{ github.event.inputs.skip_sweep != '1' }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}          # pick up the proxy job's commit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (numpy/scipy/rasterio/scikit-image/pyyaml - no torch)
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet numpy scipy rasterio scikit-image pyyaml
+
+      - name: Download fold artifacts from run ${{ github.event.inputs.run_id || '35042805806' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fold-*
+          path: folds
+          run-id: ${{ github.event.inputs.run_id || '35042805806' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+
+      - name: Download the competition rasters
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          dl () { curl -fL --retry 3 --retry-delay 5 -o "data/$2" "$1"; echo "OK $2 $(stat -c%s "data/$2") bytes"; }
+          dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
+          dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
+          dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" training_features.tif
+
+      - name: Re-blend the fold maps, keeping the pre-shaping ensemble
+        run: |
+          set -euo pipefail
+          python scripts/blend_submission.py \
+            --folds folds/fold-*/ \
+            --config configs/config_ci_ensemble.yaml \
+            --sample data/sample_submission.tif --labels data/labels.tif \
+            --out submission.tif --report blend_report.json --weights equal \
+            --save-ensemble ensemble_mean.tif 2>&1 | tee blend.log
+
+      - name: Sweep floor x thinning x emission width on the PROXY population
+        run: |
+          set -euo pipefail
+          python scripts/eval_proxy_catalogue.py --pred ensemble_mean.tif \
+            --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
+            --out data/evidence/proxy/eval_sweep.json --sweep \
+            --shaping-grid "${{ github.event.inputs.shaping_grid || '4' }}" \
+            --dilate-grid "${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6' }}" \
+            2>&1 | tee data/evidence/proxy/eval_sweep.log
+
+      - name: Score the submission this run produced, on both truth sets
+        run: |
+          set -euo pipefail
+          python scripts/eval_proxy_catalogue.py --pred submission.tif \
+            --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
+            --out data/evidence/proxy/eval_reblend_submission.json --truth only \
+            2>&1 | tee data/evidence/proxy/eval_reblend_submission.log
+
+      - name: Reconcile the measurements into the emission decision record
+        run: |
+          set -euo pipefail
+          python scripts/decide_emission_width.py \
+            --out data/evidence/emission_decision.json \
+            2>&1 | tee data/evidence/proxy/emission_decision.log
+
+      - name: Commit the sweep evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          set +e
+          D=data/evidence/proxy
+          cp -f blend.log "$D/blend_sweep.log" 2>/dev/null || true
+          python - <<'PY' || true
+          import json, pathlib
+          p = pathlib.Path("data/evidence/proxy/fetch_meta.json")
+          m = json.loads(p.read_text()) if p.exists() else {}
+          print("proxy source:", (m.get("source") or {}).get("doi"), "-",
+                (m.get("result") or {}).get("features"), "features")
+          PY
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$D" data/evidence/emission_decision.json || true
+          git diff --cached --quiet && echo "no sweep evidence changes" || {
+            git commit -m "evidence(proxy): emission-width sweep on faults absent from the labels [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          }
+
+      - name: Upload sweep artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-sweep-${{ github.run_id }}
+          path: |
+            data/evidence/proxy/
+            data/evidence/emission_decision.json
+            blend_report.json
+            ensemble_mean.tif
+          retention-days: 30
+          if-no-files-found: ignore

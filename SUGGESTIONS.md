@@ -175,21 +175,62 @@
    skeleton on held-out folds, and reproduce it on a second ensemble before trusting it. Existing
    counter-evidence stands (2-fold toy: DTI weights helped 0.014→0.098; 6-fold mini ensemble: they hurt
    0.103→0.066) — which is exactly why the criterion is the LOO number and not the pooled one.
-   Evidence lands in `data/evidence/runs/35042805806-dilate-ab/` (workflow `reblend.yml`).
-1b. **Emission width — measured 2026-09-16.** `data/evidence/shift_robustness.json` (script
-   `scripts/measure_shift_robustness.py`): on the one window where a written submission and the
-   official label raster coexist, the skeleton kept 801 px against 5,154 label px and scored 0.0555,
-   while a 6-px band scored 0.1260 (8 px: 0.1249). The curve says the *operator family*, not the floor,
-   was the binding constraint. Motivation for the scored universe: the scored faults are new to the
-   expert-reviewed dataset (rules §1.1/§3.5), never seen in training, so their localisation error is
-   strictly larger than the catalogue's — the regime where a skeleton collects nothing and a band still
-   collects the R-neighbourhood credit. Surfaces on `docs/metric.html`.
+   Evidence lands in `data/evidence/runs/35042805806-experiment/` (workflow `reblend.yml`) —
+   corrected 2026-09-16: this line pointed at a `...-dilate-ab/` directory that no run ever wrote;
+   the committed evidence is in `runs/35042805806-experiment/`.
+1b. **Emission width — measured 2026-09-16, and the surrogate lost.** The sweep ran on the six real
+   held-out crops (run 35133590776): band 0 px 0.1903, 1 px 0.1525, 2 px 0.1281, 3 px 0.1128,
+   4 px 0.1037, 6 px 0.0908 — monotone decreasing, so the search chose the skeleton and the earlier
+   stress test (`data/evidence/shift_robustness.json`, +0.0705 for a 6-px band on a single window with
+   shifted labels) does not transfer to the population the labels can actually measure. Both numbers
+   are real; they answer different questions ("what if the fault is somewhere else" vs "what if it is
+   where I drew it"), and the scored faults are new faults, so the truth is between them.
+   *What would change the decision:* a measurement on the *scored* population — i.e. the public
+   leaderboard (3 submissions/week, needs the account) — or a proxy-catalogue harness
+   (item 3) that scores against faults the model never trained on. Until one of those exists, the
+   skeleton stands and `--dilate-grid` stays as a documented knob. The LOO floor gain (+0.0083) is
+   below the pre-registered 0.01 acceptance test: the post-processing is a small honest win, and the
+   model - not the shaping - is the lever.
+
+1c. **Emission width, third measurement — the proxy-catalogue harness answered it, and the answer
+   is "widen, but not yet" (2026-09-16, session 7).** The harness of item 3 landed and was swept
+   (workflow `proxy-eval`, run 35152701740, evidence `data/evidence/proxy/eval_sweep.json`). On the
+   61,664 px (6,166 km) of mapped fault trace that the labels do NOT contain, the proxy DTI rises
+   monotonically with the emission width: 0 px 0.0144, 1 px 0.0205, 2 px 0.0256, 3 px 0.0312,
+   4 px 0.0340, 6 px 0.0395 — the sign opposite to the held-out-crop result in 1b, on the population
+   that resembles the scored one. `scripts/decide_emission_width.py` reconciles the two by
+   projecting each measured policy onto a range of possible scored-truth sizes |G| (the metric's
+   wrong-mass term does not scale with |G|, the missing-mass term does), and writes
+   `data/evidence/emission_decision.json`:
+
+   * the 6-px band beats the shipped skeleton by **+0.0149** on the new-fault-like population
+     (condition 1 of the pre-registered rule, met) and at **3/3** plausible |G| anchors — the
+     GeoDAWN-blocks density anchor (≈26,000 px), the measured population (61,664 px) and the public
+     catalogue (60,988 px);
+   * it still *loses* below **21,328 px (2,133 km)** of scored truth, so the change is not dominant;
+     a scored truth smaller than that keeps the skeleton;
+   * condition 3 (reproduce on a second ensemble) is **unmet**, so the default is unchanged.
+
+   **What this session's numbers actually demand**: a *constant-ones* submission scores 0.0585 on
+   that population and beats our shipped 0.0247 and every swept candidate, because recall is worth
+   4× precision under α=0.2/β=0.8. Our emission is therefore not "conservative", it is
+   **under-emitting**. The next `proxy-eval` sweep must (a) extend the width grid beyond 6 px
+   (8, 10, 12) since the curve is still rising, (b) add a **halo-weighted** band (weight w < 1 on the
+   dilated ring instead of 1.0 — the ring earns a hit only if it lands within R, so a fractional
+   weight keeps most of the recall at a fraction of the FP), and (c) re-run on a second ensemble.
+   The maths for (b): a ring pixel at weight w adds w·(1 − α·DTI) if it lands within R of the truth
+   and costs α·w·DTI if it does not, so the ring pays exactly when its hit rate exceeds
+   α·DTI/(1 − α·DTI) ≈ 0.055 at DTI = 0.2.
+
 2. **`neg_fraction` A/B.** Hermant et al. (2025) train only on fault-bearing tiles, explicitly to avoid
    "learning images without mapped faults when there should be some due to operator observation bias" —
    i.e. absence from the catalogue is not evidence of absence. Our config keeps 35 % empty windows.
    *Acceptance:* improve the proxy-catalogue metric (`docs/DISCOVERY_PLAN.md` §3b); a *fall* in catalogue
    DTI is acceptable and expected, because the catalogue is not the scored universe.
-3. **Proxy-catalogue evaluation harness** (§3b): compile independent fault traces for the GeoDAWN region
+3. **Proxy-catalogue evaluation harness** (§3b) — **DONE 2026-09-16 (session 6-7)**: landed as
+   `scripts/fetch_proxy_faults.py` → `build_proxy_catalogue.py` → `eval_proxy_catalogue.py`, ran on
+   the runners (runs 35152701537, 35152701740), acceptance passed (catalogue-copy = 0.0000 on the
+   absent-from-labels subset). Remaining follow-up is item 1c above. Original specification: compile independent fault traces for the GeoDAWN region
    (state geologic maps — pre-Quaternary faults are by construction absent from the Quaternary database
    used for the labels), intersect with `labels.tif`, and report DTI on the
    *present-in-proxy-but-absent-from-labels* subset. *Acceptance:* the harness reproduces the known
@@ -202,6 +243,20 @@
    "report" should assert the thing it reports on exists and is non-degenerate.
 
 ---
+
+## 8. Session 2026-09-16 (second pass) — implemented + measured
+
+| Item | Status | Evidence |
+|---|---|---|
+| Rules quotation check red for 4 runs, then fixed | ✅ **29/29 verbatim**, 18 page-furniture removals recorded; CI green (run 35153898428) | `data/evidence/rules_quotes.json`, `tests/test_rules_quotes.py` (8 tests) |
+| Blank-line-before-page-furniture bug (real PDF only) | ✅ **fixed** + proved with a synthetic reportlab→pypdf PDF in CI | `tests/test_rules_quotes.py::test_synthetic_pdf_round_trip…` |
+| Emission-width question had two contradictory measurements | ✅ **third measurement built and swept** on the new-fault-like population; decision record written | `data/evidence/proxy/eval_sweep.json`, `data/evidence/emission_decision.json`, `scripts/decide_emission_width.py` |
+| Truth length reported 10× short (`0.01` km/px) | ✅ **fixed** (61,664 px = 6,166 km, not 616.6 km); pinned by test | `scripts/eval_proxy_catalogue.py`, `tests/test_proxy_catalogue.py::test_eval_units_support_and_role_are_unambiguous` |
+| Blanket-ones baseline changed meaning with the raster scored | ✅ **fixed** — anchored to the label footprint, source recorded, whole-grid variant kept for scale | same test |
+| `as_submitted` mislabelled the sweep's soft ensemble map as a submission | ✅ **fixed** — `as_provided` + alias + `prediction_role`; sweep candidates clipped to the footprint (legal-submission scoring) | same test |
+| Site had no external bar to calibrate against | ✅ **new page** `docs/verification.html`: the public leaderboard read directly, the standalone disclaimer, and every load-bearing external claim re-checked from its own URL | `data/evidence/independent_verification.json`, `tests/test_site.py` (2 new tests) |
+| Emission width | ⏸️ **decided: widen, not yet** — condition 3 (second ensemble) unmet | `data/evidence/emission_decision.json` |
+| Second ensemble for the width decision | ❌ **blocked on GPU + data placement** (the standing blocker) | — |
 
 ## 7. Session 2026-09-16 (review) — implemented + measured
 

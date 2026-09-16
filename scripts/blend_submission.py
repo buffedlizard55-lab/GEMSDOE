@@ -40,9 +40,10 @@ import rasterio
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.metrics import compute_distance_weighted_tversky, score_arrays_blocked  # noqa: E402
+from src.metrics import (GtContext, compute_distance_weighted_tversky,        # noqa: E402
+                         score_arrays_blocked)
 from src.submission_optim import optimize_submission, shaping_thresholds  # noqa: E402
-from src.submission_io import clean_profile, write_submission  # noqa: E402
+from src.submission_io import clean_profile, sha256_pixels, write_submission  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -120,8 +121,7 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
         # --calibrate loo (fixed 2026-09-16, session 6).
         usable = [dict(f, pred_crop=pre(f["pred_crop"])) for f in usable]
     table = []
-    raw_mean = float(np.mean([compute_distance_weighted_tversky(f["pred_crop"], f["gt_crop"],
-                                                                 R_pixels=R, alpha=alpha, beta=beta)
+    raw_mean = float(np.mean([_dti(f["pred_crop"], f["gt_crop"], R, alpha, beta)
                               for f in usable]))
     best = (raw_mean, float(thresholds[0]), True, 0, 0)
     for t in thresholds:
@@ -130,10 +130,9 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
             # floor-passing mask is already a blob, and growing it further is a pure FP cost.
             for dila in (dilate_options if thin else (0,)):
                 v = float(np.mean([
-                    compute_distance_weighted_tversky(
-                        optimize_submission(f["pred_crop"], R=R, t0=float(t), thin=thin,
-                                            hard=True, gamma=1.0, dilate=dila),
-                        f["gt_crop"], R_pixels=R, alpha=alpha, beta=beta)
+                    _dti(optimize_submission(f["pred_crop"], R=R, t0=float(t), thin=thin,
+                                             hard=True, gamma=1.0, dilate=dila),
+                         f["gt_crop"], R, alpha, beta)
                     for f in usable]))
                 if v > best[0]:
                     best = (v, float(t), thin, dila, len(table))
@@ -142,8 +141,26 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
     return best[1], best[2], best[0], table, best[3]
 
 
+# One GtContext per label array per radius.  The label geometry (the mask, the label-pixel
+# coordinates, the distance transform that FP_w needs) does not change while a search runs over
+# hundreds of candidate floors against the same held-out crop; rebuilding it per candidate is what
+# made the leave-one-fold-out audit run for over 90 minutes on a runner (2026-09-16).  The cache
+# holds a reference to the array so its id() cannot be recycled while an entry is alive.
+_GT_CACHE: dict = {}
+
+
+def _gt_ctx(gt, R):
+    key = (id(gt), int(R))
+    ctx = _GT_CACHE.get(key)
+    if ctx is None or ctx.source is not gt:
+        ctx = GtContext(gt, R)
+        ctx.source = gt
+        _GT_CACHE[key] = ctx
+    return ctx
+
+
 def _dti(pred, gt, R, alpha, beta):
-    return float(compute_distance_weighted_tversky(pred, gt, R_pixels=R, alpha=alpha, beta=beta))
+    return float(_gt_ctx(gt, R).score(pred, alpha=alpha, beta=beta))
 
 
 def loo_aggregation(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None,
@@ -250,6 +267,9 @@ def main():
     ap.add_argument("--sample", default=None, help="sample_submission.tif — authoritative grid for the write")
     ap.add_argument("--labels", default=None, help="known-fault raster for the informational score")
     ap.add_argument("--out", default="submission.tif")
+    ap.add_argument("--save-ensemble", default=None,
+                    help="write the pre-shaping ensemble mean (probability raster) here, so policy "
+                         "sweeps and proxy-catalogue scoring act on the map shaping consumed")
     ap.add_argument("--report", default=None, help="defaults to <out stem>_report.json")
     ap.add_argument("--frangi", action="store_true",
                     help="A/B knob: vesselness (Frangi) line enhancement on the blended mean map "
@@ -410,6 +430,27 @@ def main():
                                 transform=rasterio.Affine(*grid["transform"]),
                                 height=q.shape[0], width=q.shape[1])
 
+    # Optional: persist the pre-shaping ensemble mean.  Policy questions (floor, emission width,
+    # thinning) can only be re-asked on the map shaping actually consumed; re-deriving it from the
+    # shaped submission would bake the current policy into the comparison.  Written on the same grid
+    # and with the same profile rules as the submission.
+    if args.save_ensemble:
+        ens = np.asarray(mean, np.float32)
+        if ens.shape != q.shape:
+            buf = np.full(q.shape, np.nan, np.float32)
+            hh, ww = min(q.shape[0], ens.shape[0]), min(q.shape[1], ens.shape[1])
+            buf[:hh, :ww] = ens[:hh, :ww]
+            ens = buf
+        eprof = clean_profile(dict(profile), dtype="float32")
+        eprof["nodata"] = float("nan")
+        ip = Path(args.save_ensemble)
+        ip.parent.mkdir(parents=True, exist_ok=True)
+        with rasterio.open(ip, "w", **eprof) as dst:
+            dst.write(ens.astype(np.float32), 1)
+            dst.set_band_description(1, "MC-ensemble mean probability, pre-shaping")
+        print(f"wrote ensemble mean {ip} ({ip.stat().st_size} B) - the exact input to shaping, "
+              "kept so policy sweeps do not have to re-derive it")
+
     out = Path(args.out)
     # write_submission() reopens the bytes on disk and raises unless it reads back as a
     # single-band float32 raster on this grid with non-zero mass -> a crashed or empty
@@ -477,6 +518,7 @@ def main():
                               collapse_factor=(pre_mass / post_mass if post_mass > 0 else None)),
         fold_weights=("equal" if ws is None else [round(float(w), 4) for w in ws]),
         submission=dict(path=str(out), bytes=out.stat().st_size, sha256=sha256(out),
+                        sha256_pixels=sha256_pixels(out),
                         grid=grid, finite_px=int(np.isfinite(q).sum()), total_px=int(q.size),
                         nonzero_px=int(np.count_nonzero(np.nan_to_num(q))),
                         min=float(np.nanmin(q)), max=float(np.nanmax(q)),

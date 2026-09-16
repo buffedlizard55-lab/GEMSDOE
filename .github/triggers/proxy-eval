@@ -1,0 +1,13 @@
+proxy-eval
+
+# 2026-09-16 (session 7): build the independent (proxy) fault catalogue, score the
+# committed submission against faults the labels lack, and sweep the emission width there.
+
+# 2026-09-16 (session 7, second run): re-run with the corrected measurement code and the wider
+# emission grid.  The first sweep (run 35152701740) was scored by scripts/eval_proxy_catalogue.py
+# before three defects were fixed: truth length reported 10x short (0.01 instead of 0.1 km/px), the
+# blanket-ones baseline taken over np.isfinite(pred) so its meaning moved with the raster scored,
+# and the score of --pred published as "as submitted" although the sweep's --pred was the
+# pre-shaping ensemble map.  This run also clips every candidate to the data footprint (a legal
+# submission is NaN outside it), extends the width grid to 12 px because the proxy curve was still
+# rising at 6, and writes data/evidence/emission_decision.json from the sweep.

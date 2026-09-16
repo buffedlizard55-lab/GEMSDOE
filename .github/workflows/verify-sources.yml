@@ -91,6 +91,18 @@ jobs:
           python scripts/verify_links.py --catalog docs/data_catalog.csv \
             --json-out docs/link_verification.json --csv-out docs/data_catalog.verified.csv || true
 
+      - name: Regenerate the site so the published HTML cannot disagree with the new JSON
+        run: |
+          set -euo pipefail
+          # The audit gate compares published tables against their artefacts, but a *regenerated*
+          # artefact used to be able to drift from the already-built HTML: on 2026-09-16 the
+          # main-branch run rewrote docs/link_verification.json while the deployed sources page
+          # still showed the previous run's counts.  Rebuilding here makes that impossible - the
+          # site is always rendered from the evidence that was just measured - and the audit
+          # fails the job if anything is inconsistent.
+          python scripts/build_site.py
+          python scripts/audit_docs.py | tail -3
+
       - name: Commit the verification evidence
         run: |
           set -euo pipefail
@@ -98,6 +110,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f data/evidence/rules_quotes.json data/evidence/rule_sources_verification.json \
                      docs/link_verification.json docs/data_catalog.verified.csv 2>/dev/null || true
+          # the regenerated pages (step above)
+          git add -f docs/*.html docs/style.css 2>/dev/null || true
           git diff --cached --quiet && echo "no evidence changes" || {
             git commit -m "verify(sources): rules quotes + catalog links re-checked [skip ci]"
             git pull --rebase origin "${GITHUB_REF_NAME}"

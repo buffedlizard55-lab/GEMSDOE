@@ -1,0 +1,504 @@
+{
+ "generated_utc": "2026-09-16T21:49:06+00:00",
+ "generated_by": "scripts/eval_proxy_catalogue.py",
+ "purpose": "score a prediction against faults the training labels do not contain (docs/DISCOVERY_PLAN.md 3b) - the only local measurement aligned with the scored 'new fault' population",
+ "inputs": {
+  "pred": "ensemble_mean.tif",
+  "pred_sha256": "1dcbb20771581fd56a09860e4482ab774abcc5ee777c717723363b5980882f5a",
+  "pred_meta": {
+   "width": 3292,
+   "height": 3730,
+   "crs": "EPSG:32611",
+   "transform": [
+    100.0,
+    0.0,
+    243350.0,
+    0.0,
+    -100.0,
+    4508550.0
+   ],
+   "dtype": "float32",
+   "nodata": NaN
+  },
+  "proxy": "data/evidence/proxy/proxy_catalogue.tif",
+  "proxy_sha256": "7563e187171f7210d70295f958b0b2714c1fa504afa35f9a4688fc99b1e1122a",
+  "proxy_meta": {
+   "width": 3292,
+   "height": 3730,
+   "crs": "EPSG:32611",
+   "transform": [
+    100.0,
+    0.0,
+    243350.0,
+    0.0,
+    -100.0,
+    4508550.0
+   ],
+   "dtype": "uint8",
+   "nodata": null
+  },
+  "labels": "data/labels.tif",
+  "truth_mode": "only",
+  "metric": {
+   "R_pixels": 3,
+   "R_meters": 300,
+   "alpha": 0.2,
+   "beta": 0.8,
+   "eps": 1e-07
+  }
+ },
+ "truth": {
+  "mode": "only",
+  "px": 61664,
+  "km": 616.64,
+  "proxy_only_px": 61664,
+  "proxy_near_label_px": 20491,
+  "catalogue_coverage_of_proxy": 0.2494
+ },
+ "prediction": {
+  "emission_px": 5165852,
+  "mass": 575330.1
+ },
+ "results": {
+  "as_submitted": {
+   "dti": 0.047822,
+   "TP_w": 7688.689,
+   "FP_w": 549544.474,
+   "FN_w": 53975.311,
+   "mass": 575330.1,
+   "emission_px": 5165852
+  },
+  "baselines": {
+   "zeros": {
+    "dti": 0.0,
+    "TP_w": 0.0,
+    "FP_w": 0.0,
+    "FN_w": 61664.0,
+    "mass": 0.0,
+    "emission_px": 0
+   },
+   "blanket_ones": {
+    "dti": 0.024901,
+    "TP_w": 61664.0,
+    "FP_w": 12073458.832,
+    "FN_w": 0.0,
+    "mass": 12279160.0,
+    "emission_px": 12279160
+   },
+   "catalogue_copy": {
+    "dti": 0.0,
+    "TP_w": 0.0,
+    "FP_w": 60988.0,
+    "FN_w": 61664.0,
+    "mass": 60988.0,
+    "emission_px": 60988
+   },
+   "catalogue_plus_submission": {
+    "dti": 0.058503,
+    "TP_w": 61650.333,
+    "FP_w": 4960664.122,
+    "FN_w": 13.667,
+    "mass": 5165946.0,
+    "emission_px": 5165946
+   }
+  },
+  "acceptance": {
+   "catalogue_copy_dti_on_proxy_only": 0.0,
+   "expected": 0.0,
+   "passed": true,
+   "meaning": "a catalogue-copy submission earns nothing here, so this population is not a restatement of the training labels"
+  },
+  "shaping_sweep": [
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 6,
+    "dti": 0.039538,
+    "TP_w": 3525.355,
+    "FP_w": 195635.32,
+    "FN_w": 58138.645,
+    "mass": 205477.0,
+    "emission_px": 205477,
+    "mean_kept_px": 205477
+   },
+   {
+    "t0": 0.0001,
+    "thin": true,
+    "dilate": 6,
+    "dti": 0.039538,
+    "TP_w": 3525.355,
+    "FP_w": 195635.32,
+    "FN_w": 58138.645,
+    "mass": 205477.0,
+    "emission_px": 205477,
+    "mean_kept_px": 205477
+   },
+   {
+    "t0": 0.00208008,
+    "thin": true,
+    "dilate": 6,
+    "dti": 0.039538,
+    "TP_w": 3525.355,
+    "FP_w": 195635.32,
+    "FN_w": 58138.645,
+    "mass": 205477.0,
+    "emission_px": 205477,
+    "mean_kept_px": 205477
+   },
+   {
+    "t0": 0.0432675,
+    "thin": true,
+    "dilate": 6,
+    "dti": 0.039538,
+    "TP_w": 3525.355,
+    "FP_w": 195635.32,
+    "FN_w": 58138.645,
+    "mass": 205477.0,
+    "emission_px": 205477,
+    "mean_kept_px": 205477
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 4,
+    "dti": 0.033985,
+    "TP_w": 2583.886,
+    "FP_w": 130916.155,
+    "FN_w": 59080.114,
+    "mass": 137596.0,
+    "emission_px": 137596,
+    "mean_kept_px": 137596
+   },
+   {
+    "t0": 0.0001,
+    "thin": true,
+    "dilate": 4,
+    "dti": 0.033985,
+    "TP_w": 2583.886,
+    "FP_w": 130916.155,
+    "FN_w": 59080.114,
+    "mass": 137596.0,
+    "emission_px": 137596,
+    "mean_kept_px": 137596
+   },
+   {
+    "t0": 0.00208008,
+    "thin": true,
+    "dilate": 4,
+    "dti": 0.033985,
+    "TP_w": 2583.886,
+    "FP_w": 130916.155,
+    "FN_w": 59080.114,
+    "mass": 137596.0,
+    "emission_px": 137596,
+    "mean_kept_px": 137596
+   },
+   {
+    "t0": 0.0432675,
+    "thin": true,
+    "dilate": 4,
+    "dti": 0.033985,
+    "TP_w": 2583.886,
+    "FP_w": 130916.155,
+    "FN_w": 59080.114,
+    "mass": 137596.0,
+    "emission_px": 137596,
+    "mean_kept_px": 137596
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 3,
+    "dti": 0.031163,
+    "TP_w": 2194.029,
+    "FP_w": 103170.515,
+    "FN_w": 59469.971,
+    "mass": 108521.0,
+    "emission_px": 108521,
+    "mean_kept_px": 108521
+   },
+   {
+    "t0": 0.0001,
+    "thin": true,
+    "dilate": 3,
+    "dti": 0.031163,
+    "TP_w": 2194.029,
+    "FP_w": 103170.515,
+    "FN_w": 59469.971,
+    "mass": 108521.0,
+    "emission_px": 108521,
+    "mean_kept_px": 108521
+   },
+   {
+    "t0": 0.00208008,
+    "thin": true,
+    "dilate": 3,
+    "dti": 0.031163,
+    "TP_w": 2194.029,
+    "FP_w": 103170.515,
+    "FN_w": 59469.971,
+    "mass": 108521.0,
+    "emission_px": 108521,
+    "mean_kept_px": 108521
+   },
+   {
+    "t0": 0.0432675,
+    "thin": true,
+    "dilate": 3,
+    "dti": 0.031163,
+    "TP_w": 2194.029,
+    "FP_w": 103170.515,
+    "FN_w": 59469.971,
+    "mass": 108521.0,
+    "emission_px": 108521,
+    "mean_kept_px": 108521
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 2,
+    "dti": 0.025601,
+    "TP_w": 1620.261,
+    "FP_w": 68166.062,
+    "FN_w": 60043.739,
+    "mass": 71583.0,
+    "emission_px": 71583,
+    "mean_kept_px": 71583
+   },
+   {
+    "t0": 0.0001,
+    "thin": true,
+    "dilate": 2,
+    "dti": 0.025601,
+    "TP_w": 1620.261,
+    "FP_w": 68166.062,
+    "FN_w": 60043.739,
+    "mass": 71583.0,
+    "emission_px": 71583,
+    "mean_kept_px": 71583
+   },
+   {
+    "t0": 0.00208008,
+    "thin": true,
+    "dilate": 2,
+    "dti": 0.025601,
+    "TP_w": 1620.261,
+    "FP_w": 68166.062,
+    "FN_w": 60043.739,
+    "mass": 71583.0,
+    "emission_px": 71583,
+    "mean_kept_px": 71583
+   },
+   {
+    "t0": 0.0432675,
+    "thin": true,
+    "dilate": 2,
+    "dti": 0.025601,
+    "TP_w": 1620.261,
+    "FP_w": 68166.062,
+    "FN_w": 60043.739,
+    "mass": 71583.0,
+    "emission_px": 71583,
+    "mean_kept_px": 71583
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 1,
+    "dti": 0.020537,
+    "TP_w": 1185.752,
+    "FP_w": 40850.058,
+    "FN_w": 60478.248,
+    "mass": 42883.0,
+    "emission_px": 42883,
+    "mean_kept_px": 42883
+   },
+   {
+    "t0": 0.0001,
+    "thin": true,
+    "dilate": 1,
+    "dti": 0.020537,
+    "TP_w": 1185.752,
+    "FP_w": 40850.058,
+    "FN_w": 60478.248,
+    "mass": 42883.0,
+    "emission_px": 42883,
+    "mean_kept_px": 42883
+   },
+   {
+    "t0": 0.00208008,
+    "thin": true,
+    "dilate": 1,
+    "dti": 0.020537,
+    "TP_w": 1185.752,
+    "FP_w": 40850.058,
+    "FN_w": 60478.248,
+    "mass": 42883.0,
+    "emission_px": 42883,
+    "mean_kept_px": 42883
+   },
+   {
+    "t0": 0.0432675,
+    "thin": true,
+    "dilate": 1,
+    "dti": 0.020537,
+    "TP_w": 1185.752,
+    "FP_w": 40850.058,
+    "FN_w": 60478.248,
+    "mass": 42883.0,
+    "emission_px": 42883,
+    "mean_kept_px": 42883
+   },
+   {
+    "t0": 0.0,
+    "thin": true,
+    "dilate": 0,
+    "dti": 0.014425,
+    "TP_w": 753.016,
+    "FP_w": 13609.84,
+    "FN_w": 60910.984,
+    "mass": 14285.0,
+    "emission_px": 14285,
+    "mean_kept_px": 14285
+   },
+   {
+    "t0": 0.0001,
+    "thin": true,
+    "dilate": 0,
+    "dti": 0.014425,
+    "TP_w": 753.016,
+    "FP_w": 13609.84,
+    "FN_w": 60910.984,
+    "mass": 14285.0,
+    "emission_px": 14285,
+    "mean_kept_px": 14285
+   },
+   {
+    "t0": 0.00208008,
+    "thin": true,
+    "dilate": 0,
+    "dti": 0.014425,
+    "TP_w": 753.016,
+    "FP_w": 13609.84,
+    "FN_w": 60910.984,
+    "mass": 14285.0,
+    "emission_px": 14285,
+    "mean_kept_px": 14285
+   },
+   {
+    "t0": 0.0432675,
+    "thin": true,
+    "dilate": 0,
+    "dti": 0.014425,
+    "TP_w": 753.016,
+    "FP_w": 13609.84,
+    "FN_w": 60910.984,
+    "mass": 14285.0,
+    "emission_px": 14285,
+    "mean_kept_px": 14285
+   },
+   {
+    "t0": 0.9,
+    "thin": true,
+    "dilate": 6,
+    "dti": 4.1e-05,
+    "TP_w": 2.0,
+    "FP_w": 129.36,
+    "FN_w": 61662.0,
+    "mass": 139.0,
+    "emission_px": 139,
+    "mean_kept_px": 139
+   },
+   {
+    "t0": 0.9,
+    "thin": true,
+    "dilate": 4,
+    "dti": 2.4e-05,
+    "TP_w": 1.195,
+    "FP_w": 64.317,
+    "FN_w": 61662.805,
+    "mass": 67.0,
+    "emission_px": 67,
+    "mean_kept_px": 67
+   },
+   {
+    "t0": 0.9,
+    "thin": true,
+    "dilate": 3,
+    "dti": 1.2e-05,
+    "TP_w": 0.588,
+    "FP_w": 42.355,
+    "FN_w": 61663.412,
+    "mass": 43.0,
+    "emission_px": 43,
+    "mean_kept_px": 43
+   },
+   {
+    "t0": 0.9,
+    "thin": true,
+    "dilate": 0,
+    "dti": 0.0,
+    "TP_w": 0.0,
+    "FP_w": 3.0,
+    "FN_w": 61664.0,
+    "mass": 3.0,
+    "emission_px": 3,
+    "mean_kept_px": 3
+   },
+   {
+    "t0": 0.9,
+    "thin": true,
+    "dilate": 1,
+    "dti": 0.0,
+    "TP_w": 0.0,
+    "FP_w": 11.0,
+    "FN_w": 61664.0,
+    "mass": 11.0,
+    "emission_px": 11,
+    "mean_kept_px": 11
+   },
+   {
+    "t0": 0.9,
+    "thin": true,
+    "dilate": 2,
+    "dti": 0.0,
+    "TP_w": 0.0,
+    "FP_w": 23.0,
+    "FN_w": 61664.0,
+    "mass": 23.0,
+    "emission_px": 23,
+    "mean_kept_px": 23
+   }
+  ],
+  "sweep_best": {
+   "t0": 0.0,
+   "thin": true,
+   "dilate": 6,
+   "dti": 0.039538,
+   "TP_w": 3525.355,
+   "FP_w": 195635.32,
+   "FN_w": 58138.645,
+   "mass": 205477.0,
+   "emission_px": 205477,
+   "mean_kept_px": 205477
+  },
+  "best_per_emission_width": {
+   "0": 0.014425,
+   "1": 0.020537,
+   "2": 0.025601,
+   "3": 0.031163,
+   "4": 0.033985,
+   "6": 0.039538
+  },
+  "sweep_verdict": {
+   "skeleton_dti": 0.014425,
+   "best_dti": 0.039538,
+   "acceptance_rule": "change the default shaping only if a candidate beats the current default by > 0.01 proxy DTI here AND is reproduced on a second ensemble; this population is the closest measurable stand-in for the scored one, not the scored one"
+  }
+ },
+ "caveats": [
+  "Population, not score: SGMC faults are published surface mapping; the scored faults are expert interpretations of the GeoDAWN geophysics. Compare policies, not leaderboards.",
+  "The FP term is a global sum over the whole raster, exactly as the official metric - the truth set is sparse, so a broad, diffuse prediction is punished here too.",
+  "Code-2 pixels are 'absent from the training labels', which is not the same as 'absent from the literature'."
+ ]
+}

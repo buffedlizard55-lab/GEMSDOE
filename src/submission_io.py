@@ -47,6 +47,22 @@ def sha256_file(path) -> str:
     return h.hexdigest()
 
 
+def sha256_pixels(path) -> str:
+    """Hash the PIXELS only, not the container.
+
+    WHY THIS IS NOT REDUNDANT WITH sha256(file).  Measured 2026-09-16: two runs of the identical
+    fold artifacts produced submissions with **bit-identical pixels** (this hash matched) but
+    different file hashes, because one float64 in a GeoTIFF metadata tag differed by one ULP
+    (the selected floor, 0.4696741044002384 vs ...2383, from geomspace under a different numpy
+    build).  The container hash is the right thing to attach to a submitted file - it is what a
+    reviewer can re-check - but the pixel hash is the right thing to compare two runs with, so both
+    are recorded.  NaN is hashed as NaN (not 0) so a footprint difference cannot hide.
+    """
+    with rasterio.open(path) as src:
+        arr = src.read()
+    return hashlib.sha256(np.ascontiguousarray(arr, dtype="<f4").tobytes()).hexdigest()
+
+
 def clean_profile(src_profile: dict | None = None, *, height: int | None = None,
                   width: int | None = None, crs=None, transform=None,
                   dtype: str = "float32", compress: str = "lzw",

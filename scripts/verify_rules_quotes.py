@@ -37,6 +37,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# The official location of the rules, recorded in every report so that a local extraction path
+# (--pdf /tmp/rules_canonical.pdf, as the workflow uses) can never become the published link.
+RULES_URL = "https://docs.nlr.gov/docs/fy26osti/96647.pdf"
+
 # (id, section hint, exact sentence as printed, why it matters here)
 QUOTES = [
     ("two_phases", "§1.1",
@@ -98,6 +102,55 @@ QUOTES = [
      "solution, and they should be able to sufficiently reproduce the winning results and generate "
      "predictions on new data samples.",
      "Why every run here commits its logs, hashes, environment pins and reproduce steps."),
+    # ---- added 2026-09-16 (session 7) from an INDEPENDENT network path --------------------
+    # The sentences below were read from https://docs.nlr.gov/docs/fy26osti/96647.pdf through a
+    # different fetcher from the one this workflow uses (the agent tool's PDF extractor, whose
+    # egress is not subject to the development sandbox's allowlist).  They are added here so the
+    # reading is machine-checked on every run instead of resting on a hand-read: two independent
+    # extractions agreeing verbatim is stronger evidence than either alone.  A mismatch fails the
+    # step, which is the point - `entry`/`citizen`/... below behave the same way.
+    ("prize_split", "§1.1",
+     "There will be two phases of prize awards.",
+     "Two prize rounds over one submission; the split matters for risk allocation."),
+    ("phase1_pool_amount", "§1.1",
+     "The Phase 1 pool of $50,000 will be distributed equally among the top five competitors, as "
+     "judged by their performance on the private test set of fault labels.",
+     "Phase 1 is an equal split among the top five, i.e. rank inside the top five is not paid "
+     "differently - the $250k Phase 2 ranking is where rank itself pays."),
+    ("experts_update_labels", "§1.1",
+     "A panel of experts will then use the submitted predictions to update fault labels in the region.",
+     "Submissions are read by the experts before Phase 2: a false positive that is geologically "
+     "plausible can become a label, which the metric alone does not reward."),
+    ("features_single_geotiff", "§3.3",
+     "This dataset will be provided as a single multiband GeoTIFF, with one feature per band.",
+     "19 bands in one file on one grid - band order is the only documentation of semantics."),
+    ("dem_download_instructions", "§3.3",
+     "In addition, instructions will be provided for downloading USGS DEM elevation data at 1-m "
+     "resolution for the GeoDAWN region.",
+     "The 1 m DEM is delivered as a link list (1m_DEM_links.csv / the data tab's PDF), not as "
+     "raster tiles - which is why this repo stores a verified tile inventory in data/dem_links.json."),
+    ("all_faults", "§3.3",
+     "Competitors will submit their predictions for all faults in the GeoDAWN study area as a "
+     "GeoTIFF raster at 100-m resolution.",
+     "'All faults' - not only the new ones and not only the catalogued ones."),
+    ("one_final_submission", "§3.5",
+     "Before the end of the competition, you must choose only one submission for evaluation across "
+     "both prize rounds.",
+     "One artefact must serve both rounds; nothing can be tuned for one and swapped for the other."),
+    ("one_final_per_entity", "§3.4",
+     "Each participating entity (team, organization, or individual prize competitor not on a team) "
+     "is allowed to have one final submission",
+     "Per-entity, not per-account: duplicate submissions from one entity are not a strategy."),
+    ("no_private_knowledge", "§3.6.2",
+     "You must choose only one submission to use for scoring across both prize rounds, and you must "
+     "make your decision without knowledge of your scores on the private test set.",
+     "Explicit anti-overfitting rule: the public leaderboard is the only feedback there is."),
+    ("test_set_composition", "§3.6.2",
+     "The set of faults included in the public test dataset and the relative weight of faults in "
+     "both test datasets will be determined by the competition organizers before the start of the "
+     "competition.",
+     "Public/private composition and fault weighting are the organizers' choice and are fixed "
+     "before the start - so public-LB optimising cannot reweight them."),
     ("entry", "§3.1",
      "To enter the competition, you must create a profile on the DrivenData platform and agree to "
      "abide by the competition rules and restrictions.",
@@ -122,6 +175,28 @@ QUOTES = [
 ]
 
 
+def divergence(quote: str, text: str, window: int = 120) -> dict:
+    """Where does the document stop agreeing with a quote?  (bisect the longest present prefix)
+
+    Used only for quotes that failed, so a failure ships with the document's own words next to the
+    quoted ones - which is how a typo in a quote gets distinguished from a moving document.
+    """
+    lo, hi = 0, len(quote)
+    while lo < hi:                                    # longest prefix present as a substring
+        mid = (lo + hi + 1) // 2
+        if quote[:mid] in text:
+            lo = mid
+        else:
+            hi = mid - 1
+    at = text.find(quote[:lo]) if lo else -1
+    start = at + lo if at >= 0 else -1
+    return {"prefix_len": lo,
+            "prefix_tail": quote[max(0, lo - 60):lo],
+            "quote_continues": quote[lo:lo + window],
+            "doc_continues": text[start:start + window] if start >= 0 else None,
+            "doc_offset": start}
+
+
 def norm(text: str) -> str:
     """Normalise a document and a quote to the same form.
 
@@ -139,7 +214,79 @@ def norm(text: str) -> str:
     return t
 
 
-def extract(path: Path) -> str:
+def _trace_page(trace: list, page_no: int, raw: str, kept: str) -> None:
+    """Record how one page came out of the extractor, so a miss can be diagnosed from evidence.
+
+    MEASURED 2026-09-16: the first attempt at removing page furniture removed nothing at all -
+    the page number was not where the diagnostic implied it would be (top or foot of the page),
+    and no job log is readable from the development sandbox.  The trace answers the question the
+    PDF cannot be re-fetched to ask: what does each page's own text look like at its head and tail?
+    """
+    def _lines(t: str) -> list:
+        return [ln.strip() for ln in t.splitlines() if ln.strip()]
+    rk, rl = _lines(raw), _lines(kept)
+    blanks = len([ln for ln in raw.splitlines()[:3] if not ln.strip()])
+    trace.append({"page": page_no, "chars": len(raw),
+                  "head": (rl[0][:80] if rl else ""), "tail": (rl[-1][:80] if rl else ""),
+                  "raw_head": (rk[0][:40] if rk else ""), "raw_tail": (rk[-1][:40] if rk else ""),
+                  # escaped: an invisible character would otherwise survive into the report looking
+                  # exactly like a plain digit
+                  "raw_head_repr": (repr(rk[0])[:60] if rk else ""),
+                  "blank_lines_before_first_text": blanks})
+
+
+def strip_page_furniture(page_text: str, page_no: int | None = None,
+                         record: list | None = None, prev_tail: str | None = None,
+                         trace: list | None = None) -> str:
+    """Remove page-margin furniture (a bare page number) from ONE page's extracted text.
+
+    MEASURED 2026-09-16 (run 35153102372).  pypdf emits a page's number as the first line of that
+    page, so a sentence that continues across a page break comes back with a bare number inside it:
+
+        "... and the 12 relative weight of faults in both test datasets will be determined ..."
+
+    That is furniture, not prose: it is what a reader sees in the margin, and leaving it in makes a
+    genuinely verbatim quotation unmatchable.  Only lines that are *nothing but* a number, at the
+    very start or the very end of a page, are removed; nothing inside the page's text is touched,
+    and every other character is compared exactly as before.  The old behaviour is still available
+    with --keep-page-furniture, so this cannot quietly become a fuzzy match.
+    """
+    # Blank lines are dropped rather than kept as positions: the extractor emits a leading newline
+    # on some pages (MEASURED 2026-09-16 - run 35153553275 removed nothing although every page's
+    # first *visible* line was its number), and the only consumer of this text normalises whitespace
+    # away anyway.  The rules below must see the page's first and last REAL lines.
+    lines = [ln.strip() for ln in page_text.splitlines() if ln.strip()]
+
+    def _drop(idx: int, why: str) -> None:
+        if record is not None:
+            record.append({"page": page_no, "removed": lines[idx], "why": why})
+        lines.pop(idx)
+
+    while lines and re.fullmatch(r"\d{1,4}", lines[0]):
+        _drop(0, "bare number at the top of the page")
+    while lines and re.fullmatch(r"\d{1,4}", lines[-1]):
+        _drop(len(lines) - 1, "bare number at the foot of the page")
+    # pypdf sometimes emits the page number glued to the first line of that page
+    # ("12 relative weight of faults ..."), so a sentence continuing across the break reads as
+    # "... and the 12 relative weight ...".  Only a leading run of digits EQUAL TO THE PAGE NUMBER
+    # is removed - a number in prose that merely starts a page is left alone.
+    continues = prev_tail is None or not re.search(r"[.!?:;)\]]\s*$", prev_tail.strip())
+    if page_no is not None and lines and continues:
+        m = re.match(r"^(\d{1,4})\s+(\S.*)$", lines[0], flags=re.S)
+        if m and int(m.group(1)) == page_no:
+            if record is not None:
+                record.append({"page": page_no, "removed": m.group(1),
+                               "why": "page number glued to the first line of the page "
+                                      "(the previous page ends mid-sentence)"})
+            lines[0] = m.group(2)
+    kept = "\n".join(lines)
+    if trace is not None:
+        _trace_page(trace, page_no if page_no is not None else -1, page_text, kept)
+    return kept
+
+
+def extract(path: Path, keep_page_furniture: bool = False, notes: list | None = None,
+            trace: list | None = None) -> str:
     if path.suffix.lower() == ".txt":
         return path.read_text(encoding="utf-8", errors="replace")
     try:
@@ -147,7 +294,18 @@ def extract(path: Path) -> str:
     except ImportError:                                             # pragma: no cover
         raise SystemExit("pypdf is required to read a PDF: pip install pypdf")
     reader = PdfReader(str(path))
-    return "\n".join((pg.extract_text() or "") for pg in reader.pages)
+    pages, prev_tail = [], None
+    for i, pg in enumerate(reader.pages, start=1):
+        raw = pg.extract_text() or ""
+        t = raw
+        if not keep_page_furniture:
+            t = strip_page_furniture(t, i, notes, prev_tail=prev_tail, trace=trace)
+            tail_lines = [ln for ln in t.splitlines() if ln.strip()]
+            prev_tail = " ".join(tail_lines[-2:]) if tail_lines else None
+        elif trace is not None:
+            _trace_page(trace, i, raw, t)
+        pages.append(t)
+    return "\n".join(pages)
 
 
 def fetch(url: str, dest: Path) -> tuple[int, str]:
@@ -167,6 +325,18 @@ def main() -> int:
     ap.add_argument("--out", default=str(ROOT / "data/evidence/rules_quotes.json"))
     ap.add_argument("--expected-sha256", default=None,
                     help="sha256 recorded for the data-tab mirror; proves the two copies are identical")
+    ap.add_argument("--keep-page-furniture", action="store_true",
+                    help="keep bare page numbers at page starts/ends (pre-2026-09-16 behaviour). "
+                         "Kept as a flag so the removal is visible and reversible, not silent.")
+    ap.add_argument("--dump-text", default=None,
+                    help="also write the NORMALISED extracted text here (public-domain US "
+                         "government document).  Without it, every check of a quote costs a CI "
+                         "round-trip: the development sandbox cannot reach docs.nlr.gov, so the "
+                         "only way to see what the extractor actually produced is to have it "
+                         "committed.")
+    ap.add_argument("--source-url", default=RULES_URL,
+                    help="Official URL of the document.  Recorded separately from the extraction "
+                         "path so the site links to the publisher, never to /tmp.")
     a = ap.parse_args()
 
     sha = None
@@ -180,20 +350,52 @@ def main() -> int:
         b = doc_path.read_bytes()
         nbytes, sha = len(b), hashlib.sha256(b).hexdigest()
 
-    text = norm(extract(doc_path))
+    furniture: list = []
+    page_trace: list = []
+    text = norm(extract(doc_path, keep_page_furniture=a.keep_page_furniture,
+                        notes=furniture, trace=page_trace))
+    if a.dump_text:
+        dp = Path(a.dump_text)
+        dp.parent.mkdir(parents=True, exist_ok=True)
+        dp.write_text(text, encoding="utf-8")
+        print(f"wrote the normalised document text to {dp} ({len(text)} chars)")
+    print(f"page trace: {len(page_trace)} pages; first page head={page_trace[0]['raw_head']!r} "
+          f"tail={page_trace[0]['raw_tail']!r}") if page_trace else None
+    if furniture:
+        print(f"page furniture removed before matching: {len(furniture)} line(s) - "
+              f"{[f['removed'] for f in furniture][:10]}"
+              f"{'...' if len(furniture) > 10 else ''} (recorded in the report)")
     results = []
     for qid, section, quote, why in QUOTES:
         found = norm(quote) in text
-        results.append(dict(id=qid, section=section, quote=quote, why=why, exact_match=bool(found)))
+        row = dict(id=qid, section=section, quote=quote, why=why, exact_match=bool(found))
+        if not found:
+            # A miss must be diagnosable from the committed evidence, not only from a job log that
+            # the development sandbox cannot even download (the Actions log host is blocked).  So
+            # report where the document diverges from the quote: the longest prefix that IS present,
+            # and the document's own text continuing from there.
+            row["diagnostic"] = divergence(norm(quote), text)
+        results.append(row)
         print(f"{'OK  ' if found else 'MISS'} {qid:20s} {section:6s} {quote[:72]}...")
+        if not found:
+            d = row["diagnostic"]
+            print(f"      longest matching prefix: {d['prefix_len']} chars: ...{d['prefix_tail']!r}")
+            print(f"      document continues with : {d['doc_continues']!r}")
 
     n_found = sum(1 for r in results if r["exact_match"])
     payload = dict(
         generated_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         script="scripts/verify_rules_quotes.py",
-        source=dict(url=a.url or str(doc_path), bytes=nbytes, sha256=sha),
+        source=dict(url=a.url or str(doc_path), canonical_url=a.source_url, bytes=nbytes,
+                    sha256=sha),
         method=("verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line "
-                "breaks and whitespace collapse - no paraphrasing, no fuzzy matching"),
+                "breaks, whitespace collapse and removal of page numbers at page margins - no "
+                "paraphrasing, no fuzzy matching"),
+        page_furniture_stripped=(not a.keep_page_furniture),
+        page_furniture_removed=furniture,
+        pages=page_trace,
+        extracted_text=(dict(path=str(a.dump_text),
+                             chars=len(text)) if a.dump_text else None),
         match_against_mirror=dict(expected_sha256=a.expected_sha256,
                                   identical=bool(a.expected_sha256 and sha == a.expected_sha256)),
         quotes=results,

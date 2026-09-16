@@ -484,6 +484,19 @@
 - File names training_features.tif, 1m_DEM_links.csv from official problem page
 - Naming drift flagged as irregularity
 - No synthetic fault data invented, no fake DOIs
+- **Second verification pass (2026-09-16, session 7):** every load-bearing external claim re-read
+  from its own URL and recorded with the URL, the method used to reach it, and what was observed —
+  `data/evidence/independent_verification.json`, rendered on `docs/verification.html`. Eleven checks
+  pass (metric definition and worked example; submission format; public/private split; label
+  provenance; the reference solution's actual code at commit aebe92f; the rules document's two
+  official hosts; the GeoDAWN release; SGMC DS 1052 + Appendix 5; INGENIOUS GDR 1391; QFFD
+  ScienceBase 589097b1; the login-walled data tab). Three claims are recorded as *not reachable*
+  rather than omitted: the data tab and submission form (login), the metric example's PNGs (S3), and
+  the Dropbox mirrors of the rasters (bash egress).
+- **Public leaderboard read directly (no account needed), 2026-09-16:** 43 ranked entrants, best
+  public DW-Tversky 0.1972, median 0.0555, last place 0.0000. Recorded in the same file, with only
+  the top five names transcribed and the rest kept as ranges. This is the externally-sourced number
+  the repository's own local proxies are calibrated against on the new Verification page.
 
 ---
 
@@ -498,7 +511,17 @@
 7. RESOLVED 2026-09-12: full rules PDF read across all 7 chunks (docs.nlr.gov, identical to canonical www.nlr.gov) — A.1-A.17 now summarized in §4 above. RESOLVED same day: A.1 exact deadline text confirmed (5:00 p.m. ET on the submission deadline date)
 8. Official competition GeoTIFFs have NO public mirror (GitHub code search on 5 distinctive filenames: 0 hits, 2026-09-12) and cannot enter the sandbox (egress matrix in LIMITATIONS §1c) — pipeline therefore E2E-verified on the RECONSTRUCTED public-source dataset (E30); leaderboard runs need the official files via scripts/download_competition_data.sh on an unrestricted machine
 9. Encoder pretrained weights (EfficientNet-B5/MIT-B2) not downloadable from sandbox (release-asset host blocked) — sandbox runs use pretrained:false; flagged in configs/config_recon_cpu.yaml
-10. make_patches keeps training windows partially overlapping test regions (mild CV leakage vs reference global zeroing) — flagged, fix queued in SUGGESTIONS §0.1; augmentation described in docs NOT yet wired into train loop — docs corrected 2026-09-12
+10. **Session 7 (2026-09-16): three defects in `scripts/eval_proxy_catalogue.py` were found by
+   inspection and fixed — (a) truth length converted with 0.01 km/px instead of 0.1 km/px, so every
+   committed truth length was published 10× short (61,664 px printed as 616.6 km; the same quantity
+   in `build_proxy_catalogue.py` used the correct 0.1, so two scripts contradicted each other);
+   (b) the blanket-ones baseline was taken over `np.isfinite(pred)`, so its definition changed with
+   whichever raster was scored; (c) the score of the raster handed to `--pred` was published as
+   "as submitted", which labelled the sweep's pre-shaping ensemble map as the submission on the
+   Results page.** All three are fixed and pinned by tests; the committed evidence files written
+   before the fix still carry the old field values and will be re-written by the next `proxy-eval`
+   run.** Flagged here because each one produced a plausible number that meant something else.
+10b. make_patches keeps training windows partially overlapping test regions (mild CV leakage vs reference global zeroing) — flagged, fix queued in SUGGESTIONS §0.1; augmentation described in docs NOT yet wired into train loop — docs corrected 2026-09-12
 
 ---
 

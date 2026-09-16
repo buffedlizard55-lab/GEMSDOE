@@ -6,6 +6,51 @@ this session falsified them, because the way they were falsified is the most use
 
 ---
 
+## 0. Session 7 (2026-09-16, second pass) — the rules check went green, and the width question got an answer
+
+**Green:** `verify-rules` run 35153898428 — 29/29 rule sentences verified verbatim against the
+official PDF (`data/evidence/rules_quotes.json`), with the 18 page-furniture removals recorded
+(bare page numbers, glued section numbers). The last blocker on that check was that pypdf extracts a
+page number *inside* the sentence that continues across the page break; the fix drops blank lines
+before looking for page furniture, and it is now proved end to end by a synthetic reportlab→pypdf
+PDF in CI. Tests 35153898433 and Pages 35153898486 are green on the same commit.
+
+**The width question has a third measurement, and it disagrees with the first.** `proxy-eval` run
+35152701740 swept floor × thinning × emission width on 61,664 px (6,166 km) of USGS SGMC fault trace
+that `labels.tif` does **not** contain — the closest measurable stand-in for the scored new-fault
+population. Proxy DTI rises monotonically with the width (0.0144 → 0.0395 from 0 px to 6 px), the
+opposite sign to the held-out-crop sweep (0.1903 → 0.0908). `scripts/decide_emission_width.py`
+reconciles them by projecting every measured policy onto a range of possible scored-truth sizes
+using the metric's own scaling (`DTI = TP_w/(0.2(TP_w+FP_w) + 0.8|G|)`: the wrong-mass term does not
+grow with |G|, the missing-mass term does), and writes the decision:
+**widen, but not yet** — conditions 1 and 2 met (+0.0149 on the new-fault-like population; 3/3
+plausible |G| anchors), condition 3 (second ensemble) unmet, default unchanged.
+
+**The uncomfortable number in that table:** a constant-ones submission scores **0.0585** on the
+new-fault-like population, beating the shipped skeleton's **0.0247** and every swept candidate.
+Recall is worth four times precision under α=0.2/β=0.8, so the shipped emission is not conservative,
+it is *under-emitting*. The crossover is computed and published: the skeleton stays ahead only
+below ~2,200 km of scored truth.
+
+**Three measurement defects found and fixed while reading that evidence** (each had produced a
+plausible-looking number that meant something else): the truth length was converted with 0.01 km/px
+instead of 0.1 km/px (every committed truth length was 10× short); the blanket-ones baseline was
+taken over `np.isfinite(pred)`, so its definition changed with whichever raster was scored; and the
+score of the raster handed to `--pred` was published as "as submitted", which mislabelled the
+sweep's soft ensemble map as a submission on the site's Results page. All three are fixed, pinned by
+`tests/test_proxy_catalogue.py::test_eval_units_support_and_role_are_unambiguous`, and the sweep now
+clips every candidate to the data footprint so it compares *legal* submissions.
+
+**New page:** `docs/verification.html` — the public leaderboard read directly (43 entrants; #1
+0.1972; top-5 cut ≈0.1454, read 2026-09-16), an explicit "this repository is not on it" statement,
+and a table re-checking every load-bearing external claim from its own URL
+(`data/evidence/independent_verification.json`).
+
+**Suite:** 91 passed (was 86; +3 proxy-contract tests, +2 site tests). The audit test deleted by an
+earlier slice-to-EOF edit is restored.
+
+---
+
 ## 1. What this session found: the ensemble run had produced no submission
 
 Session 3 reported: *"On success the blend job commits `data/evidence/runs/35042805806/` (blend_report.json,
@@ -305,3 +350,59 @@ Merge note for the sibling branch: this PR touches `scripts/build_site.py` only 
 `docs/metric.html`, whose footer line it also rebuilt → expect a one-line footer conflict there,
 resolved by rebuilding the site from the merged tree. After both merge, re-run the verify-sources
 workflow once so all pages render from one consistent evidence set.
+
+---
+
+## 7. Session 5b: the width experiment came back, and it disagreed with the surrogate
+
+The reblend experiment (`reblend.yml`, run [35133590776](https://github.com/buffedlizard55-lab/GEMSDOE/actions/runs/35133590776),
+evidence in `data/evidence/runs/35042805806-experiment/`) answered both questions it was built to
+answer, and its answers were: *keep the skeleton*, and *the shaping is worth less than the acceptance
+threshold says is worth keeping*.
+
+| question | measurement |
+|---|---|
+| Which band width does the search pick on the six real held-out crops? | **0 px** (the pure skeleton) at floor 0.4697, pooled mean DTI 0.1903 |
+| Same question per band, best floor over the grid | 0 px → 0.1903 · 1 px → 0.1525 · 2 px → 0.1281 · 3 px → 0.1128 · 4 px → 0.1037 · 6 px → 0.0908 |
+| Is the floor's gain real, fitted without the scored fold? | honest (LOO) mean **0.1643** vs 0.1560 unshaped = **+0.0083**, *below* the pre-registered 0.01 acceptance test |
+| How large is the selection optimism? | pooled 0.1903 − honest 0.1643 = **0.0260**; oracle ceiling (floor fitted on the scored fold itself) 0.2029 |
+
+**The surrogate pointed the wrong way, and this is the useful part.** `data/evidence/shift_robustness.json`
+(a single window, labels shifted to simulate mislocalisation) argued for a 6-px band and +0.0705 over
+the skeleton. The same bands scored on the six held-out crops — where the labels are the model's own
+validation windows and the trace really is where the model drew it — monotonically *lose* DTI as the
+band widens, because FP mass is paid per pixel while TP_w only takes a max within R = 3 px. Both
+measurements are correct about different populations: the surrogate asks "what if the scored fault is
+somewhere else than I drew it", the held-out crops ask "what if it is where I drew it". The scored
+faults are new, so the truth is between them, and *neither* justifies overriding the held-out
+measurement on the evidence available. The decision recorded here is therefore: **skeleton kept**,
+`--dilate-grid` left in place as a knob with its verdict attached, and the honest number (+0.0083)
+carried forward instead of the pooled one.
+
+**Two defects the audit exposed in itself, both fixed:**
+
+1. *The audit did not fit in its job* (4743 s of a 120-minute limit, and the earlier attempt hit the
+   timeout at 120 minutes). Cause: `compute_distance_weighted_tversky` rebuilt a 49-offset credit map
+   over the whole raster and a label distance transform for **every** candidate floor, then read only
+   the ~1 % of pixels that are labels; `dominant_thin` computed a whole-raster EDT up to 40 times per
+   candidate. Fixed in `src/metrics.GtContext` (label geometry built once; TP_w gathered at label
+   pixels) and by maintaining the thinning distance map incrementally. Both are pinned to the original
+   implementations by `tests/test_metric_parity.py` and `tests/test_shaping_parity.py` — a speed-up in
+   the scoring function is the one change that could silently corrupt every number at once.
+2. *The same submission had two different file hashes.* The two runs' rasters are **pixel-identical**
+   (`sha256_pixels d6380a58…`) but the files differ, because the chosen floor is stored in GeoTIFF
+   metadata at full float64 precision and `np.geomspace` rounded differently under another numpy build
+   (`0.4696741044002384` vs `…2383`). The search grid is now quantised to six significant digits, and
+   every report carries both the container hash (what a reviewer re-checks) and the pixel hash (what
+   two runs are compared with).
+
+**Cross-session review.** While this was running, a parallel session (PR #12) audited the code above
+and found three real defects in it, all confirmed and merged here: `calibrate_shaping` mutated the
+fold dicts, so `--calibrate loo` applied a pre-transform twice; its empty-input path returned four
+values where callers unpack five; and the LOO *weight* comparison averaged fold crops covering
+different geographic windows and scored them against another fold's labels, which cannot measure a
+weight rule. All three are fixed on this branch; the weight rule is now fitted per row and reported
+without being scored. The lesson kept from the merge: the fold-weight question still needs the
+per-fold held-out footprints (queued in `SUGGESTIONS.md`), and a number that cannot be measured
+should be `None`, not a plausible-looking float.
+
