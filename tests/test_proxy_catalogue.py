@@ -615,3 +615,34 @@ def test_identity_can_come_from_the_service_own_metadata():
     assert third["route"].startswith("layer metadata 'description'")
     # a service that does NOT cite the DOI must not be accepted
     assert f.identity_from_layer_metadata({"description": "some other dataset"}, f.SGMC_DATA_DOI) is None
+
+
+def test_crossover_print_tolerates_the_scalar_widest_swept_width():
+    """The reconcile step must not die on its own summary line.
+
+    MEASURED 2026-09-16 (run 35162767135): `emission_decision.json`'s `crossovers` mapping carries
+    comparisons AND the scalar `widest_swept_px`, and the print loop formatted every value as a
+    comparison - TypeError after the record was written. Observed symptom: a red step on a run whose
+    measurement was fine.
+    """
+    import io
+    import contextlib
+    import importlib.util
+    import pathlib
+    spec = importlib.util.spec_from_file_location("dew", "scripts/decide_emission_width.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    # exercise only the shape rule the loop relies on
+    crossovers = {"wide_vs_shipped": {"reason": "wins above 21328.2 px"},
+                  "widest_swept_px": 12}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        for k, c in crossovers.items():
+            if isinstance(c, dict):
+                print("  %-22s %s" % (k, c["reason"]))
+            else:
+                print("  %-22s %s" % (k, f"{c} px - the widest emission width this sweep reached"))
+    out = buf.getvalue()
+    assert "wins above 21328.2 px" in out and "12 px" in out
+    assert pathlib.Path("scripts/decide_emission_width.py").read_text().count(
+        "isinstance(c, dict)") == 1

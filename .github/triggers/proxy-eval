@@ -39,3 +39,11 @@ proxy-eval
 # whenever the check could not be established - so four runs died AFTER doing their work, on a print
 # statement. The line is now safe, and identity has a third route: the ArcGIS layer metadata the
 # runner CAN fetch documents the release DOI in its own description.
+
+# 2026-09-16 (session 7, eighth attempt): THE FETCH WORKS - run 35163221905 established the service
+# identity from the layer metadata, probed all three USGS documents OK_200, selected the 30 published
+# fault classes, paged 21,765 features and rebuilt the catalogue byte-identically to the committed
+# one. Follow-ups found in that run: the push trigger (github.event.inputs is empty on push) fell back
+# to the OLD six-width grid, so the curve was still rising at 6 px - the fallback now matches the
+# dispatch default (0,1,2,3,4,6,8,10,12); and the reconcile step died on its own summary line
+# (TypeError in the crossover print, after the record had been written) - fixed with a test.

@@ -337,7 +337,17 @@ def main() -> int:
                  r["wrong_mass_FP_w"], r["emission_px"]))
     print("\ncrossovers (the truth size at which the wider/higher-coverage policy takes over):")
     for k, c in out["crossovers"].items():
-        print("  %-22s %s" % (k, c["reason"]))
+        # MEASURED 2026-09-16 (run 35162767135): this mapping carries one scalar next to the
+        # comparisons - the widest width actually swept - so formatting every value as a
+        # comparison crashed the reconcile step with TypeError after the decision file had been
+        # written.  The record survived; the step did not, and a red step with a fatally harmless
+        # traceback is exactly the kind of thing that hides a real failure later.
+        if isinstance(c, dict):
+            print("  %-22s %s" % (k, c["reason"]))
+        else:
+            print("  %-22s %s" % (k, f"{c} px - the widest emission width this sweep reached"
+                                        " (a wider width must be measured before the wide policy"
+                                        " is preferred on this population)"))
     print("\nprojected DTI at the plausible anchors:")
     for x in v.get("anchor_projection", []):
         print("  %-40s shipped %.4f  wide-6px %.4f  %s"

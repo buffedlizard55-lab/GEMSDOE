@@ -227,6 +227,10 @@ jobs:
             --out submission.tif --report blend_report.json --weights equal \
             --save-ensemble ensemble_mean.tif 2>&1 | tee blend.log
 
+      # MEASURED 2026-09-16 (run 35162767135): `github.event.inputs` is EMPTY on a push trigger, so
+      # this step's fallback - not the workflow_dispatch default above - is what a push-triggered run
+      # actually sweeps, and the fallback was still the old six-width grid.  The measurement therefore
+      # stopped at 6 px while the curve was still rising, twice.  Keep the two lists identical.
       - name: Sweep floor x thinning x emission width on the PROXY population
         run: |
           set -euo pipefail
@@ -234,7 +238,7 @@ jobs:
             --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
             --out data/evidence/proxy/eval_sweep.json --sweep \
             --shaping-grid "${{ github.event.inputs.shaping_grid || '4' }}" \
-            --dilate-grid "${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6' }}" \
+            --dilate-grid "${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6,8,10,12' }}" \
             2>&1 | tee data/evidence/proxy/eval_sweep.log
 
       - name: Score the submission this run produced, on both truth sets
