@@ -225,9 +225,14 @@ def _trace_page(trace: list, page_no: int, raw: str, kept: str) -> None:
     def _lines(t: str) -> list:
         return [ln.strip() for ln in t.splitlines() if ln.strip()]
     rk, rl = _lines(raw), _lines(kept)
+    blanks = len([ln for ln in raw.splitlines()[:3] if not ln.strip()])
     trace.append({"page": page_no, "chars": len(raw),
                   "head": (rl[0][:80] if rl else ""), "tail": (rl[-1][:80] if rl else ""),
-                  "raw_head": (rk[0][:40] if rk else ""), "raw_tail": (rk[-1][:40] if rk else "")})
+                  "raw_head": (rk[0][:40] if rk else ""), "raw_tail": (rk[-1][:40] if rk else ""),
+                  # escaped: an invisible character would otherwise survive into the report looking
+                  # exactly like a plain digit
+                  "raw_head_repr": (repr(rk[0])[:60] if rk else ""),
+                  "blank_lines_before_first_text": blanks})
 
 
 def strip_page_furniture(page_text: str, page_no: int | None = None,
@@ -246,7 +251,11 @@ def strip_page_furniture(page_text: str, page_no: int | None = None,
     and every other character is compared exactly as before.  The old behaviour is still available
     with --keep-page-furniture, so this cannot quietly become a fuzzy match.
     """
-    lines = [ln.strip() for ln in page_text.splitlines()]
+    # Blank lines are dropped rather than kept as positions: the extractor emits a leading newline
+    # on some pages (MEASURED 2026-09-16 - run 35153553275 removed nothing although every page's
+    # first *visible* line was its number), and the only consumer of this text normalises whitespace
+    # away anyway.  The rules below must see the page's first and last REAL lines.
+    lines = [ln.strip() for ln in page_text.splitlines() if ln.strip()]
 
     def _drop(idx: int, why: str) -> None:
         if record is not None:

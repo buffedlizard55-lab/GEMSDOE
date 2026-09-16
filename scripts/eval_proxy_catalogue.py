@@ -83,6 +83,73 @@ def score(pred: np.ndarray, ctx: GtContext, R: int, alpha: float, beta: float, e
             "emission_px": int(np.count_nonzero(np.nan_to_num(pred)))}
 
 
+ALPHA_DEFAULT, BETA_DEFAULT = DEFAULTS["alpha"], DEFAULTS["beta"]
+
+
+def project_dti(coverage: float, fp_w: float, truth_px: float,
+                alpha: float = ALPHA_DEFAULT, beta: float = BETA_DEFAULT) -> float:
+    """DTI for a HYPOTHETICAL scored truth of `truth_px` pixels, from a measured policy.
+
+    The published caveat on every number in this repository is that an absolute DTI is a monitor,
+    not a result, because |G| (the hidden truth's size) is unknown.  This turns that caveat into a
+    calculation.  For a policy measured on the proxy population we know
+
+        coverage = TP_w / |G_proxy|          (the fraction of the truth the prediction reaches)
+        FP_w                                 (false-positive mass, in metric units)
+
+    and the metric is  DTI = TP_w / (alpha*(TP_w + FP_w) + beta*|G|).  Holding the coverage and the
+    false-positive mass fixed and letting |G| vary gives the projected score for a scored set of any
+    size:
+
+        DTI(|G|) = coverage*|G| / (alpha*(coverage*|G| + FP_w) + beta*|G|)
+
+    At |G| = |G_proxy| this is algebraically identical to the measured value (asserted in the tests),
+    so the projection only adds one explicit assumption: that a different-sized truth is covered at
+    the same fractional rate and that the wrong-mass stays where it is.  It is the assumption a
+    policy decision has to make out loud, because the two error terms scale differently - FP_w is
+    set by the prediction, beta*|G| by the hidden label set - and that is exactly why a policy that
+    wins on a 6,166 km proxy truth need not win on a smaller scored one.
+    """
+    tp = coverage * float(truth_px)
+    return float(tp / (alpha * (tp + fp_w) + beta * float(truth_px) + 1e-12))
+
+
+def sensitivity_table(sweep_table: list[dict], n_truth: int, sizes: list[float],
+                      alpha: float = ALPHA_DEFAULT, beta: float = BETA_DEFAULT,
+                      tol: float = 0.01) -> tuple[list[dict], dict]:
+    """Project every swept policy onto a range of possible scored-truth sizes."""
+    rows: list[dict] = []
+    for r in sweep_table:
+        cov = float(r["TP_w"]) / float(n_truth)
+        rows.append({"t0": r["t0"], "thin": r["thin"], "dilate": r["dilate"],
+                     "coverage_fraction": round(cov, 6), "FP_w": r["FP_w"],
+                     "projected_dti": {str(int(g)): round(project_dti(cov, r["FP_w"], g, alpha, beta), 6)
+                                       for g in sizes}})
+    per_size = []
+    for g in sizes:
+        key = str(int(g))
+        best = max(rows, key=lambda r: r["projected_dti"][key])
+        skel = max((r for r in rows if r["dilate"] == 0), key=lambda r: r["projected_dti"][key])
+        gain = best["projected_dti"][key] - skel["projected_dti"][key]
+        per_size.append({"truth_px": int(g), "best_t0": best["t0"], "best_thin": best["thin"],
+                         "best_dilate": best["dilate"], "best_dti": best["projected_dti"][key],
+                         "skeleton_dti": skel["projected_dti"][key],
+                         "best_is_wider_than_skeleton": bool(best["dilate"] > 0),
+                         "gain_over_skeleton": round(gain, 6),
+                         "passes_acceptance": bool(best["dilate"] > 0 and gain > tol)})
+    verdict = {
+        "sizes_px": [int(g) for g in sizes],
+        "sizes_where_a_wider_band_passes": [p["truth_px"] for p in per_size
+                                            if p["passes_acceptance"]],
+        "sizes_where_the_skeleton_wins": [p["truth_px"] for p in per_size
+                                          if not p["best_is_wider_than_skeleton"]],
+        "acceptance_rule": ("a wider band is only worth changing the default for if it beats the "
+                            "skeleton by more than %.2f at a truth size that is plausible for the "
+                            "scored set - the proxy truth is not that size" % tol),
+    }
+    return rows, {"rows": rows, "per_size": per_size, "verdict": verdict}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--pred", required=True, help="prediction raster (submission.tif, or a probability map)")
@@ -101,6 +168,8 @@ def main() -> int:
     ap.add_argument("--alpha", type=float, default=DEFAULTS["alpha"])
     ap.add_argument("--beta", type=float, default=DEFAULTS["beta"])
     ap.add_argument("--eps", type=float, default=DEFAULTS["eps"])
+    ap.add_argument("--sens-sizes", default="500,1000,2500,5000,10000,20000,50000,100000,250000",
+                    help="assumed sizes (px) of the HIDDEN scored truth, for the projection table")
     a = ap.parse_args()
 
     pred, pmeta = read_grid(Path(a.pred))
@@ -191,6 +260,26 @@ def main() -> int:
                                 "ensemble; this population is the closest measurable stand-in for "
                                 "the scored one, not the scored one"),
         }
+        # The proxy truth is 6,166 km of state-map fault trace - plausibly much larger than the
+        # scored set.  Since FP_w and beta*|G| scale differently, a policy that wins here need not
+        # win there; project every candidate onto a range of possible scored-truth sizes instead of
+        # guessing which one we are in.
+        sizes = [float(v) for v in str(a.sens_sizes).split(",") if v.strip()]
+        sens_rows, sens = sensitivity_table(sweep_table, n_truth, sizes,
+                                            alpha=a.alpha, beta=a.beta)
+        res["sensitivity"] = sens
+        print("\n  projected onto a HIDDEN scored truth of a different size "
+              "(coverage and false-positive mass held at the measured values):")
+        print("    truth px | best policy (floor/thin/band) | best DTI | skeleton DTI | gain")
+        for p in sens["per_size"]:
+            print("    %8d | %-27s | %8.4f | %12.4f | %+.4f%s"
+                  % (p["truth_px"], "%.4g / %d / %dpx" % (p["best_t0"], p["best_thin"],
+                                                          p["best_dilate"]),
+                     p["best_dti"], p["skeleton_dti"], p["gain_over_skeleton"],
+                     "  <-- wider band passes" if p["passes_acceptance"] else ""))
+        v = sens["verdict"]
+        print("    wider band passes at: %s" % (v["sizes_where_a_wider_band_passes"] or "no size"))
+        print("    skeleton still best at: %s" % (v["sizes_where_the_skeleton_wins"] or "no size"))
 
     sweep_px = int(np.count_nonzero(np.nan_to_num(pred)))
     out = {

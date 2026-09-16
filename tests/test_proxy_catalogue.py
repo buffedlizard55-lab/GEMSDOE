@@ -283,3 +283,40 @@ def test_sweep_ranks_emission_widths_on_the_proxy_population(grid, tmp_path, mon
     assert widths["0"] >= widths["4"] - 1e-12
     assert rep["results"]["sweep_verdict"]["skeleton_dti"] == widths["0"]
     assert all(k in rep["results"]["sweep_best"] for k in ("t0", "thin", "dilate", "dti"))
+
+
+# ---------------------------------------------------------------------------------------------
+# The projection onto a hidden scored truth of unknown size (scripts/eval_proxy_catalogue.py).
+#
+# Why this exists: an absolute DTI is only a monitor - beta*|G| depends on a label set nobody has
+# seen.  FP_w is set by the prediction, so the two error terms do not scale together, and a policy
+# that wins on the proxy (6,166 km of trace) need not win on the scored set.  These tests pin the
+# projection's algebra and the fact that it is capable of showing a crossover at all.
+# ---------------------------------------------------------------------------------------------
+
+def test_projection_reproduces_the_measured_dti_at_the_proxy_size():
+    ev = _load("eval_proxy_catalogue")
+    tp, fp, g = 5000.0, 1234.0, 100000.0
+    measured = tp / (0.2 * (tp + fp) + 0.8 * g)
+    assert abs(ev.project_dti(tp / g, fp, g) - measured) < 1e-12
+
+
+def test_projection_finds_the_size_at_which_the_skeleton_stops_winning():
+    ev = _load("eval_proxy_catalogue")
+    # A skeleton that reaches 5 % of the truth with almost no wrong mass, against a 3-px band that
+    # reaches three times as much but pays 30x the false positives: the classic trade of this metric.
+    sweep = [{"t0": 0.5, "thin": True, "dilate": 0, "TP_w": 0.05 * 1e5, "FP_w": 1000.0},
+             {"t0": 0.5, "thin": True, "dilate": 3, "TP_w": 0.15 * 1e5, "FP_w": 30000.0}]
+    rows, sens = ev.sensitivity_table(sweep, n_truth=100000, sizes=[1000, 5000, 20000, 100000])
+    per = {p["truth_px"]: p for p in sens["per_size"]}
+    assert not per[1000]["best_is_wider_than_skeleton"], "a small truth cannot pay for a wide band"
+    assert per[100000]["best_is_wider_than_skeleton"], "a large truth must reward coverage"
+    assert per[100000]["passes_acceptance"] is True
+    assert per[100000]["gain_over_skeleton"] > 0.01
+    assert 1000 in sens["verdict"]["sizes_where_the_skeleton_wins"]
+    assert 100000 in sens["verdict"]["sizes_where_a_wider_band_passes"]
+    # the projection is monotone in truth size for a fixed policy (more truth, same coverage, the
+    # wrong-mass is amortised further)
+    d = [r["projected_dti"]["1000"] for r in rows if r["dilate"] == 0][0]
+    e = [r["projected_dti"]["100000"] for r in rows if r["dilate"] == 0][0]
+    assert e > d

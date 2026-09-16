@@ -154,3 +154,88 @@ def test_every_quoted_sentence_matches_the_committed_extraction():
         # ...and if the strip was used, say so: the removals are listed in the report for review
         for r in report.get("page_furniture_removed") or []:
             assert set(r) == {"page", "removed", "why"}, "a removal must be explainable"
+
+
+# The one quotation the verifier could not match (§3.6.2), replayed in every shape the extractor was
+# observed to produce.  Recorded from the committed evidence of 2026-09-16:
+#   page 11 raw text ends  "... and the"            (the sentence wraps onto the next page)
+#   page 12 raw text begins "12 relative weight ..." or "12\nrelative weight ...", sometimes after a
+#   blank first line.  The document is verbatim; only the page number interleaves.
+_WRAPPED_QUOTE = ("The set of faults included in the public test dataset and the relative weight of "
+                  "faults in both test datasets will be determined by the competition organizers "
+                  "before the start of the competition.")
+_PAGE11_HEAD = "3.6.2 Interviews DOE, at its sole discretion, may decide to hold a short interview. " \
+               "This restriction is in place to encourage models that generalize well to unseen data " \
+               "and to discourage overfitting to the public test set. The set of faults included in " \
+               "the public test dataset and the"
+_PAGE12_BODY = ("relative weight of faults in both test datasets will be determined by the "
+                "competition organizers before the start of the competition.")
+
+
+def _replay(m, page11: str, page12: str) -> tuple[str, str]:
+    """Run the real strip over the two pages, returning (with strip, without strip)."""
+    rec, trace = [], []
+    stripped = m.norm("\n".join([m.strip_page_furniture(page11, 11, rec, trace=trace),
+                                 m.strip_page_furniture(page12, 12, rec, trace=trace)]))
+    raw = m.norm("\n".join([m.strip_page_furniture(page11, 11, None, trace=None),
+                            m.strip_page_furniture(page12, 12, None, trace=None)]) if False else
+                 m.norm("\n".join([page11, page12])))
+    return stripped, raw
+
+
+def test_the_page_number_may_be_emitted_as_its_own_line_glued_or_after_a_blank_line():
+    m = _mod()
+    for label, page12 in (
+            ("own line", "12\n" + _PAGE12_BODY),
+            ("glued to the wrapped sentence", "12 " + _PAGE12_BODY),
+            ("after a blank first line", "\n12\n" + _PAGE12_BODY),
+            ("numbered page, number at its foot", _PAGE12_BODY + "\n12"),
+    ):
+        stripped, raw = _replay(m, _PAGE11_HEAD, page12)
+        assert m.norm(_WRAPPED_QUOTE) in stripped, f"the strip did not repair the {label} shape"
+        if label != "numbered page, number at its foot":
+            assert m.norm(_WRAPPED_QUOTE) not in raw, \
+                f"the {label} shape was expected to break matching without the strip"
+    # and the page number must never be silently swallowed from a quotation that needs it: the
+    # removals are recorded, so a reviewer can put it back
+    rec = []
+    m.strip_page_furniture("12\n" + _PAGE12_BODY, 12, rec)
+    assert rec == [{"page": 12, "removed": "12", "why": "bare number at the top of the page"}]
+
+
+def test_a_real_pdf_with_page_margin_numbers_extracts_to_a_matchable_sentence(tmp_path):
+    """End-to-end through pypdf, on a PDF built to have the same defect (skipped if not installed).
+
+    The rules PDF itself cannot be fetched from the development sandbox (nlr.gov is not on the
+    allowlist), so the mechanism is proven on a synthetic document with the same structure and the
+    real document is checked by the workflow.
+    """
+    import pytest
+    reportlab_canvas = pytest.importorskip("reportlab.pdfgen.canvas").Canvas
+    pypdf = pytest.importorskip("pypdf")
+    pdf = tmp_path / "furniture.pdf"
+    c = reportlab_canvas(str(pdf), pagesize=(612, 792))
+    for number, body in (("11", _PAGE11_HEAD), ("12", _PAGE12_BODY)):
+        c.drawString(72, 760, number)
+        y, line = 700, ""
+        for word in body.split():
+            if len(line) + len(word) + 1 > 88:            # wrap on word boundaries: drawing a chunk
+                c.drawString(72, y, line)                  # that splits a word makes pypdf emit a
+                y, line = y - 16, word                     # spurious space inside it
+            else:
+                line = (line + " " + word).strip()
+        c.drawString(72, y, line)
+        c.showPage()
+    c.save()
+
+    m = _mod()
+    notes, trace = [], []
+    text = m.norm(m.extract(pdf, notes=notes, trace=trace))
+    assert len(trace) == 2 and trace[0]["page"] == 1
+    assert m.norm(_WRAPPED_QUOTE) in text, "the wrapped sentence is not matchable after extraction"
+    assert notes, "the page numbers were not recorded as removed"
+    for r in notes:
+        assert set(r) == {"page", "removed", "why"} and r["removed"].isdigit()
+    # ...and the escape hatch still reproduces the old behaviour, defects and all
+    kept = m.norm(m.extract(pdf, keep_page_furniture=True))
+    assert m.norm(_WRAPPED_QUOTE) not in kept

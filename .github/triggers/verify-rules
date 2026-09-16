@@ -14,3 +14,5 @@
 # 2026-09-16: page furniture (bare/glued page numbers) is stripped before matching, and recorded
 
 # 2026-09-16: first strip attempt removed nothing; record a per-page trace so the miss is diagnosable
+
+# 2026-09-16: the strip now skips blank lines and records repr + blank-line counts
