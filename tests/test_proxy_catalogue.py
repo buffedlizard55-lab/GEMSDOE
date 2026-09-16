@@ -434,3 +434,49 @@ def test_committed_emission_decision_states_its_conditions():
         "an unmet condition (second-ensemble reproduction) must be recorded, not hidden"
     assert d["crossovers"]["blanket_vs_shipped"]["crossover_px"] > 0
     assert d["verdict"]["conclusion"]
+
+
+def test_documented_link_probe_retries_falls_back_and_records_why(monkeypatch):
+    """A verification step must say WHY it failed, not just that it did.
+
+    MEASURED 2026-09-16 (proxy-eval run 35161765013): the fetch job failed at its documented-link
+    check, the job log was not retrievable, and nothing was committed - so the reason could not be
+    recovered after the fact.  The probe now retries, falls back from HEAD to a one-byte ranged GET
+    (publishers that reject HEAD with 405/403), and returns a record of every attempt that the
+    caller writes to committed evidence before it fails the job.
+    """
+    import io
+    import urllib.error
+
+    f = _load("fetch_proxy_faults")
+    calls = []
+
+    class _Resp:
+        status = 206
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def head_rejected(req, timeout=None):
+        calls.append((req.get_method(), req.headers.get("Range")))
+        if req.get_method() == "HEAD":
+            raise urllib.error.HTTPError(req.full_url, 405, "Method Not Allowed", {}, io.BytesIO(b""))
+        return _Resp()
+
+    monkeypatch.setattr(f.urllib.request, "urlopen", head_rejected)
+    rec = f.probe_url("https://pubs.usgs.gov/x.pdf", attempts=2)
+    assert rec["ok"] is True and rec["method"] == "GET" and rec["status"] == 206
+    assert calls[0][0] == "HEAD" and calls[1] == ("GET", "bytes=0-0")
+    assert "HTTPError 405" in rec["attempts"][0]["why"]
+
+    def always_fails(req, timeout=None):
+        raise urllib.error.URLError("connection reset")
+
+    monkeypatch.setattr(f.urllib.request, "urlopen", always_fails)
+    rec2 = f.probe_url("https://pubs.usgs.gov/y.pdf", attempts=2)
+    assert rec2["ok"] is False
+    assert len(rec2["attempts"]) == 4, "every attempt must be recorded, both methods, both rounds"
+    assert all("why" in a for a in rec2["attempts"])

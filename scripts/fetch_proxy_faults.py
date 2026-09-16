@@ -109,6 +109,50 @@ def http_json(url: str, timeout: int = 180, attempts: int = 4) -> dict:
     raise RuntimeError(f"failed after {attempts} attempts: {url}: {last}")
 
 
+def probe_url(url: str, attempts: int = 3, timeout: int = 60) -> dict:
+    """Check that a documented URL is reachable, and record HOW it answered.
+
+    MEASURED 2026-09-16 (proxy-eval run 35161765013): this check failed the whole fetch job with no
+    trace - the run's only symptom was `Fetch the independent catalogue ... failure`, the job log was
+    not retrievable, and nothing was committed, so the reason could not be recovered afterwards.  A
+    verification step that cannot say *why* it failed is not useful, so this one now:
+
+      * retries with backoff (transient 429/5xx and connection resets are the common case);
+      * falls back from HEAD to a one-byte ranged GET (some publishers reject HEAD with 403/405);
+      * returns a record of every attempt, which the caller writes to a committed JSON report
+        BEFORE it fails the job.
+
+    The check still fails the job - a documented link that is not reachable must not be published -
+    but the next reader gets the URL, the method, the status and the error instead of a step name.
+    """
+    record: dict = {"url": url, "attempts": []}
+    for i in range(attempts):
+        for method, headers in (("HEAD", {}), ("GET", {"Range": "bytes=0-0"})):
+            entry = {"method": method, "try": i + 1}
+            try:
+                req = urllib.request.Request(                       # noqa: S310 - fixed https
+                    url, method=method, headers={"User-Agent": USER_AGENT, **headers})
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    entry["status"] = int(getattr(r, "status", 0) or 0)
+                    record["attempts"].append(entry)
+                    record["ok"] = True
+                    record["status"] = entry["status"]
+                    record["method"] = method
+                    return record
+            except urllib.error.HTTPError as exc:
+                entry["status"] = int(exc.code)
+                entry["why"] = f"HTTPError {exc.code}"
+                if exc.code in (403, 405, 501) and method == "HEAD":
+                    entry["why"] += " (HEAD rejected - trying a ranged GET)"
+            except Exception as exc:                                # noqa: BLE001
+                entry["why"] = f"{type(exc).__name__}: {exc}"
+            record["attempts"].append(entry)
+        if i < attempts - 1:
+            time.sleep(2 ** i * 2)
+    record["ok"] = False
+    return record
+
+
 def resolve_doi(doi_url: str) -> str:
     """Follow a DOI to its landing page and return the final URL (no credentials, no API key)."""
     req = urllib.request.Request(doi_url, headers={"User-Agent": USER_AGENT})
@@ -230,6 +274,9 @@ def main() -> int:
                     help="raster whose CRS+bounds define the query envelope (the competition grid)")
     ap.add_argument("--out", default="data/external/sgmc_proxy_faults.geojson")
     ap.add_argument("--meta", default="data/evidence/proxy/fetch_meta.json")
+    ap.add_argument("--link-report", default="data/evidence/proxy/fetch_links.json",
+                    help="where to record the reachability probe of every cited USGS document "
+                         "(written before any failure, so a failed run leaves a reason)")
     ap.add_argument("--page-size", type=int, default=1000)
     ap.add_argument("--max-features", type=int, default=200000)
     ap.add_argument("--extra-classes", default="",
@@ -244,25 +291,47 @@ def main() -> int:
     # The report covers the SGMC_Structure attribute semantics; a link that 404s is worse than no
     # link, and this repository has already published one guessed USGS PDF path that did not exist.
     # So the documented links are checked here, on the same run that fetches the faults.
-    link_check = {}
+    link_check: dict = {}
+    probes: list = []
     for label, url in (("report", SGMC_REPORT_PDF),
                        ("appendix5", SGMC_ATTRIBUTE_DICTIONARY),
                        ("appendix2", SGMC_ALL_FIELD_DEFINITIONS)):
-        try:
-            req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(req, timeout=60) as r:           # noqa: S310 - fixed https
-                link_check[url] = f"OK_{r.status} ({label})"
-        except Exception as exc:                                          # noqa: BLE001
-            link_check[url] = f"UNREACHABLE: {type(exc).__name__}: {exc}"
-    ident = service_identity(a.service)
+        pr = probe_url(url)
+        pr["label"] = label
+        probes.append(pr)
+        link_check[url] = (f"OK_{pr['status']} via {pr['method']} ({label})" if pr["ok"]
+                           else f"UNREACHABLE ({label}): "
+                                f"{pr['attempts'][-1].get('why', 'no detail')}")
+    report = {"generated_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+              "generated_by": "scripts/fetch_proxy_faults.py",
+              "purpose": ("reachability of the USGS documents this proxy cites, recorded on the "
+                          "same run that fetches the faults - written before any failure so a "
+                          "failed run is diagnosable from the committed evidence"),
+              "links": probes}
+    report_path = Path(a.link_report)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _write_report(extra: dict | None = None) -> None:
+        if extra:
+            report.update(extra)
+        report_path.write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
+
+    _write_report()
+    try:
+        ident = service_identity(a.service)
+        layer_meta = http_json(f"{a.service.rstrip('/')}/{a.layer}?f=json")
+    except Exception as exc:                                              # noqa: BLE001
+        _write_report({"failed_stage": "service identity or layer metadata",
+                       "failed_with": f"{type(exc).__name__}: {exc}"})
+        raise
+    _write_report({"service_identity": ident, "layer_name": layer_meta.get("name")})
     print(f"  service identity: {ident['item_id_in_service']} in {ident['resolved']} -> "
           f"{ident['match']}")
     for url, status in link_check.items():
-        print(f"  doc link {status:<24} {url}")
-    if any(s.startswith("UNREACHABLE") for s in link_check.values()):
-        raise SystemExit("a documented USGS link is unreachable - fix the link, do not publish it")
-
-    layer_meta = http_json(f"{a.service.rstrip('/')}/{a.layer}?f=json")
+        print(f"  doc link {status:<46} {url}")
+    if any(not pr["ok"] for pr in probes):
+        raise SystemExit(f"a documented USGS link is unreachable - fix the link, do not publish it "
+                         f"(every attempt is recorded in {report_path})")
 
     if a.rule_ids:
         domain = rule_id_domain(layer_meta)

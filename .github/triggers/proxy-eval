@@ -11,3 +11,8 @@ proxy-eval
 # pre-shaping ensemble map.  This run also clips every candidate to the data footprint (a legal
 # submission is NaN outside it), extends the width grid to 12 px because the proxy curve was still
 # rising at 6, and writes data/evidence/emission_decision.json from the sweep.
+
+# 2026-09-16 (session 7, third attempt): the previous run failed at the documented-link probe with
+# no committed trace; the probe now retries, falls back from HEAD to a ranged GET, and writes
+# data/evidence/proxy/fetch_links.json before it can fail. Re-run the sweep with the corrected
+# units/baseline/clipping, the extended width grid (to 12 px) and the decision step.

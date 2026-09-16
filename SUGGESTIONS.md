@@ -257,6 +257,7 @@
 | Site had no external bar to calibrate against | ✅ **new page** `docs/verification.html`: the public leaderboard read directly, the standalone disclaimer, and every load-bearing external claim re-checked from its own URL | `data/evidence/independent_verification.json`, `tests/test_site.py` (2 new tests) |
 | Emission width | ⏸️ **decided: widen, not yet** — condition 3 (second ensemble) unmet | `data/evidence/emission_decision.json` |
 | Second ensemble for the width decision | ❌ **blocked on GPU + data placement** (the standing blocker) | — |
+| Proxy-eval run 35161765013 failed at its documented-link check with no trace (log not retrievable, nothing committed) | ✅ **made diagnosable + resilient** — retries with backoff, HEAD → ranged-GET fallback, and `data/evidence/proxy/fetch_links.json` is written *before* any failure and committed by the `always()` step | `scripts/fetch_proxy_faults.py::probe_url`, `tests/test_proxy_catalogue.py::test_documented_link_probe_retries_falls_back_and_records_why` |
 
 ## 7. Session 2026-09-16 (review) — implemented + measured
 

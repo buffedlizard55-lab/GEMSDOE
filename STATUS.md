@@ -46,8 +46,17 @@ clips every candidate to the data footprint so it compares *legal* submissions.
 and a table re-checking every load-bearing external claim from its own URL
 (`data/evidence/independent_verification.json`).
 
-**Suite:** 91 passed (was 86; +3 proxy-contract tests, +2 site tests). The audit test deleted by an
-earlier slice-to-EOF edit is restored.
+**Suite:** 93 passed (was 86; +4 proxy-contract tests, +2 site tests, +1 restored audit test). The
+audit test deleted by an earlier slice-to-EOF edit is restored.
+
+**One irregularity opened and closed:** the first proxy-eval run of this push (35161765013) failed at
+its documented-link check — a step that had no way to say why (the job log is not retrievable from
+here and the step wrote nothing before failing). The check now retries with backoff, falls back from
+`HEAD` to a one-byte ranged `GET` where a publisher rejects HEAD, and writes
+`data/evidence/proxy/fetch_links.json` *before* it can fail, so the next failure arrives with the URL,
+the method, the status and the error attached. The check still fails the job — a documented link that
+is not reachable must not be published — but the reason is now recoverable from the committed
+evidence rather than from a step name.
 
 ---
 
