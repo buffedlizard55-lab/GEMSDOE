@@ -255,3 +255,53 @@ never saw in training, whose traces it cannot localise as tightly as the catalog
 Runner A/B on the six saved folds (emission width + LOO audit, no retraining):
 `data/evidence/runs/35042805806-dilate-ab/` — workflow `reblend.yml`, run 35133590776. Its verdict decides
 the default: a wider band is kept only if the LOO mean beats the skeleton by > 0.01.
+
+---
+
+## 7. Session 6 (same day): line-by-line review — 12 findings, 11 fixed, 1 queued
+
+Method: read every line of `src/metrics.py`, `src/submission_optim.py`, `src/discovery.py`,
+`src/submission_io.py`, `src/train.py`, `scripts/blend_submission.py`,
+`scripts/measure_shift_robustness.py`, `scripts/audit_docs.py`, `scripts/verify_rules_quotes.py`,
+`scripts/verify_links.py` and the `_scoring_universe`/`build_index` renderers; re-ran the suite
+(38/38 green on arrival — the "37/37" in §3 was stale by one test), the metric self-test (8/8),
+`audit_docs.py` (PASS, but with 1 uncatalogued-host REVIEW), and `build_site.py` (rebuild
+drifted from the committed pages — the thread that found F9–F11). Environment: fresh `.venv`
+from `requirements.verified.txt` + pytest on the stock sandbox (torch 2.14.0+cu130, CPU-only).
+
+Findings (severity = consequence if left in place):
+
+| id | severity | finding | disposition |
+|---|---|---|---|
+| F1 | **high (methodological)** | `loo_aggregation`'s fold-weight audit averaged other folds' held-out crops — *different geographic windows* (each fold's own compact subset, `train.py::heldout_maps`) — and scored the mix against the held-out fold's gt. Cross-geography averaging cannot measure the weight rule. | **removed** the comparison; LOO weights still fitted and reported per row, `weight_rule_gain` kept as `None` with a note. Valid weight evidence remains the full-map A/B (`local-mini-ensemble/`, same maps, same grid). Sound LOO weight audit queued (SUGGESTIONS §7.1). |
+| F2 | medium (latent crash) | `calibrate_shaping` returned a 4-tuple with no usable folds; every caller unpacks 5 → `ValueError`. | returns `(0.3, True, nan, [], 0)` |
+| F3 | medium (latent wrong-number) | `calibrate_shaping` + `loo_aggregation` mutated `f["pred_crop"]` when `pre` was set → `--frangi --calibrate loo` applied Frangi twice to the same crops. | copy-on-transform in both |
+| F4 | low | `calibrate_shaping` docstring said 4-tuple return, code returns 5. | docstring fixed |
+| F5 | low | `sl` lambda comment said "centre window", code took top-left `a[:k,:k]`. | removed with F1 |
+| F6 | low | `--weights dti` fell back to equal weights silently when a fold lacked DTI. | prints a WARNING, still falls back |
+| F7 | low (docs) | `SUGGESTIONS.md` claimed "audit now finds no uncatalogued hosts" in the same row that contained the `https:`+ellipsis stub the audit flagged — self-falsifying. | reworded; audit now lists **0** uncatalogued hosts |
+| F8 | low | `discovery.py`: `novel_bboxes` largest-first + min_px-filtered, but `novel_component_px` was last-25-by-label-id, unfiltered — the fields could disagree. | derived from the same boxes |
+| F9 | low (reproducibility) | `generate_dummy_submission.py` used unseeded `np.random` — every invocation differed. | `--seed` (default 42); byte-identical output pinned by test |
+| F10 | low (dead code) | `train.py` built a full `TensorDataset` of the test windows every fold and never iterated it (scoring goes through `predict_patches`); `blend_submission.py` carried an unused `import math` and (after F1) an unused `_weighted_mean`. | removed |
+| F11 | **high (live site)** | `docs/metric.html` printed *"Quotation verification is INCOMPLETE (0/0). Do not rely on the table below"* next to 19 verified quotes: `_scoring_universe` still read the old `verification`/`document` keys after the report was reshaped to `summary`/`source`. The overview page reads the same file correctly — the site contradicted itself. | reads the current schema (falls back to recounting the quotes, never to 0/0); page rebuilt. New `tests/test_site.py` pins the badge to the evidence. |
+| F12 | medium (evidence staleness) | `build_site.py` rebuild drifted from committed pages two more ways: (a) `rules_quotes.json` records `source.url=/tmp/rules_canonical.pdf` (workflow verifies a /tmp copy), which the index renderer would publish as a link; (b) `link_verification.json` (19:33Z) disagrees with `sources.html` (built 18:24Z), flagging 3 live ScienceBase pages as BROKEN (403 = bot-wall — the GeoDAWN item re-verified reachable via independent fetch the same day). | **not touched here**: the parallel session (`arena/01a0ab54-gemsdoe`) independently found and fixed both on its branch (canonical-URL recording + http-guard, sciencebase BOT_BLOCK policy + `--reclassify`, workflow rebuild step, audit count check). Deliberately left to that branch to avoid a same-hunk conflict; this branch rebuilt only `docs/metric.html`. |
+
+Verification after the fixes: **46/46 tests pass** (38 on arrival + 8 new: 4 blend/seed in
+`test_ensemble.py`, 1 in `test_discovery.py`, 3 in `tests/test_site.py`), `audit_docs.py` PASS with
+0 uncatalogued hosts, `src/metrics.py --self-test` 8/8, `metric.html` shows "19/19 quoted sentences
+verified verbatim" with no `/tmp/` leak. Dependencies audited against imports: `scikit-learn` and
+`matplotlib` are listed in `requirements.txt` but imported nowhere (same dead-dep class as the
+removed `albumentations`) — left in place as harmless; `einops` (also listed) is genuinely unneeded
+(`smp` 0.5.0 instantiates SegFormer without it; only the weight download fails, on the blocked
+host — the known limitation).
+
+Still running at session end: the emission-width + LOO A/B (run 35133590776, `blend` job since
+18:18Z). It executes the *pre-session-6* blend code on the sibling branch, so when it lands: trust
+its floor/dilate verdicts, **disregard its `weight_rule_gain`** (it was computed by the removed
+cross-geography comparison). Its report commits to `arena/01a0ab54-gemsdoe`, not here.
+
+Merge note for the sibling branch: this PR touches `scripts/build_site.py` only in
+`_scoring_universe` (a different hunk than its index-URL guard — clean merge) but rebuilds
+`docs/metric.html`, whose footer line it also rebuilt → expect a one-line footer conflict there,
+resolved by rebuilding the site from the merged tree. After both merge, re-run the verify-sources
+workflow once so all pages render from one consistent evidence set.

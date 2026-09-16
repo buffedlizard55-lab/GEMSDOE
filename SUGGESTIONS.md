@@ -30,7 +30,7 @@
 | Per-epoch shaping table cost at patch 256 | ✅ **fixed** — the search scored the bbox of 12 *scattered* held-out windows ≈ the whole raster (≈7 min/epoch of EDTs, CPU); now: `selection_mode: raw` per epoch + `_compact_window_subset` picks the smallest fault-bearing contiguous run for the crop the table IS run on | `src/train.py`, unit test in `tests/test_ensemble.py` |
 | `early_stopping_patience` implemented | ✅ **fixed** — was config-only, never read; now honoured on shaped/raw DTI, plus `training.max_minutes` wall-clock guard so a job CANNOT time out without saving its best checkpoint | `src/train.py` |
 | `pretrained: true` robustness | ✅ **fixed** — weight-download failure now warns and trains from scratch instead of crashing the fold | `src/models.py` |
-| Docs pseudo-URL `https://&hellip;` | ✅ fixed (audit now finds no uncatalogued hosts beyond notes) | `scripts/audit_docs.py` PASS |
+| Docs pseudo-URL (an `https:` + ellipsis stub) | ✅ fixed — reworded 2026-09-16 (session 6), because the row describing the fix still contained the stub and the audit kept flagging it; the audit now lists zero uncatalogued hosts | `scripts/audit_docs.py` PASS |
 
 **Next (queued, in order):**
 1. Run the 6-fold ensemble workflow once GitHub auth is restored (push = trigger). Read its report from `data/evidence/runs/<id>/`, then iterate: fold count, epochs within budget, `shaping_grid` refinement (0.2–0.6 at 0.05 steps around the selected floor).
@@ -200,3 +200,43 @@
 5. **Every workflow step that judges a result must fail loudly.** `pipefail` is now on the steps that
    mattered; the same audit should be applied to future steps by default, and any step that writes a
    "report" should assert the thing it reports on exists and is non-degenerate.
+
+---
+
+## 7. Session 2026-09-16 (review) — implemented + measured
+
+| Item | Status | Evidence |
+|---|---|---|
+| LOO weight-rule audit compared across geographies (HIGH) | ✅ **removed** — weights fitted per row, no fake DTI comparison; legacy keys `None` with notes | `tests/test_ensemble.py::test_blend_loo_audit_and_dilate_grid` (updated) |
+| `calibrate_shaping` 4-tuple crash with no usable folds | ✅ **fixed** — 5-tuple `(0.3, True, nan, [], 0)` | `test_calibrate_shaping_without_heldout_crops_returns_full_tuple` |
+| `pre` applied twice under `--calibrate loo` (mutation) | ✅ **fixed** — copy-on-transform in both functions | `test_pre_transform_does_not_mutate_fold_crops` |
+| `--weights dti` silent fallback to equal | ✅ **fixed** — WARNING printed | `test_weights_dti_falls_back_to_equal_loudly` |
+| Live false "INCOMPLETE (0/0)" warning on metric.html | ✅ **fixed** — badge reads the current report schema, recounts as fallback | `tests/test_site.py` (3 tests), rebuilt `docs/metric.html` |
+| `novel_component_px` disagreed with `novel_bboxes` | ✅ **fixed** — both derive from the same boxes | `test_novel_component_px_matches_bboxes_largest_first` |
+| Dummy submission unseeded (reproducibility) | ✅ **fixed** — `--seed` default 42 | `test_generate_dummy_submission_is_seeded` |
+| Dead `test_ds` copy per fold, dead `_weighted_mean`/`import math` | ✅ **removed** | suite still 46/46 |
+| Self-falsifying pseudo-URL row | ✅ **reworded** — audit lists 0 uncatalogued hosts | `scripts/audit_docs.py` PASS |
+| `/tmp` rules-URL leak + stale link counts on other pages | ⏸️ **left to sibling branch** (already fixed there; same-hunk conflict avoided) | `arena/01a0ab54-gemsdoe` diff reviewed 2026-09-16 |
+
+### 7.1 Queued next (in order — for this session's follow-up or the next)
+
+1. **Read the dilate-ab verdict** (run 35133590776, still running at session end): keep a wider
+   emission band only if the LOO mean beats the skeleton by > 0.01. **Disregard that run's
+   `weight_rule_gain`** — it was computed by the removed cross-geography comparison.
+2. **Sound LOO weight audit (footprint intersection).** Each fold manifest already saves
+   `test_windows`; intersect them across folds, combine the full-raster `prob_raw.tif` maps on the
+   intersection with each candidate weight rule, score there. *Acceptance:* the audit reproduces
+   the known full-map result (equal ≈ weighted-or-better on 6 folds) before it is trusted to
+   choose anything.
+3. **`neg_fraction` A/B** (carried): Hermant et al. train only on fault-bearing tiles; we keep 35 %
+   empty windows. *Acceptance:* proxy-catalogue metric (§3b), not catalogue DTI.
+4. **Proxy-catalogue harness** (carried, §3b): independent traces ∩ `labels.tif`, DTI on the
+   present-in-proxy-but-absent-from-labels subset; must first reproduce "catalogue copy ≈ 0".
+5. **1 m DEM pilot** (carried): one survey block of derivatives; rules §2 admits the DEM as feature
+   data, tiles verified.
+6. **Merge coordination:** after the sibling branch merges (verify/links/site pipeline + Tests
+   workflow), re-run verify-sources once on main so every page renders from one evidence set; then
+   confirm the Tests workflow passes on main with this session's 8 new tests.
+7. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
+   check (§1.3), Pages source setting (legacy-vs-Actions race still open), generative-AI + code
+   assets at the deadline.

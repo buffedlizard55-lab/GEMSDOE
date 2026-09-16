@@ -273,11 +273,10 @@ def main():
         train_dl = DataLoader(train_ds, batch_size=bs, shuffle=True,
                               num_workers=int(cfg["training"].get("num_workers", 0)),
                               pin_memory=(device.type == "cuda"), drop_last=False)
-        # test loader: no augmentation, no fpw needed (scored globally)
-        test_ds = torch.utils.data.TensorDataset(
-            torch.from_numpy(np.ascontiguousarray(res["X_test"])).permute(0, 3, 1, 2).float(),
-            torch.from_numpy(res["y_test"]).float())
-
+        # NOTE: held-out scoring goes through predict_patches() on res["X_test"] directly
+        # (see heldout_maps); no test DataLoader is needed.  A TensorDataset used to be built
+        # here and never iterated — a full extra copy of the test windows per fold — removed
+        # 2026-09-16 (session 6).
         opt = optim.AdamW(model.parameters(), lr=float(cfg["training"]["init_lr"]),
                           weight_decay=float(cfg["training"]["weight_decay"]))
         epochs = int(cfg["training"]["epochs"])

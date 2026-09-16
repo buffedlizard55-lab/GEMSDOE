@@ -181,6 +181,16 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
     else:
         raise AssertionError("all-zero submission must never be written")
 
+def _blend_mod():
+    """Import scripts/blend_submission.py as a module (it has no import-time side effects)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "blend_submission", ROOT / "scripts" / "blend_submission.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def test_blend_loo_audit_and_dilate_grid(tmp_path):
     """The leave-one-fold-out audit and the emission-width grid (2026-09-16).
 
@@ -189,6 +199,10 @@ def test_blend_loo_audit_and_dilate_grid(tmp_path):
     scored fold itself.  `--dilate-grid` must reach the report and pick a member of the grid.
     Both are plain assertions about the artifact, not about a fixed number, so they stay true
     as the model changes.
+
+    Session-6 update: the fold-weight rule is fitted per row but NOT scored (folds' held-out
+    crops cover different regions, so averaging them is geographically meaningless).  The
+    legacy weight keys stay present as None so older report readers do not KeyError.
     """
     H = W = 64
     gt = np.zeros((H, W), np.float32)
@@ -229,6 +243,98 @@ def test_blend_loo_audit_and_dilate_grid(tmp_path):
     assert sm["mean_dti_self_best_oracle"] >= sm["mean_dti_loo"] - 1e-9, sm
     assert abs((sm["mean_dti_loo"] - sm["mean_dti_unshaped"]) - sm["gain_loo_over_unshaped"]) < 1e-9
     assert "acceptance" in sm and "weight_rule_gain" in sm
+    # session 6: no LOO score for the weight rule (cross-geography averaging removed);
+    # the keys stay as None, the per-row fitted weights stay as weights_loo (summing to 1)
+    assert sm["weight_rule_gain"] is None
+    assert sm["mean_dti_loo_weighted"] is None and sm["mean_dti_loo_equal_weighted_mean"] is None
+    assert "weight_rule_note" in sm
+    for r in loo["rows"]:
+        assert r["weights_loo"] is not None
+        assert abs(sum(r["weights_loo"]) - 1.0) < 1e-6
     sh = rep["shaping"]
     assert sh["dilate_grid"] == [0, 1, 2] and sh["dilate"] in (0, 1, 2)
+
+
+def test_calibrate_shaping_without_heldout_crops_returns_full_tuple():
+    """Regression (session 6): with no usable folds calibrate_shaping returned 4 values while
+    every caller unpacks 5 (t0, thin, mean, table, dilate) -> ValueError."""
+    mod = _blend_mod()
+    from src.submission_optim import shaping_thresholds
+    out = mod.calibrate_shaping([{"pred_crop": None, "gt_crop": None}], R=3,
+                                thresholds=shaping_thresholds(5), alpha=0.2, beta=0.8)
+    assert len(out) == 5, f"expected a 5-tuple, got {len(out)} values"
+    t0, thin, mean_dti, table, dil = out
+    assert (t0, thin, table, dil) == (0.3, True, [], 0)
+    assert mean_dti != mean_dti  # nan
+
+
+def test_pre_transform_does_not_mutate_fold_crops():
+    """Regression (session 6): with --calibrate loo the pre-transform (e.g. Frangi) was applied
+    once by calibrate_shaping and AGAIN by loo_aggregation to the same arrays, because both
+    mutated the shared fold dicts.  Calibration must copy, never mutate."""
+    mod = _blend_mod()
+    from src.submission_optim import shaping_thresholds
+    rng = np.random.default_rng(3)
+    folds = []
+    for i in range(3):
+        gt = np.zeros((24, 24), np.float32)
+        gt[10:14, 5:20] = 1.0
+        folds.append(dict(dir=f"f{i}", pred_crop=rng.random((24, 24)).astype(np.float32),
+                          gt_crop=gt, mean_dti=0.2))
+    before = [f["pred_crop"].copy() for f in folds]
+
+    def pre(a):
+        return np.clip(a + 0.1, 0, 1).astype(np.float32)
+
+    thr = shaping_thresholds(3)
+    mod.calibrate_shaping(folds, 3, thr, 0.2, 0.8, pre=pre)
+    loo = mod.loo_aggregation(folds, 3, thr, 0.2, 0.8, pre=pre)
+    assert loo is not None and loo["summary"]["n_folds"] == 3
+    for f, b in zip(folds, before):
+        assert np.array_equal(f["pred_crop"], b), "calibration mutated the fold's pred_crop"
+
+
+def test_weights_dti_falls_back_to_equal_loudly(tmp_path):
+    """--weights dti with a fold lacking positive held-out DTI used to fall back to equal
+    weights silently.  A requested weighting that does not happen must say so (session 6)."""
+    H = W = 64
+    gt = np.zeros((H, W), np.float32)
+    for k in range(8, 56):
+        gt[k, k] = 1.0
+    fd = tmp_path / "fold-nodti"
+    fd.mkdir()
+    prob = np.clip(gt + 0.05, 0, 1).astype(np.float32)
+    _write_tif(fd / "prob_raw.tif", prob)
+    np.savez_compressed(fd / "heldout_mc0.npz", pred=prob.astype(np.float16),
+                        gt=gt.astype(np.uint8))
+    (fd / "manifest.json").write_text(json.dumps({"models": [{"file": "m.pt", "dti": 0.0}]}))
+    _write_tif(tmp_path / "labels.tif", gt)
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("training: {alpha: 0.2, beta: 0.8}\n"
+                   "metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-7}\n")
+    r = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "blend_submission.py"),
+         "--folds", str(fd), "--config", str(cfg), "--labels", str(tmp_path / "labels.tif"),
+         "--out", str(tmp_path / "sub.tif"), "--report", str(tmp_path / "rep.json"),
+         "--weights", "dti"],
+        capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "WARNING" in r.stdout and "equal weights" in r.stdout, r.stdout
+    rep = json.loads((tmp_path / "rep.json").read_text())
+    assert rep["fold_weights"] == "equal"
+
+
+def test_generate_dummy_submission_is_seeded(tmp_path):
+    """--seed (session 6): two runs with the same seed must produce identical bytes (rules
+    §3.2/§3.5 reproducibility); different seeds must differ."""
+    spec = importlib.util.spec_from_file_location(
+        "generate_dummy_submission", ROOT / "scripts" / "generate_dummy_submission.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    a, b, c = (tmp_path / f"d{i}.tif" for i in range(3))
+    mod.generate_dummy(str(a), width=64, height=64, seed=7)
+    mod.generate_dummy(str(b), width=64, height=64, seed=7)
+    mod.generate_dummy(str(c), width=64, height=64, seed=8)
+    assert a.read_bytes() == b.read_bytes(), "same seed produced different files"
+    assert a.read_bytes() != c.read_bytes(), "different seeds produced identical files"
 
