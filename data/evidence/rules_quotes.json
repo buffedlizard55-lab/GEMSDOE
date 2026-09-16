@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:37:41Z",
+ "generated_utc": "2026-09-16T21:39:18Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
   "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
@@ -10,6 +10,160 @@
  "method": "verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line breaks, whitespace collapse and removal of page numbers at page margins - no paraphrasing, no fuzzy matching",
  "page_furniture_stripped": true,
  "page_furniture_removed": [],
+ "pages": [
+  {
+   "page": 1,
+   "chars": 96,
+   "head": "Geologic Enhanced Mapping",
+   "tail": "SEPTEMBER 2026",
+   "raw_head": "Geologic Enhanced Mapping",
+   "raw_tail": "SEPTEMBER 2026"
+  },
+  {
+   "page": 2,
+   "chars": 633,
+   "head": "2",
+   "tail": "Date Modifications",
+   "raw_head": "2",
+   "raw_tail": "Date Modifications"
+  },
+  {
+   "page": 3,
+   "chars": 6761,
+   "head": "3",
+   "tail": "A.17 Platform ..................................................................",
+   "raw_head": "3",
+   "raw_tail": "A.17 Platform .........................."
+  },
+  {
+   "page": 4,
+   "chars": 2152,
+   "head": "4",
+   "tail": "dataset using the same distance-weighted Tversky index.",
+   "raw_head": "4",
+   "raw_tail": "dataset using the same distance-weighted"
+  },
+  {
+   "page": 5,
+   "chars": 1563,
+   "head": "5",
+   "tail": "recognized accrediting agency or association.",
+   "raw_head": "5",
+   "raw_tail": "recognized accrediting agency or associa"
+  },
+  {
+   "page": 6,
+   "chars": 3651,
+   "head": "6",
+   "tail": "is subject to change.",
+   "raw_head": "6",
+   "raw_tail": "is subject to change."
+  },
+  {
+   "page": 7,
+   "chars": 3069,
+   "head": "7",
+   "tail": "mapping and modeling that will, in turn, assist geothermal and critical mineral ",
+   "raw_head": "7",
+   "raw_tail": "mapping and modeling that will, in turn,"
+  },
+  {
+   "page": 8,
+   "chars": 2459,
+   "head": "8",
+   "tail": "Survey. Accessed December 22, 2025. https://doi.org/10.5066/P93LGLVQ.",
+   "raw_head": "8",
+   "raw_tail": "Survey. Accessed December 22, 2025. http"
+  },
+  {
+   "page": 9,
+   "chars": 3212,
+   "head": "9",
+   "tail": "updated test set created by expert review.",
+   "raw_head": "9",
+   "raw_tail": "updated test set created by expert revie"
+  },
+  {
+   "page": 10,
+   "chars": 2914,
+   "head": "10",
+   "tail": "Repository. GBCGE, NBMG, UNR. https://doi.org/10.15121/1881483.",
+   "raw_head": "10",
+   "raw_tail": "Repository. GBCGE, NBMG, UNR. https://do"
+  },
+  {
+   "page": 11,
+   "chars": 3020,
+   "head": "11",
+   "tail": "overfitting to the public test set.  The set of faults included in the public te",
+   "raw_head": "11",
+   "raw_tail": "overfitting to the public test set.  The"
+  },
+  {
+   "page": 12,
+   "chars": 1558,
+   "head": "12",
+   "tail": "One such platform for connection will be provided via the DrivenData community f",
+   "raw_head": "12",
+   "raw_tail": "One such platform for connection will be"
+  },
+  {
+   "page": 13,
+   "chars": 2655,
+   "head": "13",
+   "tail": "RELATED TO THE PRIZE.",
+   "raw_head": "13",
+   "raw_tail": "RELATED TO THE PRIZE."
+  },
+  {
+   "page": 14,
+   "chars": 2917,
+   "head": "14",
+   "tail": "trade secrets or confidential, proprietary, or privileged information:",
+   "raw_head": "14",
+   "raw_tail": "trade secrets or confidential, proprieta"
+  },
+  {
+   "page": 15,
+   "chars": 3504,
+   "head": "15",
+   "tail": "exhibition and other exploitation in any manner and in all media, whether now",
+   "raw_head": "15",
+   "raw_tail": "exhibition and other exploitation in any"
+  },
+  {
+   "page": 16,
+   "chars": 2973,
+   "head": "16",
+   "tail": "responsible for this prize, the judge has determined that no liability insurance",
+   "raw_head": "16",
+   "raw_tail": "responsible for this prize, the judge ha"
+  },
+  {
+   "page": 17,
+   "chars": 3056,
+   "head": "17",
+   "tail": "will select no competitors to be winners and will award no prize money.",
+   "raw_head": "17",
+   "raw_tail": "will select no competitors to be winners"
+  },
+  {
+   "page": 18,
+   "chars": 3345,
+   "head": "18",
+   "tail": "in the manner most pertinent to their participation in the prize competition. Pa",
+   "raw_head": "18",
+   "raw_tail": "in the manner most pertinent to their pa"
+  },
+  {
+   "page": 19,
+   "chars": 1338,
+   "head": "19",
+   "tail": "This is the end of the rules document; thank you for reading.",
+   "raw_head": "19",
+   "raw_tail": "This is the end of the rules document; t"
+  }
+ ],
  "extracted_text": {
   "path": "data/evidence/rules_extracted_text.txt",
   "chars": 49935
