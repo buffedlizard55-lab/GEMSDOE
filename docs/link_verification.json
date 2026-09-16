@@ -1,31 +1,105 @@
 {
-  "generated_utc": "2026-09-14T18:11:56+00:00",
+  "generated_utc": "2026-09-16T18:12:03+00:00",
   "generated_by": "scripts/verify_links.py on a GitHub-hosted runner (live HTTP)",
   "catalog": "docs/data_catalog.csv",
   "n_rows": 81,
   "n_unique_urls": 76,
   "summary_counts": {
     "BOT_BLOCKED_403": 10,
-    "BROKEN_HTTP_401": 1,
-    "OK_200": 53,
-    "OK_REDIRECTED": 9,
+    "AUTH_REQUIRED": 1,
+    "OK_200": 54,
+    "OK_REDIRECTED": 8,
+    "UNREACHABLE": 1,
     "OK_202": 1,
-    "LOGIN_REQUIRED": 1,
-    "NOT_A_URL": 1
+    "LOGIN_REQUIRED": 1
   },
-  "n_problems": 2,
+  "n_problems": 1,
   "problems": [
+    {
+      "url": "https://doi.org/10.5066/P9MQRCBY",
+      "status": null,
+      "result": "UNREACHABLE",
+      "error": "TimeoutError('The read operation timed out')"
+    }
+  ],
+  "n_expected_non_ok": 12,
+  "expected_non_ok": [
+    {
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
     {
       "url": "https://api.github.com/search/code",
       "status": 401,
-      "result": "BROKEN_HTTP_401"
+      "result": "AUTH_REQUIRED",
+      "note": "endpoint requires credentials; not a broken or missing resource"
     },
     {
-      "url": "https://www.nlr.gov/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf",
-      "status": null,
-      "result": "NOT_A_URL",
-      "error": "InvalidURL(\"URL can't contain control characters. '/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf' (found at least ' ')\")",
-      "note": "catalog cell contained two URLs; fixed in docs/data_catalog.csv (row V4)"
+      "url": "https://doi.org/10.1029/2020JB021269",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.1080/08123985.2023.2299475",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://doi.org/10.1093/gji/ggad491",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/data/",
+      "status": 200,
+      "final_url": "https://www.drivendata.org/accounts/login/?next=/competitions/306/competition-doe-gems/data/",
+      "content_type": "text/html",
+      "content_length": null,
+      "title": "Login",
+      "redirected": true,
+      "redirected_offsite": false,
+      "result": "LOGIN_REQUIRED"
+    },
+    {
+      "url": "https://www.mdpi.com/2072-4292/16/7/1115",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
+    },
+    {
+      "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026",
+      "status": 403,
+      "result": "BOT_BLOCKED_403",
+      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
     }
   ],
   "results": [
@@ -44,7 +118,8 @@
     {
       "url": "https://api.github.com/search/code",
       "status": 401,
-      "result": "BROKEN_HTTP_401"
+      "result": "AUTH_REQUIRED",
+      "note": "endpoint requires credentials; not a broken or missing resource"
     },
     {
       "url": "https://apps.nationalmap.gov/downloader/",
@@ -73,8 +148,18 @@
       "status": 200,
       "final_url": "https://community.drivendata.org/c/gems-prize-challenge/111",
       "content_type": "text/html",
-      "content_length": 12879,
+      "content_length": 14215,
       "title": "GEMS Prize Challenge - DrivenData Community",
+      "redirected": false,
+      "redirected_offsite": false,
+      "result": "OK_200"
+    },
+    {
+      "url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
+      "status": 200,
+      "final_url": "https://docs.nlr.gov/docs/fy26osti/96647.pdf",
+      "content_type": "application/pdf",
+      "content_length": 455140,
       "redirected": false,
       "redirected_offsite": false,
       "result": "OK_200"
@@ -132,14 +217,9 @@
     },
     {
       "url": "https://doi.org/10.5066/P9MQRCBY",
-      "status": 200,
-      "final_url": "https://www.sciencebase.gov/catalog/item/64e597dfd34e736b81e198d2",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Maps of elevation trend and detrended elevation for the Great Basin, USA - ScienceBase-Catalog",
-      "redirected": true,
-      "redirected_offsite": true,
-      "result": "OK_REDIRECTED_TO_www.sciencebase.gov"
+      "status": null,
+      "result": "UNREACHABLE",
+      "error": "TimeoutError('The read operation timed out')"
     },
     {
       "url": "https://doi.org/10.5066/P9TWT2LU",
@@ -329,11 +409,11 @@
     {
       "url": "https://link.springer.com/article/10.1007/s12145-026-02224-5",
       "status": 200,
-      "final_url": "https://link.springer.com/article/10.1007/s12145-026-02224-5?error=cookies_not_supported&code=381d71e6-5986-4726-8646-ed031cbe712a",
+      "final_url": "https://link.springer.com/article/10.1007/s12145-026-02224-5",
       "content_type": "text/html",
-      "content_length": null,
-      "title": "A U-Net-based human-in-the-loop semi-supervised iterative approach to vectorizing linear features on archived geological maps | Earth Science Informatics | Springer Nature Link",
-      "redirected": true,
+      "content_length": 3038,
+      "title": "Client Challenge",
+      "redirected": false,
       "redirected_offsite": false,
       "result": "OK_200"
     },
@@ -386,7 +466,7 @@
       "final_url": "https://ngmdb.usgs.gov/emri/",
       "content_type": "text/html",
       "content_length": null,
-      "title": "Earth MRI | Acquisitions Map",
+      "title": "Earth MRI Acquisitions Viewer | U.S. Geological Survey",
       "redirected": false,
       "redirected_offsite": false,
       "result": "OK_200"
@@ -591,7 +671,7 @@
       "status": 200,
       "final_url": "https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1635344/full",
       "content_type": "text/html",
-      "content_length": 587226,
+      "content_length": 601250,
       "title": "Frontiers | 3D fault detection method using TransVNet",
       "redirected": false,
       "redirected_offsite": false,
@@ -617,11 +697,11 @@
     {
       "url": "https://www.nature.com/articles/s41598-025-90823-5",
       "status": 200,
-      "final_url": "https://www.nature.com/articles/s41598-025-90823-5?error=cookies_not_supported&code=9c3eb08d-2541-49b4-8e63-0c7e9705033d",
+      "final_url": "https://www.nature.com/articles/s41598-025-90823-5",
       "content_type": "text/html",
-      "content_length": null,
-      "title": "The intelligent fault identification method based on multi-source information fusion and deep learning | Scientific Reports",
-      "redirected": true,
+      "content_length": 3038,
+      "title": "Client Challenge",
+      "redirected": false,
       "redirected_offsite": false,
       "result": "OK_200"
     },
@@ -645,13 +725,6 @@
       "redirected": true,
       "redirected_offsite": true,
       "result": "OK_REDIRECTED_TO_docs.nlr.gov"
-    },
-    {
-      "url": "https://www.nlr.gov/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf",
-      "status": null,
-      "result": "NOT_A_URL",
-      "error": "InvalidURL(\"URL can't contain control characters. '/docs/fy26osti/96647.pdf and https://docs.nlr.gov/docs/fy26osti/96647.pdf' (found at least ' ')\")",
-      "note": "catalog cell contained two URLs; fixed in docs/data_catalog.csv (row V4)"
     },
     {
       "url": "https://www.osti.gov/biblio/1881483",
@@ -799,80 +872,5 @@
       "result": "OK_200"
     }
   ],
-  "note": "Machine-measured. LOGIN_REQUIRED (DrivenData data tab) and BOT_BLOCKED_403/401 (publishers and doi.org rejecting scripted clients) are EXPECTED and are not counted as problems. Only BROKEN_*/UNREACHABLE/NOT_A_URL require review.",
-  "expected_non_ok": [
-    {
-      "url": "https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2014JB011145",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2023JB028044",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://doi.org/10.1029/2020JB021269",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://doi.org/10.1080/08123985.2023.2299475",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://doi.org/10.1093/gji/ggad491",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://www.drivendata.org/competitions/306/competition-doe-gems/data/",
-      "status": 200,
-      "final_url": "https://www.drivendata.org/accounts/login/?next=/competitions/306/competition-doe-gems/data/",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "Login",
-      "redirected": true,
-      "redirected_offsite": false,
-      "result": "LOGIN_REQUIRED"
-    },
-    {
-      "url": "https://www.mdpi.com/2072-4292/16/7/1115",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300421000169",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0098300422001765",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0375650525000902",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    },
-    {
-      "url": "https://www.sciencedirect.com/science/article/pii/S2949673X25000026",
-      "status": 403,
-      "result": "BOT_BLOCKED_403",
-      "note": "publisher/DOI resolver rejects scripted clients; not a broken link"
-    }
-  ],
-  "n_expected_non_ok": 11,
-  "reclassified_locally_utc": "2026-09-14 (rules identical to scripts/verify_links.py)"
+  "note": "Machine-measured. LOGIN_REQUIRED (DrivenData data tab) and BOT_BLOCKED_403/401 (publishers and doi.org rejecting scripted clients) are EXPECTED and are not counted as problems. Only BROKEN_* / UNREACHABLE / NOT_A_URL require review."
 }

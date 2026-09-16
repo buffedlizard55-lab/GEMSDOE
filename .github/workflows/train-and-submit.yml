@@ -75,20 +75,23 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ github.event.inputs.profile || 'smoke' }}" = "full" ]; then
-            python -m src.train --config configs/config.yaml 2>&1 | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee train.log
+            python -m src.train --config configs/config.yaml 2>&1 | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee train.log
           else
-            python -m src.train --config configs/config_ci_smoke.yaml 2>&1 | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee train.log
+            python -m src.train --config configs/config_ci_smoke.yaml 2>&1 | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee train.log
           fi
 
       - name: Inference -> submission.tif
         run: |
+          set -uo pipefail
           CFG=configs/config_ci_smoke.yaml
           [ "${{ github.event.inputs.profile || 'smoke' }}" = "full" ] && CFG=configs/config.yaml
           # strip \r progress-bar frames so the committed log stays readable
-          python -m src.inference --config "$CFG" --out submission.tif --score-against data/labels.tif 2>&1 | tr '\r' '\n' | grep -vE "it/s\]$|s/it\]$" | tee inference.log
+          python -m src.inference --config "$CFG" --out submission.tif --score-against data/labels.tif 2>&1 | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee inference.log
 
-      - name: Validate submission format
-        run: python scripts/validate_submission.py --pred submission.tif --sample data/sample_submission.tif --train data/training_features.tif 2>&1 | tee validation.log
+      - name: Validate submission format (exit code gates the rest)
+        run: |
+          set -uo pipefail
+          python scripts/validate_submission.py --pred submission.tif --sample data/sample_submission.tif --train data/training_features.tif 2>&1 | tee validation.log
 
       - name: Score locally against the PUBLIC (known) faults
         run: |

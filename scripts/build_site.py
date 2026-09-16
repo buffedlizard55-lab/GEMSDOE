@@ -10,6 +10,7 @@ read out of the JSON that a GitHub runner produced by measuring the actual bytes
     data/evidence/labels_summary.json   label positives + value histogram
     data/evidence/transfer_analysis.json sample-vs-labels cross-check, encoding sizes
     data/evidence/metric_strategy.json  measured DTI baselines
+    data/evidence/rules_quotes.json     verbatim quotations from the official rules PDF
     data/dem_links.json                 DEM tiles confirmed against the USGS bucket
     docs/link_verification.json         live HTTP status of every catalog link
     data/evidence/runs/*/               training run reports
@@ -173,7 +174,51 @@ def build_index(ev: dict) -> str:
                   f'publisher bot-blocked (expected) · <b>{lv["n_problems"]}</b> needing review. '
                   f'See <a href="sources.html">Sources</a>.</p>')
 
-    return page("Overview", "index.html", f"""
+    rules_block = ""
+    rq = ev.get("rules_quotes")
+    if rq:
+        used = ("phase1_target", "phase2_target", "phase2_eligibility", "experts_revise",
+                "labels_source", "ranking_basis")
+        qrows = "".join(
+            '<tr><td class="mono small">%s</td><td>%s</td><td class="num">%s</td></tr>' % (
+                e(q["id"]), e(q["quote"]),
+                '<span class="ok">&#10004;</span>' if q.get("exact_match") else
+                '<span class="bad">&#10008;</span>')
+            for q in rq["quotes"] if q["id"] in used)
+        src = rq.get("source") or rq.get("document", {})
+        _q = rq["quotes"]
+        _s = rq.get("summary") or dict(n_quotes=len(_q),
+                                       n_found=sum(1 for q in _q if q.get("exact_match")),
+                                       all_found=all(q.get("exact_match") for q in _q))
+        verdict = ("All %d quoted sentences matched (%s)." % (_s["n_quotes"], e(rq["generated_utc"]))
+                   if _s["all_found"] else
+                   ("<b>%d of %d matched &mdash; a quoted rule sentence no longer appears in the "
+                    "document, and the verification step fails until that is resolved.</b>"
+                    % (_s["n_found"], _s["n_quotes"])))
+        rules_block = ('<h2>What is actually scored &mdash; the rules, verbatim</h2>\n'
+                       '<p>The scored population is not the dataset we can download, and this is the'
+                       ' single most consequential fact in the challenge. It is stated in prose, so'
+                       ' it is quoted here word for word rather than paraphrased, and re-checked'
+                       ' mechanically against the official document'
+                       ' (<a href="%s">%s</a>, sha256 <span class="mono small">%s&hellip;</span>) by'
+                       ' <code>scripts/verify_rules_quotes.py</code> on a runner. %s</p>'
+                       '<table><thead><tr><th>rules id</th><th>sentence as printed</th>'
+                       '<th>found</th></tr></thead><tbody>%s</tbody></table>%s'
+                       % (e(src.get("url") or src.get("canonical_url") or RULES),
+                          e(src.get("url") or src.get("canonical_url") or RULES),
+                          e(str(src.get("sha256", ""))[:16]), verdict, qrows,
+                          note("warn", "<b>Consequence, stated plainly.</b> The training labels in "
+                                       "the data tab are the <em>existing</em> USGS Quaternary "
+                                       "compilation, but <em>both</em> prize phases score the "
+                                       "expert-mapped <em>new</em> fault dataset. A submission that "
+                                       "reproduces the catalogue earns credit only where the experts'"
+                                       " new labels coincide with it, and every DTI printed "
+                                       "elsewhere on this site is a monitor against the wrong "
+                                       "population. The same asymmetry is why the emitted line is "
+                                       "now written as a band rather than a skeleton &mdash; see the"
+                                       " <a href='metric.html#width'>width measurement</a>.")))
+
+    return page("Overview", "index.html", rules_block + f"""
 {note("ok", "<strong>How to read this site.</strong> Nothing here is written from memory. "
       "Every table is rendered by <code>scripts/build_site.py</code> from JSON that a GitHub "
       "Actions runner produced by downloading the real files and measuring them with "
@@ -210,15 +255,26 @@ faults back is therefore not the goal; finding the <em>unmapped</em> ones is.</p
       measured table.</li>
   <li><b>The DEM link PDF has no text layer.</b> It is a scan; three text extractors return zero
       URLs. Recovered by OCR and then re-confirmed tile-by-tile against the live USGS bucket.</li>
+  <li><b>A whole ensemble run was reported green while producing no submission at all.</b> The blend
+      crashed on a TIFF tile-size rule, the crash was masked by a missing <code>pipefail</code>, and a
+      110-byte stub was committed as <code>submission.tif</code>. Found by auditing the committed
+      artifacts on 2026-09-16 and fixed; see <a href="results.html">Results</a>.</li>
+  <li><b>Both prize phases score <em>new</em> faults only.</b> Verbatim from the official rules
+      (§1.1, §3.3, §3.5): the training labels are the <em>existing</em> catalogue, the labelled test
+      data are faults missing from it. The catalogue DTI quoted everywhere is a plumbing monitor, not
+      a leaderboard proxy — <a href="metric.html">Metric</a> quotes the sentences.</li>
 </ol>
 {lvline}
 
 <h2>Where this stands</h2>
-<p>The pipeline runs end-to-end on the real competition rasters — train → inference → format
-validation → scoring — on a CPU runner, and locally in-sandbox against a committed real-data
-fixture. Format validation passes. What remains for a competitive score is GPU training at full
-capacity; see <a href="results.html">Results</a> for the honest current numbers, including a smoke
-run that scored <em>below</em> the trivial baseline.</p>
+<p>The pipeline runs end-to-end on the real competition rasters — train → inference → blend → format
+validation → scoring — on CPU runners, and locally in-sandbox against a committed real-data fixture
+(37 tests, all green). The 2026-09-16 audit found and fixed a defect that had silently destroyed the
+ensemble's submission; a rebuild from the surviving fold artifacts produces the newest submission
+below. What remains for a competitive score is (1) optimising against the <em>scored</em> universe
+rather than the catalogue and (2) GPU training at full capacity; see
+<a href="results.html">Results</a> for the honest current numbers, including runs that scored
+<em>below</em> the trivial baseline and one that reported success while writing nothing.</p>
 """, "A fault-detection entry for the DOE GEMS Prize, built so every claim can be checked.")
 
 
@@ -331,6 +387,54 @@ true band semantics.</p>""")
                 "Exactly what the competition files contain — measured, with the irregularities found.")
 
 
+def _scoring_universe(ev: dict) -> str:
+    """What the metric is computed AGAINST - the fact every other decision depends on.
+
+    Rendered from data/evidence/rules_quotes.json, which scripts/verify_rules_quotes.py
+    writes by extracting the canonical rules PDF and asserting each sentence appears
+    verbatim.  If that evidence is absent the section says so instead of paraphrasing.
+    """
+    rq = ev.get("rules_quotes")
+    head = f"""<h2>What the metric is actually computed against</h2>
+<p>Both prize phases are scored on the <b>new fault dataset</b> — faults that are <em>not</em> in the
+public catalogue the competition hands out for training. The training labels are the existing fault
+data. The two populations are disjoint by construction, which is the single most consequential fact
+in this competition:</p>"""
+    if not rq:
+        return head + note("warn", """The verbatim rules quotations have not been machine-verified in
+this checkout yet. Run <code>python scripts/verify_rules_quotes.py --url
+https://docs.nlr.gov/docs/fy26osti/96647.pdf</code> (or the <em>Verify official sources</em> workflow,
+which also checks the PDF's sha256 against the inventoried data-tab copy). Until then, treat the
+statement above as a claim derived from the <a href="%s">problem description</a>, not as a verified
+quotation.""" % PROB)
+
+    rows = "".join(
+        f'<tr><td class="mono small">{e(q["id"])}</td><td>{e(q["section"])}</td>'
+        f'<td>“{e(q["quote"])}”</td>'
+        f'<td class="num">{"✔" if q.get("exact_match") else "✘"}</td></tr>'
+        for q in rq["quotes"])
+    v = rq.get("verification", {})
+    badge = note("ok", f"""<b>{v.get('exact_matches', 0)}/{v.get('quotes_checked', 0)} quoted
+sentences verified verbatim</b> against <code>{e(rq['document']['canonical_url'])}</code>
+(sha256 <span class="mono small">{e(str(rq['document']['retrieved_via'].get('sha256', ''))[:16])}…</span>,
+retrieved {e(rq['generated_utc'])}).
+Method: {e(v.get('method', ''))}.""") if v.get("all_verified") else note(
+        "warn", f"Quotation verification is INCOMPLETE ({v.get('exact_matches', 0)}/"
+                f"{v.get('quotes_checked', 0)}). Do not rely on the table below until it is fixed.")
+    return head + badge + f"""<table><thead><tr><th>id</th><th>section</th><th>verbatim quotation</th>
+<th>verified</th></tr></thead><tbody>{rows}</tbody></table>""" + note("warn", """<b>Consequence for
+everything else in this repository.</b> A model that reproduces <code>labels.tif</code> perfectly scores
+~1.0 against the catalogue and ~0 against the competition target: the scored faults are precisely the
+ones missing from the catalogue. So the catalogue DTI quoted throughout this site is a
+<em>plumbing monitor</em>, not a leaderboard proxy — useful because it proves the metric, the loss, the
+tiling and the writer agree, and <em>not</em> useful for choosing between models. The quantities that
+speak to the real objective are in <code>src/discovery.py</code>: <code>novel_fraction</code> (share of
+emitted probability mass farther than R from any catalogued fault) and
+<code>candidate_new_faults</code> (connected components of the prediction that touch no catalogued
+fault). A submission of pure noise also has <code>novel_fraction ≈ 1</code>, so those diagnostics are
+never read alone — they are read next to the catalogue DTI, the emitted area and the component sizes.""")
+
+
 def build_metric(ev: dict) -> str:
     ms = ev.get("metric_strategy")
     body = [f"""<h2>Definition</h2>
@@ -376,9 +480,11 @@ pixels. The per-unit discount loses to the count."""))
 <ul>
 <li><b>Be sparse, thin and confident.</b> Dilating perfect predictions by one pixel costs 12 points
 of DTI (0.9999 → 0.8818); by three pixels, 41 points.</li>
-<li><b>Thin before writing.</b> Faults are 1-px lineaments at 100 m. <code>src/submission_optim.py</code>
-applies a probability floor plus distance-R dominating thinning; the pooled held-out search in
-training selects <code>thin=True</code> essentially always.</li>
+<li><b>Thin, but not to nothing.</b> Faults are 1-px lineaments at 100 m and
+<code>src/submission_optim.py</code> applies a probability floor plus distance-R
+dominating thinning; the pooled search selects <code>thin=True</code> essentially
+always. But the width of what is kept is a separate decision, and against the public
+labels it is <em>not</em> zero &mdash; see <a href="#width">the measured width curve</a>.</li>
 <li><b>Recall still matters most among <em>correct</em> predictions</b> — DTI is near-linear in the
 fraction of faults found (0.554 → 0.794 → 0.917 for 25/50/75% precise recall).</li>
 <li><b>Beat 0.096.</b> A model scoring under the blanket-coverage floor is worse than a constant.</li>
@@ -386,13 +492,61 @@ fraction of faults found (0.554 → 0.794 → 0.917 for 25/50/75% precise recall
     else:
         body.append(missing("Measured baselines.", "python scripts/metric_strategy.py"))
 
-    body.append(f"""<h2>Caveats</h2>
+    if ev.get("robustness"):
+        _r0 = ev["robustness"]["rows"]
+        _base = next((r for r in _r0 if r["dilate"] == 0), _r0[0])
+        _best = max(_r0, key=lambda r: max(v["mean"] for v in r["per_shift"].values()))
+        gain_txt = ("the skeleton (0 px) keeps {:,} px and scores {:.4f}, while a {}-px band keeps "
+                    "{:,} px and scores {:.4f} - the operator family, not the floor, was the binding "
+                    "constraint.".format(_base["kept_px"], _base["per_shift"]["0"]["mean"],
+                                         _best["dilate"], _best["kept_px"],
+                                         _best["per_shift"]["0"]["mean"]))
+    else:
+        gain_txt = ""
+    rb = ev.get("robustness")
+    if rb:
+        _rows = []
+        for r in rb["rows"]:
+            per = r["per_shift"]
+            _rows.append('<tr><td class="num">{}</td><td class="num">{:,}</td>{}</tr>'.format(
+                r["dilate"], r["kept_px"],
+                "".join('<td class="num">%.4f<br><span class="muted small">worst %.4f</span></td>'
+                        % (per[k]["mean"], per[k]["worst"])
+                        for k in sorted(per, key=lambda s: int(s)))))
+        cols = "".join('<th>labels shifted &plusmn;%s px</th>' % k
+                       for k in sorted(rb["rows"][0]["per_shift"], key=lambda s: int(s)))
+        body.append("""<h2 id="width">How wide should the line be? &mdash; measured</h2>
+<p>TP<sub>w</sub> takes a <em>max</em> within R = %d px, so a prediction up to that far from a
+label still earns full credit, while FP costs 0.2 per unit of mass and a missed label costs 0.8.
+That makes the <em>width</em> of the emitted line a first-class decision: a skeleton scores zero
+on a fault it missed by more than R, while a band of k pixels survives k px of localisation error.
+The scored faults are new to the expert-reviewed dataset (rules &sect;1.1/&sect;3.5) and the model
+has never seen them, so its localisation error there is strictly larger than on the catalogue.</p>
+<p>Measured on the one window where a real written submission and the official label raster
+coexist (%s): %s</p>
+<table><thead><tr><th>band (px)</th><th>pixels kept</th>%s</tr></thead><tbody>
+%s
+</tbody></table>
+%s%s""" % (
+            rb["R_pixels"], rb.get("window") or "whole raster", gain_txt, cols, "".join(_rows),
+            note("warn", "<b>What this is and is not.</b> The labels here are the <em>public "
+                         "catalogue</em>, not the scored set, and shifting them is a stress test of "
+                         "the writing operator, not a measurement of the competition metric. It is "
+                         "reported because the same asymmetry applies with more force to faults the "
+                         "model has never seen."),
+            note("info", "Because of this the shaping search now searches the emission width too "
+                         "(<code>--dilate-grid</code>), and <code>--calibrate loo</code> re-fits the "
+                         "floor on the folds that are <em>not</em> being scored, so the reported mean "
+                         "is not selection-optimistic.")))
+
+    body.append(_scoring_universe(ev))
+    body.append(f"""<h2>Remaining caveats</h2>
 <ul>
-<li>These baselines use the <b>public/known</b> labels. Scoring uses a <b>private</b> set of
-newly-labelled faults (<a href="{PROB}#competition-structure">structure</a>). The metric's shape is
-identical so the strategy transfers; the absolute values do not.</li>
-<li>|G| for the hidden test set is unknown, so the <code>0.8·|G|</code> floor is unknown.</li>
+<li>|G| for the hidden test set is unknown, so the <code>0.8·|G|</code> floor is unknown. Every
+absolute DTI on this page is a <em>monitor</em>; only ratios and identities carry over.</li>
 <li>ε is not specified on the problem page; we use 1×10⁻⁷. Negligible here, recorded for exactness.</li>
+<li>The public leaderboard is scored on a public <em>split</em> of the same new-fault dataset, so it is
+the first honest signal; the private split and the Phase-2 revision are hidden.</li>
 </ul>""")
     return page("Metric", "metric.html", "\n".join(body),
                 "The scoring function, rearranged — and what it actually pays for.")
@@ -458,10 +612,20 @@ post-processing. The Final Prize Round explicitly rewards flagging faults expert
 def build_results(ev: dict) -> str:
     runs = ev.get("runs", [])
     body = [f"""<h2>Honest status</h2>
-{note("warn", '''The pipeline is <b>verified working end to end on the real competition data</b>.
-It is <b>not yet competitive</b>. The only full-scale run so far was a 2-epoch MobileNetV2 smoke test
-on a CPU runner, and it scored <em>below</em> the trivial blanket-coverage baseline. That is recorded
-here as a negative result rather than dressed up.''')}"""]
+{note("bad", '''<b>A green workflow is not evidence.</b> The 6-fold ensemble run
+<code>35042805806</code> trained every fold for 2 h 36 min and then crashed while writing the
+submission (<code>RasterBlockError: the height and width of TIFF dataset blocks must be multiples of
+16</code>). The job was reported <b>successful</b>, because the step piped Python into <code>tee</code>
+without <code>pipefail</code>, and the evidence it committed was self-incriminating:
+<code>data/evidence/runs/35042805806/submission.tif</code> is <b>110 bytes</b> (a GDAL stub) and
+<code>validation.log</code> is an argparse usage dump. Fixed on 2026-09-16: a read-back-verifying
+writer (<code>src/submission_io.py</code>), <code>pipefail</code> on every piped step, and a commit gate
+that ships <code>FAILED.json</code> instead of a stub. The rebuilt submission is the newest run below.''')}
+{note("warn", '''The pipeline runs end to end on the real competition rasters and every number below
+is measured, but it is <b>not yet competitive</b>: the first full-scale run was a 2-epoch MobileNetV2
+smoke test that scored <em>below</em> the trivial blanket-coverage baseline, which is recorded here as
+a negative result rather than dressed up. And every DTI on this page is computed against the
+<em>known</em> catalogue, which is not the scored universe (see <a href="metric.html">Metric</a>).''')}"""]
 
     if runs:
         for r in runs:
@@ -517,6 +681,25 @@ here as a negative result rather than dressed up.''')}"""]
                     body.append('<table><thead><tr><th>Fold</th><th>Model(s)</th>'
                                 '<th>Best held-out shaped DTI</th></tr></thead>'
                                 f"<tbody>{fold_rows}</tbody></table>")
+                disc = b.get("discovery_vs_known_catalog")
+                if disc:
+                    nm = disc.get("novel_mass", {})
+                    pt = (disc.get("per_threshold") or {}).get("0.5", {})
+                    body.append(f"""<h5>Discovery diagnostics (vs the known catalogue)</h5>
+<table class="kv"><tbody>
+<tr><th>novel_fraction</th><td><b>{nm.get('novel_fraction', float('nan')):.3f}</b> of emitted
+  probability mass sits farther than R=3 px from any catalogued fault</td></tr>
+<tr><th>mass</th><td>{nm.get('prob_mass', 0):,.0f} total → {nm.get('novel_mass', 0):,.0f} novel</td></tr>
+<tr><th>candidate new faults</th><td>{pt.get('n_novel_components', 0):,} components
+  ({pt.get('novel_px', 0):,} px) do not touch the catalogue at p&gt;0.5; largest
+  {pt.get('largest_novel_px', 0):,} px</td></tr>
+<tr><th>catalogue recall @R</th><td>{disc.get('catalog_recall_R_t0.5', 0.0):.3f} of catalogued fault
+  pixels have a prediction within R (higher = more catalogue-driven)</td></tr>
+</tbody></table>
+<p class="small">These are the numbers that speak to the scored universe. Read together: high
+catalogue recall with a low <code>novel_fraction</code> means the submission mostly restates the
+catalogue (poor against new faults); a high <code>novel_fraction</code> with a large component count
+means it is proposing candidates (what Phase 2 rewards if experts confirm them).</p>""")
                 cal = shp.get("calibration_table") or []
                 if cal:
                     best_t = shp.get("t0")
@@ -549,6 +732,10 @@ here as a negative result rather than dressed up.''')}"""]
 
 <h2>Next steps, in priority order</h2>
 <ol>
+<li><b>Optimise for the scored universe, not the catalogue.</b> The scored faults are missing from
+    <code>labels.tif</code>, so model selection, shaping calibration and fold weighting must be anchored
+    on <code>src/discovery.py</code> diagnostics plus a spatial-block hold-out instead of catalogue DTI.
+    This is a measurement-protocol change before it is a modelling change.</li>
 <li><b>Parallel 6-fold ensemble on CPU runners</b> — implemented as the
     <em>Train MC ensemble</em> workflow (<code>configs/config_ci_ensemble.yaml</code>:
     UNet++ / DeepLabV3+ / U-Net × resnet34 at patch 256, 8-way TTA, pooled shaping calibration).
@@ -587,6 +774,35 @@ def build_sources(ev: dict) -> str:
 domain) or openly licensed (INGENIOUS via OpenEI GDR). The rules permit additional data provided the
 licence allows use in the challenge and sharing with the sponsor
 (<a href="''' + PROB + '''#external-datasets">external datasets</a>).''')}"""]
+
+    sb = ev.get("sb")
+    if sb:
+        files_rows = []
+        for it in sb["items"]:
+            fl = "<br>".join(f'{e(f["name"])} <span class="muted">({e(f["size"])})</span>'
+                             for f in it.get("files", [])) or "-"
+            files_rows.append(f"""<tr>
+<td><a href="{it['sciencebase_url']}">{e(it['title'])}</a><br>
+    <code>{e(it['doi'])}</code> <span class="muted">({e(it['catalog_id'])})</span></td>
+<td>{e(it.get('citation', ''))}</td>
+<td>{fl}</td>
+<td>{e(it.get('role', ''))}</td></tr>""")
+        body.append(f"""<h2>INGENIOUS sub-datasets &mdash; direct DOI verification</h2>
+<p>Three of the catalogued external sources are USGS data releases produced for the same DOE
+project that generated the competition data. Each DOI below was followed to its ScienceBase
+landing page and the title, citation and attached files were read off that page
+({e(sb['generated_utc'])}).</p>
+<table><thead><tr><th>Release</th><th>Citation</th><th>Attached files</th><th>Role here</th></tr>
+</thead><tbody>
+{''.join(files_rows)}
+</tbody></table>
+{note("info", "<b>Irregularity, recorded not hidden.</b> " + e(sb['irregularity']))}
+{note("ok", "<b>Why this matters for the leaderboard.</b> The scored faults are the ones "
+            "<em>missing</em> from the INGENIOUS catalogue, and the detrended-elevation and "
+            "geophysics grids are that project's own fault-emphasising products: free, "
+            "public-domain, officially released, and already inside the study area. They are the "
+            "lowest-risk additional inputs to test against the negative-sampling baseline "
+            "(see <a href='results.html'>Results</a>).")}""")
 
     if lv:
         c = lv["summary_counts"]
@@ -783,8 +999,11 @@ def main() -> int:
         "labels": load(ROOT / "data/evidence/labels_summary.json"),
         "transfer": load(ROOT / "data/evidence/transfer_analysis.json"),
         "metric_strategy": load(ROOT / "data/evidence/metric_strategy.json"),
+        "rules_quotes": load(ROOT / "data/evidence/rules_quotes.json"),
         "dem": load(ROOT / "data/dem_links.json"),
+        "sb": load(ROOT / "data/evidence/sciencebase_dois.json"),
         "linkver": load(DOCS / "link_verification.json"),
+        "robustness": load(ROOT / "data/evidence/shift_robustness.json"),
         "runs": [],
     }
     rd = ROOT / "data/evidence/runs"

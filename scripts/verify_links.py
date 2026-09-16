@@ -86,6 +86,12 @@ def check(url: str, timeout: int = 45) -> dict:
                                         for h in BOT_BLOCKING_HOSTS):
             out.update(status=e.code, result=f"BOT_BLOCKED_{e.code}",
                        note="publisher/DOI resolver rejects scripted clients; not a broken link")
+        elif e.code == 401:
+            # A 401 means "credentials required", not "broken": e.g. api.github.com/search/code is
+            # used here as a *verification method* row (it needs a token).  Reporting it as a broken
+            # link would be a false positive in the repo's own audit table.
+            out.update(status=e.code, result="AUTH_REQUIRED",
+                       note="endpoint requires credentials; not a broken or missing resource")
         else:
             out.update(status=e.code, result=f"BROKEN_HTTP_{e.code}")
     except Exception as e:  # noqa: BLE001
@@ -117,10 +123,10 @@ def main() -> int:
         print(f"  {r['result']:34s} {r['url'][:95]}")
 
     stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    EXPECTED = ("OK", "BOT_BLOCKED", "LOGIN_REQUIRED")
+    EXPECTED = ("OK", "BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED")
     problems = [r for r in results if not r["result"].startswith(EXPECTED)]
     expected_nonok = [r for r in results
-                      if r["result"].startswith(("BOT_BLOCKED", "LOGIN_REQUIRED"))]
+                      if r["result"].startswith(("BOT_BLOCKED", "LOGIN_REQUIRED", "AUTH_REQUIRED"))]
 
     fields = list(rows[0].keys())
     for extra in ("verification_result", "verified_status", "verified_final_url", "verified_utc"):

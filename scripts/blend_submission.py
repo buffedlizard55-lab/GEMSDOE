@@ -41,7 +41,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.metrics import compute_distance_weighted_tversky, score_arrays_blocked  # noqa: E402
-from src.submission_optim import optimize_submission  # noqa: E402
+from src.submission_optim import optimize_submission, shaping_thresholds  # noqa: E402
+from src.submission_io import clean_profile, write_submission  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -84,16 +85,29 @@ def load_folds(fold_dirs: list[str]):
     return folds
 
 
-def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None):
-    """Pooled held-out search over (t0, thin). Returns (t0*, thin*, mean_dti*, table).
+def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None,
+                      dilate_options=(0,)):
+    """Pooled held-out search over (t0, thin, dilate). Returns (t0*, thin*, mean_dti*, table).
 
     Each fold contributes DTI(shaped fold-model crop, fold gt crop); the chosen point
     maximises the MEAN over folds.  The raw (unshaped) mean is reported too so the
     gain from shaping is auditable.
+
+    `dilate_options` grows the kept set after thinning (src.submission_optim.dilate_mask).
+    MEASURED 2026-09-16 on the one window where a written submission and the official labels
+    coexist (data/evidence/shift_robustness.json): the skeleton kept 801 px against 5,154
+    label px and scored 0.0555; growing the line to a 6-px band scored 0.1260 -- i.e. the
+    operator family was the binding constraint, not the floor.  The exchange rate is the
+    metric's own: TP_w takes a max within R=3 px (a prediction up to 3 px off still earns
+    full credit), FP costs 0.2 per unit while missing GT costs 0.8.  Against the scored
+    *new* faults the model has never seen the trace at all, so its localisation error is
+    strictly larger than on the catalogue -> the optimum band width is an empirical
+    question, and this is where it gets answered.
     """
     usable = [f for f in folds if f["pred_crop"] is not None]
     if not usable:
         return 0.3, True, float("nan"), []
+    dilate_options = tuple(int(d) for d in dilate_options) or (0,)
     if pre is not None:
         # the FULL map gets `pre` before shaping, so calibration must see the same
         # transform on the fold crops - otherwise the floor is fitted to a different
@@ -105,20 +119,139 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
     raw_mean = float(np.mean([compute_distance_weighted_tversky(f["pred_crop"], f["gt_crop"],
                                                                  R_pixels=R, alpha=alpha, beta=beta)
                               for f in usable]))
-    best = (raw_mean, float(thresholds[0]), True, 0)
-    for it, t in enumerate(thresholds):
-        vals = []
+    best = (raw_mean, float(thresholds[0]), True, 0, 0)
+    for t in thresholds:
         for thin in (False, True):
-            v = float(np.mean([
-                compute_distance_weighted_tversky(
-                    optimize_submission(f["pred_crop"], R=R, t0=float(t), thin=thin, hard=True, gamma=1.0),
-                    f["gt_crop"], R_pixels=R, alpha=alpha, beta=beta)
-                for f in usable]))
-            if v > best[0]:
-                best = (v, float(t), thin, len(table))
-            table.append(dict(t0=float(t), thin=bool(thin), mean_dti=v))
-    table.insert(0, dict(t0=None, thin=None, mean_dti=raw_mean, raw=raw_mean))  # row 0 = unshaped
-    return best[1], best[2], best[0], table
+            # dilation only makes sense on a thinned skeleton: on the un-thinned branch the
+            # floor-passing mask is already a blob, and growing it further is a pure FP cost.
+            for dila in (dilate_options if thin else (0,)):
+                v = float(np.mean([
+                    compute_distance_weighted_tversky(
+                        optimize_submission(f["pred_crop"], R=R, t0=float(t), thin=thin,
+                                            hard=True, gamma=1.0, dilate=dila),
+                        f["gt_crop"], R_pixels=R, alpha=alpha, beta=beta)
+                    for f in usable]))
+                if v > best[0]:
+                    best = (v, float(t), thin, dila, len(table))
+                table.append(dict(t0=float(t), thin=bool(thin), dilate=int(dila), mean_dti=v))
+    table.insert(0, dict(t0=None, thin=None, dilate=0, mean_dti=raw_mean, raw=raw_mean))
+    return best[1], best[2], best[0], table, best[3]
+
+
+def _dti(pred, gt, R, alpha, beta):
+    return float(compute_distance_weighted_tversky(pred, gt, R_pixels=R, alpha=alpha, beta=beta))
+
+
+def _weighted_mean(preds, ws):
+    """NaN-aware weighted mean of same-shaped crops (weights need not sum to 1)."""
+    stack = np.stack(preds).astype(np.float64)
+    w = np.asarray(ws, dtype=np.float64)
+    valid = ~np.isnan(stack)
+    num = np.tensordot(w, np.where(valid, stack, 0.0), axes=1)
+    den = np.tensordot(w, valid.astype(np.float64), axes=1)
+    out = np.where(den > 0, num / np.maximum(den, 1e-12), np.nan)
+    return out.astype(np.float32)
+
+
+def loo_aggregation(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None,
+                    dilate_options=(0,)):
+    """Leave-one-fold-out audit of the aggregation step itself.
+
+    `calibrate_shaping` picks (t0, thin) on the SAME held-out folds it reports, so its mean is
+    a selection-optimistic number.  Here, for every fold i the (t0, thin) is fitted on the
+    other folds only and then scored on fold i.  The mean of those six scores is an honest
+    estimate of what the procedure buys on an unseen fold; the gap to the pooled number is
+    the optimism.  A per-fold "best on itself" row is included as an oracle ceiling.
+
+    Fold weights are audited the same way: softmax weights fitted on the other folds (the
+    `--weights dti` rule) are applied to the fold crops and scored on fold i, next to the
+    equal-weight score on that fold.
+
+    Returns None when there are fewer than 3 usable folds (nothing to leave out).
+    """
+    usable = [f for f in folds if f["pred_crop"] is not None]
+    if len(usable) < 3:
+        return None
+    if pre is not None:
+        for f in usable:                       # same transform the full map gets
+            f["pred_crop"] = pre(f["pred_crop"])
+    shapes = {f["pred_crop"].shape for f in usable}
+    same_shape = len(shapes) == 1
+    hw = min(min(s) for s in shapes)           # weights comparison uses the common window
+    sl = lambda a, k: a[:k, :k]                # noqa: E731 - centre window every fold shares
+
+    rows = []
+    for i, f in enumerate(usable):
+        rest = usable[:i] + usable[i + 1:]
+        t_loo, thin_loo, _, _, dila_loo = calibrate_shaping(rest, R, thresholds, alpha, beta,
+                                                            pre=None, dilate_options=dilate_options)
+        d_loo = _dti(optimize_submission(f["pred_crop"], R=R, t0=float(t_loo), thin=bool(thin_loo),
+                                         hard=True, gamma=1.0, dilate=int(dila_loo)),
+                     f["gt_crop"], R, alpha, beta)
+        d_unshaped = _dti(f["pred_crop"], f["gt_crop"], R, alpha, beta)
+        best_self, t_self, thin_self, dila_self = d_unshaped, None, None, None
+        for t in thresholds:
+            for thin in (False, True):
+                for dila in (dilate_options if thin else (0,)):
+                    v = _dti(optimize_submission(f["pred_crop"], R=R, t0=float(t), thin=bool(thin),
+                                                 hard=True, gamma=1.0, dilate=int(dila)),
+                             f["gt_crop"], R, alpha, beta)
+                    if v > best_self:
+                        best_self, t_self, thin_self, dila_self = v, float(t), bool(thin), int(dila)
+        row = dict(fold=Path(f["dir"]).name, t0_loo=float(t_loo), thin_loo=bool(thin_loo),
+                   dilate_loo=int(dila_loo), dti_loo=d_loo, dti_unshaped=d_unshaped,
+                   t0_self_best=t_self, thin_self_best=thin_self, dilate_self_best=dila_self,
+                   dti_self_best=best_self)
+
+        # weight rule, fitted on the other folds and scored on this one
+        other = [(o, o["mean_dti"]) for o in rest if o["mean_dti"] > 0]
+        if same_shape and len(other) == len(rest):
+            ws = np.array([v for _, v in other], dtype=np.float64)
+            ws = np.exp((ws - ws.max()) * 8.0)
+            ws = ws / ws.sum()
+            preds = [sl(o["pred_crop"], hw) for o in rest]
+            gt = sl(f["gt_crop"], hw)
+            wm = _weighted_mean(preds, ws)
+            t_w, thin_w, _, _, dila_w = calibrate_shaping([dict(pred_crop=wm, gt_crop=gt)], R,
+                                                          thresholds, alpha, beta, pre=None,
+                                                          dilate_options=dilate_options)
+            row.update(weights_loo=[round(float(w), 4) for w in ws],
+                       dti_loo_weighted=_dti(optimize_submission(wm, R=R, t0=float(t_w),
+                                                                 thin=bool(thin_w), hard=True,
+                                                                 gamma=1.0, dilate=int(dila_w)),
+                                             gt, R, alpha, beta),
+                       dti_loo_equal_weighted_mean=_dti(
+                           optimize_submission(_weighted_mean(preds, np.ones(len(preds))), R=R,
+                                               t0=float(t_w), thin=bool(thin_w), hard=True,
+                                               gamma=1.0, dilate=int(dila_w)), gt, R, alpha, beta))
+        else:
+            row.update(weights_loo=None, dti_loo_weighted=None, dti_loo_equal_weighted_mean=None,
+                       note="fold crops have different shapes" if not same_shape
+                            else "some folds report no held-out DTI")
+        rows.append(row)
+
+    mean = lambda k: (float(np.mean([r[k] for r in rows if r.get(k) is not None]))
+                      if any(r.get(k) is not None for r in rows) else None)
+    dti_loo, dti_unshaped = mean("dti_loo"), mean("dti_unshaped")
+    summary = dict(
+        n_folds=len(rows),
+        mean_dti_loo=dti_loo, mean_dti_unshaped=dti_unshaped,
+        mean_dti_self_best_oracle=mean("dti_self_best"),
+        gain_loo_over_unshaped=(None if dti_loo is None or dti_unshaped is None
+                                else dti_loo - dti_unshaped),
+        mean_dti_loo_weighted=mean("dti_loo_weighted"),
+        mean_dti_loo_equal_weighted_mean=mean("dti_loo_equal_weighted_mean"),
+        weight_rule_gain=(None if mean("dti_loo_weighted") is None
+                          or mean("dti_loo_equal_weighted_mean") is None
+                          else mean("dti_loo_weighted") - mean("dti_loo_equal_weighted_mean")),
+        acceptance=("aggregation calibration is worth keeping when mean_dti_loo beats "
+                    "mean_dti_unshaped by > 0.01 on held-out folds, and the weight rule is worth "
+                    "using when weight_rule_gain > 0.01"),
+        note=("(t0, thin) and the fold weights are re-fitted on the five folds that are NOT being "
+              "scored, so this mean is not selection-optimistic; the pooled number reported "
+              "elsewhere is."),
+    )
+    return dict(rows=rows, summary=summary)
 
 
 def main():
@@ -134,6 +267,21 @@ def main():
                          "BEFORE shaping (src/postprocess.frangi_enhance). Off by default until "
                          "measured to help on held-out calibration; see SUGGESTIONS.md.")
     ap.add_argument("--shaping-grid", type=int, default=None, help="threshold count (default: config)")
+    ap.add_argument("--calibrate", choices=["pooled", "loo"], default="pooled",
+                    help="'pooled' (default) fits (t0, thin) on the same held-out folds it reports - "
+                         "selection-optimistic. 'loo' ADDS a leave-one-fold-out audit: the floor and "
+                         "the fold weights are re-fitted on the five folds that are not being scored, "
+                         "so the reported mean is honest. The submission itself is unchanged (a "
+                         "single global floor cannot be fitted per fold); only the report grows.")
+    ap.add_argument("--dilate-grid", default="0,1,2,3,4,6",
+                    help="emission width candidates in pixels: the kept set is the skeleton grown by "
+                         "k px. '0' = pure skeleton (previous behaviour). See "
+                         "src.submission_optim.dilate_mask for why the scored (new-fault) universe "
+                         "may prefer k > 0, and data/evidence/shift_robustness.json for the "
+                         "measurement that motivated the search.")
+    ap.add_argument("--loo-grid", type=int, default=9,
+                    help="threshold count for the leave-one-fold-out search (cheaper than the "
+                         "submission grid; the LOO search runs n_folds times)")
     ap.add_argument("--weights", choices=["equal", "dti"], default="equal",
                     help="fold averaging weights. 'dti' = softmax over each fold's best HELD-OUT "
                          "shaped DTI. MEASURED 2026-09-15 on the real 512x512 fixture window: with "
@@ -187,13 +335,50 @@ def main():
 
     # 2. pooled held-out shaping calibration ---------------------------------------
     n_grid = int(args.shaping_grid or cfg["training"].get("shaping_grid", 11))
-    thr = np.linspace(0.02, 0.9, n_grid)
-    t0b, thinb, mean_dti, table = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta, pre=enh)
-    print(f"pooled shaping: t0={t0b:.3f} thin={thinb} -> mean held-out DTI {mean_dti:.4f}"
-          f" (unshaped {table[0]['mean_dti']:.4f})")
+    # shaping_thresholds() is log-spaced and always contains 0.0.  This script used to
+    # build its own linear 0.02-0.9 grid, which (a) omitted the no-floor reference
+    # point and (b) could not reach a low-contrast optimum -- the same defect PR #9 fixed
+    # in src/train.py but not here, even though the BINDING calibration for the 6-fold
+    # workflow happens in this script.  See src/submission_optim.shaping_thresholds.
+    thr = shaping_thresholds(n_grid)
+    dil = tuple(sorted({int(v) for v in str(args.dilate_grid).split(",") if v.strip()}))
+    t0b, thinb, mean_dti, table, dilb = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta,
+                                                          pre=enh, dilate_options=dil)
+    print(f"pooled shaping: t0={t0b:.3f} thin={thinb} dilate={dilb}px -> mean held-out DTI "
+          f"{mean_dti:.4f} (unshaped {table[0]['mean_dti']:.4f}; "
+          f"skeleton r=0 {next((r['mean_dti'] for r in table if r.get('dilate') == 0 and r.get('thin')), float('nan')):.4f})")
+
+    # 2b. optional leave-one-fold-out audit of the aggregation step ----------------
+    loo = None
+    if args.calibrate == "loo":
+        t_loo = time.time()
+        loo = loo_aggregation(folds, R, shaping_thresholds(int(args.loo_grid)), alpha=alpha,
+                              beta=beta, pre=enh, dilate_options=dil)
+        if loo is None:
+            print("LOO audit skipped: fewer than 3 folds carry held-out crops")
+        else:
+            sm = loo["summary"]
+            print("leave-one-fold-out aggregation audit "
+                  f"({sm['n_folds']} folds, {time.time() - t_loo:.0f}s):")
+            print(f"  mean DTI, floor re-fitted without the scored fold : {sm['mean_dti_loo']:.4f}"
+                  f"   (unshaped {sm['mean_dti_unshaped']:.4f},"
+                  f" gain {sm['gain_loo_over_unshaped']:+.4f})")
+            print(f"  mean DTI, oracle floor fitted on the scored fold : "
+                  f"{sm['mean_dti_self_best_oracle']:.4f}")
+            if sm["mean_dti_loo_weighted"] is not None:
+                print(f"  fold weights fitted without the scored fold : "
+                      f"{sm['mean_dti_loo_weighted']:.4f} vs equal-weight mean on the same window "
+                      f"{sm['mean_dti_loo_equal_weighted_mean']:.4f}"
+                      f" (gain {sm['weight_rule_gain']:+.4f})")
+            print(f"  pooled (selection-optimistic) reference : {mean_dti:.4f}")
+            for r in loo["rows"]:
+                print(f"    {r['fold']:>12s}  t0_loo {r['t0_loo']:.4f} thin {str(r['thin_loo']):5s}"
+                      f"  dti_loo {r['dti_loo']:.4f}  unshaped {r['dti_unshaped']:.4f}"
+                      f"  self-best {r['dti_self_best']:.4f}")
 
     # 3. shape on the full ensemble map --------------------------------------------
-    q = optimize_submission(mean, R=R, t0=t0b, thin=bool(thinb), hard=True, gamma=1.0)
+    q = optimize_submission(mean, R=R, t0=t0b, thin=bool(thinb), hard=True, gamma=1.0,
+                            dilate=int(dilb))
     q = np.clip(q, 0.0, 1.0).astype(np.float32)
     post_mass = float(q[~allnan].sum())
     if post_mass <= 0.0:
@@ -201,18 +386,26 @@ def main():
         # the map can drive EVERY pixel under the calibrated floor -> an all-zero
         # submission (DTI 0).  Never write that silently; fail the step loudly instead.
         raise SystemExit("BLEND ABORTED: shaping collapsed the map to all zeros "
-                         f"(t0={t0b:.3f}, thin={bool(thinb)}, mean mass {pre_mass:.0f}). "
+                         f"(t0={t0b:.3f}, thin={bool(thinb)}, dilate={int(dilb)}, "
+                         f"mean mass {pre_mass:.0f}). "
                          "A pre-transform likely changed the distribution outside calibration.")
     q[allnan] = np.nan                                        # spec: outside bounds null/nan
 
     # write on the sample grid when given, else on the fold grid (identical by spec;
     # scripts/validate_submission.py re-checks against both the sample and the features)
+    #
+    # NOTE (2026-09-16): the profile MUST NOT inherit block geometry from the sample file.
+    # A striped GeoTIFF reports blockxsize == width (3292 for the competition template), and
+    # requesting TILED=YES with that block size makes GDAL refuse to write at all:
+    #   "RasterBlockError: The height and width of TIFF dataset blocks must be multiples of 16"
+    # (this is exactly how Actions run 35042805806 lost its submission).  clean_profile()
+    # drops stale block keys and pins legal 256-px tiles.
     grid = folds[0]["grid"]
     if args.sample and Path(args.sample).exists():
         with rasterio.open(args.sample) as src:
             sgrid = dict(width=src.width, height=src.height, crs=str(src.crs),
                          transform=list(src.transform), res=[float(src.res[0]), float(src.res[1])])
-            profile = src.profile.copy()
+            profile = clean_profile(src.profile.copy(), dtype="float32")
         if sgrid["width"] != grid["width"] or sgrid["height"] != grid["height"]:
             print(f"WARNING sample grid {sgrid['width']}x{sgrid['height']} != fold grid "
                   f"{grid['width']}x{grid['height']} — writing on the SAMPLE grid (crop/pad)")
@@ -220,27 +413,29 @@ def main():
             hh, ww = min(sgrid["height"], q.shape[0]), min(sgrid["width"], q.shape[1])
             buf[:hh, :ww] = q[:hh, :ww]
             q = buf
-        profile.update(driver="GTiff", count=1, dtype="float32", nodata=None,
-                       compress="lzw", TILED="YES")
     else:
-        profile = dict(driver="GTiff", height=grid["height"], width=grid["width"], count=1,
-                       dtype="float32", crs=grid["crs"],
-                       transform=rasterio.Affine(*grid["transform"]),
-                       nodata=None, compress="lzw", TILED="YES")
+        profile = clean_profile(None, dtype="float32", crs=grid["crs"],
+                                transform=rasterio.Affine(*grid["transform"]),
+                                height=q.shape[0], width=q.shape[1])
 
     out = Path(args.out)
-    with rasterio.open(out, "w", **profile) as dst:
-        dst.write(q, 1)
-        dst.set_band_description(1, "fault-presence probability (GEMSDOE 6-fold MC ensemble, shaped)")
-        dst.update_tags(source="GEMSDOE train-ensemble workflow",
-                        n_models=str(len(folds)),
-                        models=";".join(str(m) for f in folds for m in f["model"]),
-                        shaping_t0=str(t0b), shaping_thin=str(bool(thinb)))
-    print(f"wrote {out}  nonzero={int(np.count_nonzero(np.nan_to_num(q)))} "
-          f"finite={int(np.isfinite(q).sum())}/{q.size} mass {pre_mass:.0f} -> {post_mass:.0f}")
+    # write_submission() reopens the bytes on disk and raises unless it reads back as a
+    # single-band float32 raster on this grid with non-zero mass -> a crashed or empty
+    # submission can no longer be reported as success.
+    written = write_submission(
+        out, q, profile,
+        band_description="fault-presence probability (GEMSDOE MC ensemble, shaped)",
+        tags=dict(source="GEMSDOE train-ensemble workflow", n_models=str(len(folds)),
+                  models=";".join(str(m) for f in folds for m in f["model"]),
+                  shaping_t0=str(t0b), shaping_thin=str(bool(thinb))))
+    print(f"wrote {out}  {written['bytes']} B sha256={written['sha256'][:16]}  "
+          f"nonzero={written['nonzero_px']} finite={written['finite_px']}/{written['total_px']} "
+          f"mass {pre_mass:.0f} -> {post_mass:.0f}  tiled={written['tiled']} "
+          f"blocks={written['block_shapes']}")
 
     # 4. informational score vs known (public) faults -------------------------------
     local = None
+    discovery = None
     if args.labels and Path(args.labels).exists():
         with rasterio.open(args.labels) as src:
             lab = src.read(1)
@@ -261,6 +456,17 @@ def main():
                           "set (private expert-labelled NEW faults). Optimistic AND wrong-universe: "
                           "reported for pipeline monitoring only.")
         print(f"informational DTI vs known faults = {d:.4f} (blanket-ones floor {d_ones:.4f})")
+        # The competition target is the NEW fault dataset (rules §1.1) — disjoint from the
+        # catalog we can see.  Measure how much of the submission is a *discovery*.
+        from src.discovery import discovery_report
+        thr_diag = [t for t in (0.1, 0.5, 0.9)]
+        discovery = discovery_report(np.nan_to_num(q), gt, R=R, alpha=alpha, beta=beta,
+                                     thresholds=thr_diag)
+        print("discovery vs known catalog: novel_fraction={:.3f}  candidate_new(>0.5)={} px "
+              "in {} components".format(
+                  discovery["novel_mass"]["novel_fraction"] or 0.0,
+                  discovery["per_threshold"]["0.5"]["novel_px"],
+                  discovery["per_threshold"]["0.5"]["n_novel_components"]))
 
     report = dict(
         generated_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -270,7 +476,9 @@ def main():
         folds=[dict(dir=f["dir"], models=f["model"], fold_best_dti=f["fold_dti"],
                     grid=f["grid"]) for f in folds],
         metric=dict(R_pixels=R, alpha=alpha, beta=beta),
-        shaping=dict(t0=t0b, thin=bool(thinb), mean_heldout_dti=float(mean_dti),
+        aggregation_calibration=loo,
+        shaping=dict(t0=t0b, thin=bool(thinb), dilate=int(dilb), dilate_grid=list(dil),
+                     mean_heldout_dti=float(mean_dti),
                      unshaped_mean_heldout_dti=float(table[0]["mean_dti"]),
                      calibration_table=table),
         probability_mass=dict(pre_shaping=pre_mass, post_shaping=post_mass,
@@ -280,8 +488,10 @@ def main():
                         grid=grid, finite_px=int(np.isfinite(q).sum()), total_px=int(q.size),
                         nonzero_px=int(np.count_nonzero(np.nan_to_num(q))),
                         min=float(np.nanmin(q)), max=float(np.nanmax(q)),
-                        mean=float(np.nanmean(q))),
+                        mean=float(np.nanmean(q)),
+                        readback=written),
         local_score_vs_known=local,
+        discovery_vs_known_catalog=discovery,
     )
     rp = Path(args.report) if args.report else out.with_name(out.stem + "_report.json")
     rp.write_text(json.dumps(report, indent=1))

@@ -160,3 +160,43 @@
 - ✅ Validation and dummy submission scripts ready
 - ✅ GitHub Pages site with literature review, methodology, data catalog, submission guide, limitations
 - ✅ Auditable tables with official verified links for manual review
+
+
+---
+
+## 2026-09-16 — measured next experiments (each with an acceptance criterion)
+
+1. **Aggregation calibration, leave-one-fold-out — implemented 2026-09-16, runner A/B running.**
+   `scripts/blend_submission.py --calibrate loo` re-fits the floor (and the fold-weight rule) on the
+   folds that are *not* being scored, scores the held-out one, and prints the oracle ceiling next to
+   it: the gap between the pooled and the LOO mean **is** the selection optimism, as a number instead
+   of an assumption. The same run sweeps the emission width (`--dilate-grid 0,1,2,3,4,6`).
+   *Acceptance:* keep a wider band only if the **LOO** mean improves by > 0.01 over the `dilate=0`
+   skeleton on held-out folds, and reproduce it on a second ensemble before trusting it. Existing
+   counter-evidence stands (2-fold toy: DTI weights helped 0.014→0.098; 6-fold mini ensemble: they hurt
+   0.103→0.066) — which is exactly why the criterion is the LOO number and not the pooled one.
+   Evidence lands in `data/evidence/runs/35042805806-dilate-ab/` (workflow `reblend.yml`).
+1b. **Emission width — measured 2026-09-16.** `data/evidence/shift_robustness.json` (script
+   `scripts/measure_shift_robustness.py`): on the one window where a written submission and the
+   official label raster coexist, the skeleton kept 801 px against 5,154 label px and scored 0.0555,
+   while a 6-px band scored 0.1260 (8 px: 0.1249). The curve says the *operator family*, not the floor,
+   was the binding constraint. Motivation for the scored universe: the scored faults are new to the
+   expert-reviewed dataset (rules §1.1/§3.5), never seen in training, so their localisation error is
+   strictly larger than the catalogue's — the regime where a skeleton collects nothing and a band still
+   collects the R-neighbourhood credit. Surfaces on `docs/metric.html`.
+2. **`neg_fraction` A/B.** Hermant et al. (2025) train only on fault-bearing tiles, explicitly to avoid
+   "learning images without mapped faults when there should be some due to operator observation bias" —
+   i.e. absence from the catalogue is not evidence of absence. Our config keeps 35 % empty windows.
+   *Acceptance:* improve the proxy-catalogue metric (`docs/DISCOVERY_PLAN.md` §3b); a *fall* in catalogue
+   DTI is acceptable and expected, because the catalogue is not the scored universe.
+3. **Proxy-catalogue evaluation harness** (§3b): compile independent fault traces for the GeoDAWN region
+   (state geologic maps — pre-Quaternary faults are by construction absent from the Quaternary database
+   used for the labels), intersect with `labels.tif`, and report DTI on the
+   *present-in-proxy-but-absent-from-labels* subset. *Acceptance:* the harness reproduces the known
+   result that a catalogue-copy submission scores ~0 on that subset, then discriminates between models.
+4. **1 m DEM derivatives**, subset-first. Rules §2 says the DEM is part of the intended feature data and
+   716 tiles are already URL-verified against the live USGS bucket (`data/dem_links.json`); Hermant et al.
+   map faults from elevation and slope at 10 m. Pilot on one survey block, then decide.
+5. **Every workflow step that judges a result must fail loudly.** `pipefail` is now on the steps that
+   mattered; the same audit should be applied to future steps by default, and any step that writes a
+   "report" should assert the thing it reports on exists and is non-degenerate.

@@ -1,242 +1,257 @@
-# Project status — 2026-09-15 (session 3)
+# Project status — 2026-09-16 (session 4, extended by session 5 below)
 
-## What changed this session
-
-1. **Strategic fact re-verified from the official page** (fetched 2026-09-15, verbatim):
-   both prize rounds score against the set of **newly-labelled** faults — Phase 1 against
-   "a privately withheld subset of the original new fault dataset compiled by expert
-   reviewers", Phase 2 against "the full, revised new fault dataset" (rules PDF §1.1,
-   <https://docs.nlr.gov/docs/fy26osti/96647.pdf>). The public `existing_faults.tif` is
-   training data, NOT the scoring target. `docs/METRIC_STRATEGY.md` §4 now states the
-   consequence: copying the known-fault raster (which scores 0.9999 against itself) is a
-   trap, and every local DTI number is a plumbing monitor, not a leaderboard proxy.
-
-2. **Reference solution cross-verification (new, line-by-line)**: fetched the official
-   reference notebook and compared its executed output against our runner-measured
-   evidence: **19/19 band descriptions in `gems-geodawn-numerical-features.tif` match the
-   notebook output exactly** (names, order, wording), CRS/resolution/nodata/shape agree,
-   and the notebook confirms `numeric_features.tif` naming + plain min-max normalisation +
-   device-fallback order. This independently ties our acquired files to the official ones.
-
-3. **The parallel ensemble pipeline is implemented and locally exercised**:
-   `configs/config_ci_ensemble.yaml` + `.github/workflows/train-ensemble.yml` run 6 MC
-   folds as 6 parallel CPU jobs (UNet++/DeepLabV3+/U-Net × resnet34 @ patch 256, 8-way
-   TTA, time-guarded so a checkpoint always exists), then a blend job averages the raw
-   fold maps, shapes ONCE with the pooled held-out (t0, thin) calibration
-   (`scripts/blend_submission.py`) and commits report + submission back to the branch.
-   New regression tests (`tests/test_ensemble.py`); full suite **23/23 green** in-sandbox.
-
-4. **Blend-weighting rule MEASURED, not assumed** (6-fold mini ensemble on the real
-   512×512 fixture window, sandbox): with **2** folds, equal weights let a weak fold
-   (held-out 0.049) bury a strong one (0.150) and softmax-over-held-out-DTI lifted the
-   blend 0.0143 → 0.0984; but with **6** folds the same weighting HURT
-   (equal 0.1033 vs weighted 0.0656) because per-fold held-out DTI differences on small
-   crops are noise and the softmax over-concentrates. Final rule: **equal averaging is
-   the workflow default**; `--weights dti` remains for excluding a known-catastrophic
-   fold. Evidence + full table: `data/evidence/runs/local-mini-ensemble/`.
-
-5. **Also fixed**: per-epoch shaping-table cost (scattered 12-window bbox → whole-raster
-   EDTs; now a compact fault-bearing window run, `selection_mode: raw` for CPU folds);
-   `early_stopping_patience` was configured but never implemented — it is now;
-   `pretrained: true` now degrades to a warning instead of crashing;
-   `src/inference.py` gained `--raw` and `--override`; audit_docs now passes on the
-   formerly pseudo-URL `&hellip;` links in LIMITATIONS.md.
-
-## GitHub auth blocker — RESOLVED, ensemble run now live (2026-09-15, session 3 addendum)
-
-The expired `GH_TOKEN` from earlier this session was reconnected. Consequences, in order:
-
-1. `git push origin arena/01a0a738-gemsdoe` succeeded (remote branch was created).
-2. **PR #10 opened** against `main` for the six session-3 commits, incl. the reviewer note
-   that open PR #9's three defect fixes (fpw leak on un-zeroed labels, unreachable shaping
-   floor, `in_channels=10` default) are *not* in this branch — verified by inspection:
-   `src/dataset.py` still computes `fp_src = (yp > 0.5)` before the zeroing, and
-   `src/submission_optim.py` still uses `np.linspace(0.02, 0.9, 45)`.
-3. The push touched `.github/triggers/ensemble`, so **workflow run 35042805806 auto-started**
-   ("Train MC ensemble (parallel folds) + blend"): all 6 fold jobs `in_progress`. On success
-   the blend job commits `data/evidence/runs/35042805806/` (blend_report.json,
-   validation.log, submission.tif) back to this branch; the artifact `submission-final-*`
-   is the file to upload to DrivenData (3 submissions/week limit). Numbers are informational
-   monitors vs public labels, not leaderboard proxies (see §1 above).
-
-Caveat while reviewing the run: it trains the code *with* the fpw leak (#9 not merged), so
-fold-selection DTI is optimistic by the sliver effect #9 quantifies; relative fold ordering
-is expected to survive but treat selection accordingly until #9 lands.
-Human-only steps unchanged: DrivenData account + upload; optional Settings→Pages→"GitHub
-Actions" flip; forum report for the example_submission.tif == labels anomaly.
+Supersedes the previous `STATUS.md` (session 3, 2026-09-15). Session 3's own claims are quoted where
+this session falsified them, because the way they were falsified is the most useful thing in this file:
+**a green workflow was treated as evidence.**
 
 ---
 
-# Project status — 2026-09-14 (superseded below where it conflicts with the above)
+## 1. What this session found: the ensemble run had produced no submission
 
-Supersedes the earlier note that read *"the single remaining blocker to training is data
-placement."* **That blocker is resolved.** The data was acquired, verified and used.
+Session 3 reported: *"On success the blend job commits `data/evidence/runs/35042805806/` (blend_report.json,
+validation.log, submission.tif) back to this branch; the artifact `submission-final-*` is the file to
+upload to DrivenData."* It also reported *"full suite 23/23 green"*.
 
----
+Audited against the committed bytes (not the logs):
 
-## What changed this session
-
-The dev sandbox reaches only `github.com` and `pypi.org` — Dropbox, S3, DrivenData,
-ScienceBase and even the Azure host that serves GitHub Actions *artifacts* are all blocked
-(verified: `curl` exit 35 / EOF on each). Earlier sessions treated that as a hard stop.
-
-It isn't. A **GitHub Actions runner has open egress**, and results can return to the
-sandbox as ordinary git commits over `github.com`. That data bridge is
-`.github/workflows/fetch-competition-data.yml`, and it changed the project from
-"blocked, waiting for a human" to "data in hand".
-
-### Acquired and verified (machine-measured, not transcribed)
-
-| File | Size | Verified |
+| artifact | claimed | measured |
 |---|---|---|
-| `gems-geodawn-numerical-features.tif` | 418.9 MB | TIFF, 3292×3730, **19 bands**, EPSG:32611, 100 m |
-| `existing_faults.tif` | 425.8 KB | TIFF, int8, 60,988 fault px (1.18 % of valid) |
-| `example_submission.tif` | 1.6 MB | TIFF, float32 |
-| `GEMS_96647.pdf` | 455.1 KB | PDF (rules) |
-| `Digital-elevation-model-links-JSON.pdf` | 23.0 MB | PDF (**scan — no text layer**) |
+| `data/evidence/runs/35042805806/submission.tif` | the submission | **110 bytes** — a GDAL stub, not a raster |
+| `data/evidence/runs/35042805806/validation.log` | a validation report | **an argparse usage dump** (`unrecognized arguments: --sample`) |
+| Actions artifact `submission-final-35042805806` | the file to upload | **1,183 bytes total** |
+| `data/evidence/runs/35042805806/manifest.json` | — | missing (never produced) |
 
-sha256 for each is in `data/evidence/inventory.json`; full band table in
-`data/evidence/rasters.json`.
+The blend job's own log shows why (`data/evidence/runs/35042805806/blend.log`):
+
+```
+pooled shaping: t0=0.372 thin=True -> mean held-out DTI 0.1927 (unshaped 0.1560)
+rasterio._err.CPLE_AppDefinedError: _TIFFVSetField:submission.tif: Bad value 3292 for "TileWidth" tag
+rasterio.errors.RasterBlockError: The height and width of TIFF dataset blocks must be multiples of 16
+```
+
+Three independent defects, all fixed this session and each covered by a regression test:
+
+1. **The writer could not write.** `scripts/blend_submission.py` copied
+   `sample_submission.tif`'s rasterio profile — a *striped* GeoTIFF, so `blockxsize == width == 3292` —
+   and then forced `TILED="YES"`. GDAL rejects a 3292-px tile width. Fixed by the new
+   `src/submission_io.py` (`clean_profile()` drops stale block geometry and pins legal 256-px tiles;
+   `write_submission()` **reads the bytes back** and raises unless they are a single-band float32
+   raster on the requested grid with non-zero mass). `tests/test_submission_writer.py` reproduces the
+   original crash against the old profile, so the defect stays falsifiable.
+2. **The failure was masked.** Every workflow step piped Python into `tee` without `pipefail`, so a
+   crashed step exited 0 and everything downstream — including "Validate submission format" — "passed".
+   `set -uo pipefail` is now on the train / inference / blend / validate steps, and the commit step
+   refuses to commit a submission unless it is >10 kB, reads back as a raster and is non-empty;
+   otherwise it commits `FAILED.json` instead of a stub.
+3. **The binding floor search still used the old grid.** PR #9 replaced `linspace(0.02, 0.9, n)` with
+   the log-spaced `shaping_thresholds()` in `src/train.py` — but not in `scripts/blend_submission.py`,
+   which is where the 6-fold workflow's *binding* calibration happens. Fixed; measured effect on the
+   flat-map case that used to collapse: the floor `t0 = 0.000` is now reachable and a valid sparse
+   submission is written instead of an abort.
+
+**Lesson recorded in the site and here:** a workflow conclusion is not evidence. The evidence is the
+bytes, read back.
+
+## 2. What this session verified: the scoring universe (and why it changes the target)
+
+The canonical rules PDF was re-read line by line and the relevant sentences are now **machine-verified
+verbatim** rather than paraphrased. Actions run **35132263421** (55 s) confirmed all three links in the
+chain at once: the canonical PDF at `docs.nlr.gov` is **byte-identical** to the data-tab mirror we
+inventoried (`sha256 50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938`, 455,140 B,
+`identical: true`), **11/11 quoted sentences matched verbatim**, and a re-fetch of all 76 catalog URLs
+recorded 54 `OK_200`, 8 redirects, 10 publisher bot-blocks, 1 login-walled (the data tab) and 2 items to
+review. Mechanism: `scripts/verify_rules_quotes.py` extracts the PDF from
+`https://docs.nlr.gov/docs/fy26osti/96647.pdf`, normalises whitespace/unicode, and asserts each quoted
+sentence appears; the *Verify official sources* workflow also checks that PDF's sha256 against the
+copy inventoried from the data tab (`GEMS_96647.pdf`, 455,140 B), proving the mirror and the canonical
+document are the same file. Evidence: `data/evidence/rules_quotes.json`,
+`data/evidence/rule_sources_verification.json`.
+
+The three load-bearing sentences:
+
+* §1.1 — "In Phase 1, submissions will be evaluated against a privately withheld subset of the original
+  **new** fault dataset compiled by expert reviewers."
+* §1.1 — "Submissions will be reevaluated against the full, revised **new** fault dataset using the same
+  distance-weighted Tversky index."
+* §3.3 — "The training labels contain **existing** fault data at 100-m resolution … obtained from the
+  INGENIOUS project's Great Basin Regional Dataset Compilation."
+
+So **both prize phases score faults that are absent from the only labels we can download**, and Phase 2
+does *not* add the existing catalogue back in. Session 3's phrasing — "the public `existing_faults.tif`
+is training data, NOT the scoring target … copying the known-fault raster … is a trap" — was right; what
+was missing is the consequence: *every* selection signal in the pipeline (early stopping, fold weights,
+and the floor/thinning calibration) is fitted to the catalogue, i.e. to a population that is disjoint
+from the scored one. Full write-up and the experiment queue: **`docs/DISCOVERY_PLAN.md`**.
+
+New capability that follows from it — `src/discovery.py` (+ `tests/test_discovery.py`, 6 tests): every
+blend report now carries `novel_fraction` (share of emitted probability mass farther than R=3 px from
+any catalogued fault), `candidate_new_faults` (connected components that touch no catalogued fault, with
+area and extent) and `catalog_recall_R`. Those are the only numbers in the repo that can distinguish
+"this model is restating the catalogue" from "this model is proposing faults the catalogue does not
+contain" without access to the hidden labels.
+
+Independent corroboration that this is the right frame, from the paper the competition's own About page
+recommends (Hermant, Kiersnowski & Bellanger 2025, Stanford SGW, fetched 2026-09-16): they keep **only
+fault-bearing training tiles**, explicitly to "limit the possibility of learning images without mapped
+faults when there should be some due to **operator observation bias**", and they measure up to **400 m**
+of disagreement between the USGS Quaternary catalogue and their own expert labels in north-central
+Nevada. Our config keeps 35 % empty windows (`neg_fraction: 0.35`) — a concrete, citable A/B target.
+
+## 3. Verified environment facts (measured, not assumed)
+
+* Sandbox egress allowlist still permits only `github.com`, `api.github.com`, `codeload.github.com`,
+  `pypi.org`/`files.pythonhosted.org`. Re-measured 2026-09-16: `www.dropbox.com`, `drivendata.org`,
+  `s3.amazonaws.com`, `prd-tnm.s3.amazonaws.com`, `sciencebase.gov`, `apps.nationalmap.gov`,
+  `gdr.openei.org`, `raw.githubusercontent.com`, `objects.githubusercontent.com`,
+  `pipelines.actions.githubusercontent.com` all fail (TLS EOF).
+* **GitHub Actions *artifacts* remain unreachable from the sandbox** — newly measured: downloading
+  `submission-final-35042805806` fails with `EOF` against
+  `productionresultssa8.blob.core.windows.net`. A *runner* can download them (that is what the new
+  re-blend workflow does).
+* `github.com` git transport works, so small artifacts (reports, `submission.tif` ≈ 1 MB) travel back
+  as ordinary commits. Large rasters cannot and are not committed.
+* The full test suite now runs **in-sandbox with torch installed** (CPU wheel from PyPI):
+  **37/37 pass** (`pytest tests -q`). Previous sessions could not install torch here at all.
+
+## 4. What was rebuilt this session — and it produced the first real submission
+
+`.github/workflows/reblend.yml` (+ trigger `.github/triggers/reblend`) re-runs **only** the blend step
+against the fold artifacts of run 35042805806 — six checkpoints and six full-raster probability maps
+(≈120 MB each) that the runner can still fetch, valid until ~2026-09-30. Cross-run artifact download
+(`actions/download-artifact@v4` with `run-id`) is the mechanism. Actions run **35131318033** finished in
+**7 m 46 s** (the training that it reuses took 2 h 36 min) and committed:
+
+| output | value |
+|---|---|
+| `data/evidence/runs/35042805806/submission.tif` | **386,018 B**, tiled, blocks 256×256, sha256 `a5ae61d5…` |
+| grid / format | 3292×3730, 1 band float32, EPSG:32611, 100 m, NaN outside the footprint (57.93 % of pixels), values in [0,1] |
+| emitted area | 21,492 non-zero px of 5,165,852 finite px (0.42 %) |
+| validation | `✅ Validation PASSED` — CRS, resolution, dtype, range, size and transform all match the template (`validation.log`) |
+| pooled shaping | `t0 = 0.470`, `thin = True`; mean held-out DTI 0.1903 (unshaped 0.1560) |
+| informational DTI vs the **known** catalogue | 0.1387 (blanket-ones floor on this grid: 0.0246) — wrong-universe number |
+| **discovery profile** | `novel_fraction = 0.684`; 6,090 px in **617** components that never come within R of a catalogued fault (largest 92 px, ≈8.4 km long); catalogue recall @R = 0.214 |
+
+The discovery profile is the interesting one: **68 % of the emitted probability mass sits farther than
+300 m from any catalogued fault**, so this submission is not merely restating the catalogue — it is
+proposing 617 candidate fault segments the catalogue does not contain. Whether they are real is exactly
+what Phase 2's expert review decides, and what the public leaderboard would score; neither is available
+here.
+
+**Fold spread is wide and worth acting on** (measured, from the same report): held-out DTI per fold was
+0.3351, 0.2665, 0.1780, 0.1776, 0.0916, 0.0742 — a 4.5× spread between the best and worst fold of the
+*same* configuration. Equal averaging squeezes a weak fold into a strong one, and the pooled calibration
+that picks the floor scores the same folds it fits, so its mean is selection-optimistic. Both are now
+instrumented (`scripts/blend_submission.py`): `--calibrate loo` re-fits the floor — and the fold-weight
+rule — on the five folds that are *not* being scored, and reports the oracle ceiling next to it, so the
+optimism is a printed number instead of an assumption. Experiment `data/evidence/runs/35042805806-dilate-ab/`.
+
+**The width of the emitted line was the binding constraint, not the floor** (measured 2026-09-16,
+`data/evidence/shift_robustness.json`, script `scripts/measure_shift_robustness.py`). On the one window
+where a written submission and the official label raster coexist (rows 2048–2560, cols 1280–1792 of the
+full grid; `data/fixture/fixture_labels.tif`, 5,154 label px):
+
+| band grown around the skeleton | pixels kept | DTI (no shift) | DTI, labels shifted ±3 px |
+|---|---|---|---|
+| 0 px (what the pipeline wrote) | 801 | 0.0555 | 0.0406 |
+| 3 px | 8,063 | 0.1109 | 0.0991 |
+| 6 px | 19,908 | **0.1260** | 0.1212 |
+| 8 px | 29,249 | 0.1249 | 0.1240 |
+
+The 6-fold submission written on 2026-09-16 kept 801 px in this window against 5,154 label px: it is
+**under-covering**, and no floor can fix that — the old search could only choose between a skeleton and
+an un-thinned blob. `--dilate-grid` now searches the band width, and the reblend workflow is re-running
+the same six saved folds with it (`data/evidence/runs/35042805806-dilate-ab/`, triggered 2026-09-16).
+
+**Reading of the numbers, stated plainly.** The labels in that table are the *public catalogue*, not the
+scored set, and translating them is a stress test of the writing operator — not a measurement of the
+competition metric. It is reported because the asymmetry is structural: TP<sub>w</sub> credits a
+prediction up to R = 3 px away in full, a missed label costs 0.8 per unit, a false positive 0.2. For the
+scored faults — new to the expert-reviewed dataset (rules §1.1/§3.5), never seen in training — the
+model's localisation error is strictly larger than on the catalogue, which is exactly the regime where a
+skeleton loses everything and a band still collects credit.
+
+## 5. Still needed (unchanged by any of the above)
+
+1. **A DrivenData account + enrolment** to (a) download the official data-tab files directly, (b) upload
+   submissions at all, and (c) see the public leaderboard — the only unbiased signal for the scored
+   universe, 3 submissions/week (rules §3.2). Nothing in this repository can substitute for it.
+2. **A GPU** for the full `configs/config.yaml` run (EfficientNet-B5, 10 splits, 60 epochs). CPU runners
+   cap the ensemble at resnet34 / 45 epochs / ~2.5 h per fold, which is what run 35042805806 measured.
+3. **Eligibility check** (rules §1.3): competitors must be US citizens/permanent residents, private
+   entities US-incorporated, academic institutions US-accredited; FFRDC-affiliated researchers may
+   compete individually but are not cash-eligible; DOE employees and support contractors are excluded.
+4. **Narrative + code assets** (rules §3.2, §3.5): finalists must submit complete code assets and the
+   generative-AI disclosure — this repository is structured to be that submission (manifests,
+   environment pins, reproduce page, audit gates).
+5. **1 m DEM derivatives** (716 tiles already confirmed against the live USGS 3DEP bucket) and the
+   proxy-catalogue evaluation of `docs/DISCOVERY_PLAN.md` §3.
+6. **The public leaderboard score itself.** Every number in this repository is a proxy: catalogue DTI is
+   the wrong universe, discovery diagnostics are unlabelled, and the width study is a stress test. Three
+   submissions a week against the real metric (rules §3.2) is the only way to replace proxies with
+   measurements, and it needs the account from item 1.
 
 ---
 
-## Irregularities found — flagged for review
+## 6. Session 5 (same day): the rules verified verbatim, and the emission width
 
-1. **`example_submission.tif` is a copy of the labels, not an empty template.**
-   The problem page says it *"predicts total fault absence"*. Measured: 60,988 positive
-   pixels, **bit-identical** to `existing_faults.tif` across all 5,167,373 commonly-valid
-   pixels. Evidence: `data/evidence/transfer_analysis.json → sample_vs_labels`.
-   *Impact here: none — we take only georeferencing from it. Worth reporting upstream.*
+### 6.1 The scored population, now machine-verified rather than paraphrased
 
-2. **The feature stack has 19 bands**, not the ~10 the problem page's prose implies.
-   All 19 carry self-describing `band_name` / `data_category` tags, reproduced verbatim
-   on the site's Data page.
+Session 4 established that both prize phases score expert-mapped *new* faults. That conclusion has now
+been re-derived from the official PDF on a runner, sentence by sentence, by
+`scripts/verify_rules_quotes.py` (workflow `verify-rules.yml`, run
+[35134058898](https://github.com/buffedlizard55-lab/GEMSDOE/actions/runs/35134058898), 16 s):
 
-3. **The DEM-links PDF has no text layer.** pypdf → 41 chars, pdftotext → 0, pdfplumber
-   → 41; zero `http` occurrences in any. It is a raster scan.
-   Recovered by OCR, then **every URL re-confirmed against the live USGS 3DEP bucket
-   listing** — 716 unique tiles confirmed, 3 unmatched and reported. No URL is
-   reconstructed from OCR characters, because OCR corrupts them (`2020`→`202@`,
-   underscores→spaces, `QL1`/`QLi`). See `data/dem_links.json`.
+* **19 of 19 quoted sentences matched verbatim** after NFKC + quote folding + de-hyphenation +
+  whitespace collapse. No fuzzy matching; a miss fails the step and the commit.
+* The document fetched from `docs.nlr.gov/docs/fy26osti/96647.pdf` is **byte-identical** to the data-tab
+  mirror recorded in `data/evidence/inventory.json`: `sha256 50d854b1e0239fe6b9648d9fa5c7537bc7b6e5bc10cf6b37a2ff9aa401c36938`,
+  455,140 B, `identical: true`.
+* Evidence: `data/evidence/rules_quotes.json` (+ `rules_quotes.log`), committed by the workflow; the home
+  page of the site renders the six decisive sentences with their found/not-found marks.
 
-4. **Three doc pages cited HTML files that no longer existed** after the site rebuild.
-   Caught by `scripts/audit_docs.py`, fixed. The gate now passes.
+The sentences that carry the strategy, quoted exactly:
 
----
+| id | § | sentence |
+|---|---|---|
+| `phase1_target` | 1.1 | "In Phase 1, submissions will be evaluated against a privately withheld subset of the original new fault dataset compiled by expert reviewers." |
+| `phase2_target` | 1.1 | "Submissions will be reevaluated against the full, revised new fault dataset using the same distance-weighted Tversky index." |
+| `phase2_eligibility` | 1.1 | "All Phase 1 competitors will be eligible to compete in Phase 2 and will be automatically submitted for consideration." |
+| `experts_revise` | 1.1 | "After Phase 1, expert reviewers will use submitted predictions to revise the new fault dataset." |
+| `labels_source` | 2 | "The labels for this prize come from the USGS Quaternary Fault and Fold Database and from a set of newly identified faults labeled by geology experts at the National Laboratory of the Rockies (NLR) and USGS." |
+| `ranking_basis` | 3.2 | "Second-round prize rankings will be determined by running the selected final submissions against the complete updated test set created by expert review." |
 
-## The most important finding: what the metric actually pays for
+Two consequences worth stating because they are easy to get backwards: the released training label
+raster is the *existing* catalogue (problem page + rules §3.3) while both phases score the *new* faults,
+so reproducing the catalogue earns credit only where the experts' new labels coincide with it; and no
+Phase-1 top-5 cutoff gated Phase-2 entry, so there is nothing to be gained by trading discovery for
+catalogue coverage.
 
-`TP_w + FN_w = |G|` holds identically, so the official DTI rearranges exactly to
+### 6.2 The emission width was the binding constraint, not the floor
 
-> **DTI = TP_w / ( 0.2·(TP_w + FP_w) + 0.8·|G| )**
+Measured (`data/evidence/shift_robustness.json`, script `scripts/measure_shift_robustness.py`) on the one
+window where a written submission and the official label raster coexist — full-grid rows 2048–2560 ×
+cols 1280–1792, 5,154 label pixels:
 
-`TP_w` and `FP_w` share the same coefficient. Measured on a real window of the competition
-labels (`scripts/metric_strategy.py`):
+| band grown around the skeleton | pixels kept | DTI (labels as-is) | DTI (labels shifted ±3 px) |
+|---|---|---|---|
+| 0 px — what the pipeline wrote | 801 | 0.0555 | 0.0406 |
+| 3 px | 8,063 | 0.1109 | 0.0991 |
+| 6 px | 19,908 | **0.1260** | 0.1212 |
+| 8 px | 29,249 | 0.1249 | 0.1240 |
 
-| Strategy | DTI |
-|---|---:|
-| all zeros | 0.0000 |
-| **all ones (blanket coverage)** | **0.0956** |
-| **25 % of the faults, precisely** | **0.5545** |
-| known faults dilated by 1 px | 0.8818 |
-| exact known faults | 0.9999 |
+The submission kept 801 px against 5,154 label px in that window: it is **under-covering**, and the old
+search could not express the fix — its only two options were a pure skeleton and the un-thinned
+floor-passing blob. `scripts/blend_submission.py --dilate-grid` (default `0,1,2,3,4,6`) now searches the
+band width on the held-out crops, and `--calibrate loo` re-fits the floor — and the fold-weight rule — on
+the folds that are *not* being scored, printing the oracle ceiling next to the honest mean, so the
+selection optimism is a number instead of an assumption.
 
-α=0.2/β=0.8 *looks* like "predict generously". It is the opposite: β multiplies `FN_w`,
-capped at `|G|`; α multiplies `FP_w`, which grows with painted **area**, and non-fault
-pixels outnumber fault pixels ~50:1. **Be sparse, thin and confident.** Full derivation:
-`docs/METRIC_STRATEGY.md` and the site's Metric page.
+Honest boundary: the labels used in that table are the public catalogue, not the scored set, and shifting
+them is a stress test of the writing operator. It is reported because the asymmetry is structural
+(TP<sub>w</sub> credits a prediction up to R = 3 px away in full; a missed label costs 0.8, a false
+positive 0.2), and because it is *most* severe exactly where the scored faults live — faults the model
+never saw in training, whose traces it cannot localise as tightly as the catalogue's.
 
----
-
-## Pipeline state — verified, not yet competitive
-
-- **Runs end-to-end on the real rasters** (CPU runner): train → inference → format
-  validation → scoring. `submission.tif` produced; `validate_submission.py` **PASSED**
-  (single band, float32, [0,1], EPSG:32611, 100 m, matching grid/transform).
-- **Runs in-sandbox** against `data/fixture/` — a 512×512 window of the *real* rasters
-  committed to the repo (5 MB, int16, round-trip error 1.6×10⁻⁵). 3 epochs in ~20 s.
-- **Metric implementation verified**: 8 self-tests including fast-vs-brute-force agreement
-  and reproduction of the official worked example (0.60).
-
-### Honest numbers
-
-The only full-scale run was a 2-epoch MobileNetV2 smoke test: **DTI 0.0816 against the
-public labels — *below* the 0.0956 blanket-coverage floor.** That is a negative result and
-is recorded as such. It proves plumbing, not predictive power. Shaping helped on every run
-(`DTI_shaped` > `DTI_raw` consistently), exactly as the metric algebra predicts.
-
----
-
-## What is genuinely still needed
-
-1. **A GPU.** `configs/config.yaml` (UNet++/DeepLabV3+/SegFormer ensemble, EfficientNet-B5,
-   10 MC splits, 60 epochs, pretrained encoders) cannot run inside a CPU runner's job
-   limit. This is the single biggest gap between "works" and "competitive".
-2. **A DrivenData account** to actually submit. The pipeline produces a
-   format-valid `submission.tif`; uploading it requires a logged-in human, and the rules
-   require choosing one submission for both rounds before the deadline.
-3. **DEM derivatives** from the 716 confirmed tiles (~GB-scale download, best done on a
-   runner or the GPU box).
-4. **A fresh GitHub token** — the session token expired at the end of this session.
-   Last successful push: `a28b699`. All work is committed and on the remote.
-
----
-
-## Anti-hallucination measures in place
-
-- The site is **generated** (`scripts/build_site.py`) from the evidence JSON; no figure is
-  hand-typed. Missing evidence renders as an explicit "not available" block.
-- `scripts/audit_docs.py` fails CI if any doc cites a file that doesn't exist.
-- `scripts/verify_links.py` re-fetches every catalog URL and records the real HTTP status;
-  `LOGIN_REQUIRED` is reported as such, never as "verified".
-- Local scores are labelled **optimistic** wherever shown — they are computed against the
-  labels the model trained on, which are not the test set.
-
----
-
-## Site publishing note (2026-09-15)
-
-GitHub Pages for this repo is set to **`build_type: legacy`** (Jekyll from the repo root), so
-the root URL renders `README.md` and the `docs/` artifact uploaded by
-`.github/workflows/pages.yml` is ignored at the root. Switching Settings → Pages → Source to
-**"GitHub Actions"** requires repository-admin rights the automation token does not have
-(`PUT /repos/.../pages` returns HTTP 403).
-
-Workaround in place: a root `index.html` redirects to `docs/index.html`, which legacy Jekyll
-honours ahead of `README.md`. The generated site is live and correct at
-<https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html>.
-
-**Recommended (optional) owner action:** flip Source to "GitHub Actions" for a cleaner root
-URL. The redirect becomes harmless if you do.
-
----
-
-## Correctness fixes to the training path (2026-09-15)
-
-Three defects found by re-reading the code against the evidence, each now covered by a
-regression test in `tests/test_metric.py` (20/22 pass in-sandbox; the 2 failures are
-`torch`-only tests — no installable CPU wheel here, the pytorch index is egress-blocked).
-
-**1. Held-out label leakage through the FP-weight map** (`src/dataset.py`).
-`fpw = 1 - max_g k(d(x,g))` is handed to the loss as "how much a prediction here counts as
-a false positive", so `fpw < 1` states that a fault lies within R px. It was computed from
-the labels *before* the test windows were zeroed. Training windows are allowed to overlap
-the test grid by up to 25%, and inside that sliver the loss was being told not to penalise
-predictions sitting exactly on the hidden faults. Held-out DTI was therefore optimistic.
-Fixed by computing the EDT on the zeroed (train-only) labels and forcing `fpw = 1` inside
-the held-out region. Synthetic check: 196 test-region pixels carried `fpw < 1` before, 0
-after. On the real fixture the corrected map now matches a train-only reference exactly
-(max abs error 0.0 across all 27 train patches).
-
-**2. The shaping floor search could not reach the optimum** (`src/submission_optim.py`).
-The full-raster smoke run (Actions run `34876843912`) selected `t0 = 0.02` — the *first*
-point of `linspace(0.02, 0.9, 15)`. An optimum pinned to a grid endpoint means the grid,
-not the data, chose it. New `shaping_thresholds()` is log-spaced from 1e-4 and always
-includes 0.0 as an explicit no-floor row. Measured on the real fixture labels with a
-low-contrast field of the kind an under-trained model emits (max p = 0.014): the old grid
-zeroes the entire submission (**DTI 0.000**, every value falls under the 0.02 floor) while
-the new grid finds **DTI 0.856** at `t0 = 0.0050`.
-
-**3. `get_model(in_channels=10)` default** (`src/models.py`) → **19**, the measured band
-count. Every caller passes it explicitly so no run was affected, but it was a trap for
-direct importers.
+Runner A/B on the six saved folds (emission width + LOO audit, no retraining):
+`data/evidence/runs/35042805806-dilate-ab/` — workflow `reblend.yml`, run 35133590776. Its verdict decides
+the default: a wider band is kept only if the LOO mean beats the skeleton by > 0.01.

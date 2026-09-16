@@ -224,3 +224,66 @@ cited paths exist, that tables equal their artifacts, that links resolve and tha
 Lesson recorded: after any bulk revert, re-read the whole affected page — and prefer reading the
 **deployed** page over the local file, which is exactly how this was found. Fixed in the follow-up
 commit; the numeric claims in the same area are pinned by `test_line_geometry_dti_values` (20/20 tests).
+
+---
+
+# 2026-09-16 addendum — measured limits, and one that is not a limit
+
+Everything below was re-measured this session with `curl`, `gh` and `rasterio` inside the sandbox;
+nothing is inferred from the earlier notes.
+
+## 1. Egress allowlist (re-measured)
+
+| host | result | consequence |
+|---|---|---|
+| `github.com`, `api.github.com`, `codeload.github.com` | 200 / working | git push, PRs, workflow dispatch, **`api.github.com` artifact *listing*** |
+| `pypi.org`, `files.pythonhosted.org` | working | the full dependency set installs (torch included, CPU) |
+| `productionresultssa8.blob.core.windows.net` (Actions artifact payloads) | `EOF` | **workflow artifacts cannot be downloaded here**, only *listed* via the API. Measured by attempting `gh run download 35042805806 --name submission-final-35042805806`. |
+| `www.dropbox.com`, `drivendata.org`, `s3.amazonaws.com`, `prd-tnm.s3.amazonaws.com`, `sciencebase.gov`, `apps.nationalmap.gov`, `gdr.openei.org`, `community.drivendata.org`, `raw.githubusercontent.com`, `objects.githubusercontent.com` | TLS `EOF` | no direct data download; no release/artifact/raw fetch |
+
+**Not a limit: the competition data is already in hand.** `gems-geodawn-numerical-features.tif`
+(418,912,844 B), `existing_faults.tif` (425,830 B), `example_submission.tif` (1,599,597 B),
+`GEMS_96647.pdf` (455,140 B) and `Digital-elevation-model-links-JSON.pdf` (23,032,446 B) were
+downloaded, hashed and measured by a **GitHub-hosted runner** in session 2/3
+(`data/evidence/inventory.json`, `data/evidence/rasters.json`), and a 512×512 window of the real
+rasters is committed as `data/fixture/` so the pipeline can be exercised in-sandbox. The runner is the
+only machine here with open egress; that is why every data-touching job is a workflow.
+
+## 2. Compute (re-measured)
+
+2 vCPU / 3 GB RAM / 20 GB disk in the sandbox; GitHub-hosted `ubuntu-latest` runners are 4 vCPU CPU-only
+with a 6-hour job limit. Consequences actually observed:
+
+* full-suite tests **do** run here (torch CPU wheel from PyPI): 37/37 pass;
+* training does **not** meaningfully run here — 3 GB RAM caps patch size and the 2 vCPUs put a 6-fold
+  ensemble out of reach;
+* the 6-fold ensemble needed **2 h 36 min** per fold on a runner (`run 35042805806`), i.e. a
+  leaderboard-grade ensemble on CPU is possible but slow, which is exactly why the fold jobs are
+  parallel and time-guarded (`training.max_minutes`).
+
+## 3. Access we still need (human actions — no amount of automation here replaces them)
+
+1. **DrivenData account + competition enrolment.** Required to (a) download the official data-tab
+   files under the competition's own terms, (b) *upload* any submission (this is the single blocking
+   step between this repository and the leaderboard), and (c) see the public leaderboard, which is the
+   only unbiased feedback on the scored universe (3 submissions/week, rules §3.2).
+2. **Eligibility** (rules §1.3): US citizen/permanent resident (or a team whose captain is), US
+   incorporation for private entities, US-accredited institutions for academics; DOE employees/support
+   contractors and FFRDC *institutional* participation are excluded (FFRDC-affiliated individuals may
+   compete individually but are not cash-eligible). Worth a check before any prize is contemplated.
+3. **A GPU**, to run `configs/config.yaml` (EfficientNet-B5, 10 splits, 60 epochs) rather than the
+   CPU-feasible `configs/config_ci_ensemble.yaml`.
+4. **Narrative + code-asset submission** at the deadline: the rules require the complete solution
+   assets with resource documentation and a generative-AI disclosure; this repository is deliberately
+   shaped to be that package, but the upload itself is human.
+
+5. **Proxies are labelled as proxies, but they are still proxies.** Four different quantities appear in
+   this repository and none of them is the competition score: (a) held-out DTI against the public
+   catalogue (the wrong population — rules §1.1 scores new faults), (b) discovery diagnostics
+   (unlabelled), (c) the shift-robustness width curve (a stress test of the writing operator, run on the
+   catalogue), and (d) the blanket-ones floor (a constant). The new LOO audit removes one specific bias —
+   fitting and scoring the floor on the same folds — and nothing more.
+6. **The emission-width stress test was run on one window.** Rows 2048–2560 × cols 1280–1792 of the
+   official grid is the only place where a committed submission and the official label raster overlap
+   locally. The 6-fold A/B runs on the runner over all six held-out crops, but the absolute numbers in
+   `data/evidence/shift_robustness.json` are single-window and are reported as such.
