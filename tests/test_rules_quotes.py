@@ -86,3 +86,68 @@ def test_committed_report_matches_the_quote_list():
             assert q.get("diagnostic", {}).get("prefix_len") is not None, \
                 f"{q['id']} failed without a diagnostic"
     assert report["source"]["canonical_url"] == m.RULES_URL, "evidence must link the publisher"
+
+
+def test_page_furniture_is_removed_from_page_margins_only():
+    """A bare page number at a page boundary is furniture, not prose.
+
+    MEASURED 2026-09-16: the official rules' §3.6.2 sentence continues across a page break, and the
+    extractor emitted the next page's number inside it ("... and the 12 relative weight of faults
+    ..."), so a genuinely verbatim quotation could not match.  The strip must be exactly as narrow as
+    that: bare numbers at the very start or end of a page, nothing inside the text.
+    """
+    m = _mod()
+    assert m.strip_page_furniture("12\nrelative weight of faults\n13", 12) == \
+        "relative weight of faults"
+    assert m.strip_page_furniture("text continues here\n12", 12) == "text continues here"
+    # numbers inside prose are untouched
+    inside = "15 U.S.C. 1001 applies to a real sentence spanning 2026 words"
+    assert m.strip_page_furniture(inside, 7) == inside
+    # a rule/statute number at the start of a page is NOT a page number: the previous page ended a
+    # sentence, so the number cannot be a marker glued to a wrapped sentence
+    assert m.strip_page_furniture("15 U.S.C. 1001 applies", 15, None,
+                                  prev_tail="shall be fined.") == "15 U.S.C. 1001 applies"
+    # ...and when the previous page DOES end mid-sentence, a leading number EQUAL TO THE PAGE NUMBER
+    # is the page marker pypdf glued to the wrapped sentence (this is the real §3.6.2 break:
+    # page 11 ends "... and the", page 12's text begins "12 relative weight of faults ...")
+    assert m.strip_page_furniture("12 relative weight of faults", 12, None,
+                                  prev_tail="and the") == "relative weight of faults"
+    # a leading number that is not this page's number is never touched
+    assert m.strip_page_furniture("12 relative weight", 7, None,
+                                  prev_tail="and the") == "12 relative weight"
+
+
+def test_every_quote_is_present_in_the_committed_extracted_text():
+    """Offline end-to-end check of the whole quote list against the committed extraction.
+
+    The PDF is only reachable from a runner, so this uses the text the workflow committed.  It is
+    therefore only meaningful for a run that used the page-furniture strip (the report says so);
+    before that, the check would fail for a sentence that legitimately spans a page break.
+    """
+    m = _mod()
+    report = json.loads((ROOT / "data/evidence/rules_quotes.json").read_text())
+    if not report.get("page_furniture_stripped"):
+        import pytest
+        pytest.skip("committed extraction predates the page-furniture strip")
+    text_path = ROOT / (report.get("extracted_text") or {}).get("path", "")
+    if not text_path.exists():
+        import pytest
+        pytest.skip("extracted text not committed in this checkout")
+    text = text_path.read_text(encoding="utf-8")
+    missing = [q[0] for q in m.QUOTES if m.norm(q[2]) not in text]
+    assert not missing, f"quotes absent from the committed extraction: {missing}"
+    assert report["summary"]["all_found"] is True, \
+        "every quote is in the committed text but the report says some were not found"
+
+
+def test_the_strip_records_every_removal_for_audit():
+    """Removal must be inspectable: the report carries what was dropped, from which page, and why."""
+    m = _mod()
+    rec = []
+    out = m.strip_page_furniture("12 relative weight of faults\n13", 12, rec, prev_tail="and the")
+    assert out == "relative weight of faults"
+    assert [r["removed"] for r in rec] == ["13", "12"]
+    assert all(r["page"] == 12 and r["why"] for r in rec)
+    rec2 = []
+    m.strip_page_furniture("15 U.S.C. 1001 applies", 15, rec2, prev_tail="shall be fined.")
+    assert rec2 == [], "nothing inside prose may be recorded as removed"

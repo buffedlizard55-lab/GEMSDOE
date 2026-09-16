@@ -451,6 +451,155 @@ fault). A submission of pure noise also has <code>novel_fraction ≈ 1</code>, s
 never read alone — they are read next to the catalogue DTI, the emitted area and the component sizes.""")
 
 
+def _proxy_catalogue(ev: dict) -> str:
+    """The independent fault catalogue: the first local measurement on the scored population.
+
+    Everything else in this repository is measured against `labels.tif` - the faults the catalogue
+    ALREADY contains - while both prize phases score faults it does NOT contain (rules §1.1/§3.3).
+    This section renders the instrument for that gap: an independent USGS fault set
+    (SGMC, Horton et al. 2017, DOI 10.3133/ds1052) rasterised on the competition grid and split by
+    whether a training label lies within R of it.  Every number comes from the committed evidence
+    JSON - and Python 3.11 forbids nested braces in f-strings here, so the lookups are hoisted.
+    """
+    ps, fm = ev.get("proxy_stats"), ev.get("proxy_fetch") or {}
+    ex, sweep = ev.get("proxy_eval"), ev.get("proxy_sweep")
+    if not ps:
+        return missing("The independent (proxy) fault catalogue.",
+                       "the Proxy catalogue workflow (.github/workflows/proxy-eval.yml)")
+
+    px, labels = ps["proxy"], ps["labels"]
+    src = fm.get("source") or {}
+    res = fm.get("result") or {}
+    ident = src.get("official_identity") or {}
+    links = src.get("documented_links_checked") or {}
+    n_class = len(res.get("per_rule_id_name") or {})
+    n_feat = int(res.get("features") or 0)
+    states = ", ".join(f"{k} {v:,}" for k, v in sorted((res.get("per_state") or {}).items()))
+    doc_url = str(src.get("doi") or "")
+    license_txt = str(src.get("license") or "")
+    layer_name = str(src.get("layer_name") or "")
+    n_err = len((fm.get("query") or {}).get("request_urls") or [])
+    pages = int((fm.get("query") or {}).get("pages") or 0)
+
+    if ident.get("match"):
+        ident_txt = ("tied to the data release by measurement: the DOI resolves to ScienceBase item "
+                     "<code>%s</code>, which is exactly the item id inside the service name"
+                     % e(str(ident.get("item_id_in_service"))))
+    else:
+        why = ident.get("doi_route_error") or ident.get("item_route_error") or ident.get("error")
+        ident_txt = ("service-to-DOI identity could not be re-established on this run and is "
+                     "recorded as such, not assumed: %s" % e(str(why or "no route succeeded")))
+    link_txt = (", ".join("<code>" + e(u.split("/")[-1]) + "</code> " + e(str(v))
+                          for u, v in links.items()) if links else "no link check recorded")
+
+    rows = []
+    if ex:
+        b = ex["results"]["baselines"]
+        for key, label, hl in (("as_submitted", "this submission, as committed", True),
+                               ("blanket_ones", "every pixel = 1 (the coverage floor)", False),
+                               ("catalogue_plus_submission", "catalogue &cup; submission", False),
+                               ("catalogue_copy", "exact copy of the training labels", False),
+                               ("zeros", "all zeros", False)):
+            v = ex["results"]["as_submitted"] if key == "as_submitted" else b.get(key)
+            if not v:
+                continue
+            rows.append('<tr%s><td>%s</td><td class="num"><b>%.4f</b></td>'
+                        '<td class="num">%s</td><td class="num">%s</td><td class="num">%s</td></tr>'
+                        % (' class="hl"' if hl else "", e(label), v["dti"],
+                           f'{v["TP_w"]:,.0f}', f'{v["FP_w"]:,.0f}', f'{v["FN_w"]:,.0f}'))
+    table = ("<h3>The submission, scored on the faults the labels do not contain</h3>"
+             "<table class=\"metric\"><thead><tr><th>prediction</th>"
+             "<th>DTI on the proxy-only faults</th><th>TP_w</th><th>FP_w</th><th>FN_w</th>"
+             "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>") if rows else missing(
+        "The committed submission scored against the proxy population.",
+        "the Proxy catalogue workflow")
+
+    accept = ((ex or {}).get("results") or {}).get("acceptance") or {}
+    combined = ev.get("proxy_eval_combined") or {}
+    comb_dti = ((combined.get("results") or {}).get("as_submitted") or {}).get("dti")
+    comb_px = (combined.get("truth") or {}).get("px")
+    comb_txt = (" Scored on the <em>whole</em> proxy plus the labelled faults it holds "
+                "(%s px) the same submission gets <b>%.4f</b> - the gap between the two numbers is "
+                "how much of its skill is catalogue recall." % (f"{comb_px:,}", comb_dti)
+                ) if (comb_dti is not None and comb_px) else ""
+
+    sweep_html = ""
+    widths = ((sweep or {}).get("results") or {}).get("best_per_emission_width")
+    if widths:
+        sw_rows = "".join('<tr%s><td class="num">%s</td><td class="num">%.4f</td></tr>'
+                          % (' class="hl"' if str(k) == "0" else "", e(str(k)), v)
+                          for k, v in sorted(widths.items(), key=lambda kv: int(kv[0])))
+        best = (sweep["results"].get("sweep_best") or {})
+        sweep_html = (
+            "<h3>The emission-width sweep, on <em>that</em> population</h3>"
+            "<p>The same family of policies the shaping search uses (floor &times; thinning &times; "
+            "band width), scored here against faults the labels lack:</p>"
+            "<table><thead><tr><th>band grown around the kept set (px)</th>"
+            "<th>best proxy DTI over the floor grid</th></tr></thead><tbody>" + sw_rows +
+            "</tbody></table>"
+            "<p>Best candidate on this population: floor <code>%.4g</code>, thin=<code>%s</code>, "
+            "dilate=<code>%s</code> px, DTI <b>%.4f</b>. Acceptance rule, pre-registered before the "
+            "run: change the default shaping only if a candidate beats the current default by more "
+            "than 0.01 <em>here</em> and reproduces on a second ensemble.</p>"
+            % (float(best.get("t0", 0.0)), e(str(best.get("thin"))), e(str(best.get("dilate"))),
+               float(best.get("dti", 0.0))))
+
+    cc = accept.get("catalogue_copy_dti_on_proxy_only", 0.0)
+    cc_txt = ("%.4f" % cc) if accept else "not measured"
+    accept_note = ("" if not accept else
+                   (" That identity is asserted in <code>scripts/eval_proxy_catalogue.py</code> and "
+                    "fails the run if it breaks." if accept.get("passed")
+                    else " <b>ASSERTION FAILED on the last run - do not rely on this section.</b>"))
+
+    warn_note = note("warn", (
+        "<b>What this is and is not.</b> It is a measurement on real mapped faults absent from the "
+        "training labels: an exact copy of the labels scores <b>" + cc_txt + "</b> here, by "
+        "construction." + accept_note + " It is <em>not</em> the competition metric — the scored "
+        "faults were drawn by experts from the GeoDAWN geophysics, SGMC faults by state-map "
+        "geologists from surface mapping. Related populations, not the same one: compare policies "
+        "here, never leaderboards."))
+    ok_note = note("ok", (
+        "Why this matters more than another catalogue-DTI point: the shaping search, the early "
+        "stopping and the fold weights are all fitted against the catalogue, and the catalogue is "
+        "the one population where an ultra-sparse emission pays. TP<sub>w</sub> takes a max within R, "
+        "a missed label costs 0.8 and a false positive 0.2, so on a population of faults the model "
+        "has never been trained on, coverage — not precision — is the lever." + comb_txt))
+
+    head = """<h2 id="proxy">What the model finds that the catalogue does not</h2>
+<p>Every other number on this page is computed against the <em>training labels</em> — the faults the
+catalogue already contains — while both prize phases score faults it does not contain. This is the
+instrument for that gap: an independent fault catalogue, fetched from USGS and rasterised on the
+competition grid, split by whether a training label lies within R = %d px (the competition's 300 m)
+of it. Reproduce: <code>scripts/fetch_proxy_faults.py</code> &rarr;
+<code>scripts/build_proxy_catalogue.py</code> &rarr; <code>scripts/eval_proxy_catalogue.py</code>,
+all three run by the <em>Proxy catalogue</em> workflow.</p>
+<table><thead><tr><th>quantity</th><th>value</th></tr></thead><tbody>
+<tr><td>source</td><td><a href="%s">USGS State Geologic Map Compilation, Data Series 1052</a>
+ (Horton, San Juan &amp; Stoeser 2017) — %s; read through the published FeatureServer layer
+ <code>%s</code>, %s</td></tr>
+<tr><td>selection rule</td><td>%d fault classes taken from the service's own coded-value domain
+ (every class whose published name contains "fault"), %s polylines in %d paged requests</td></tr>
+<tr><td>states present</td><td>%s</td></tr>
+<tr><td>rasterised on the competition grid</td><td>%s px (%s km of trace); %s px of it lie outside
+ the data footprint</td></tr>
+<tr><td>already within R of a training label</td><td>%s px (%.1f %% of the in-footprint proxy)</td></tr>
+<tr><td><b>absent from the training labels</b> — the proxy truth set</td><td><b>%s px</b> = %s km of
+ trace in %s components (largest %s km)</td></tr>
+<tr><td>for scale</td><td>the training labels hold %s km of trace, so the absent set is not a rarer
+ population than the catalogue itself</td></tr>
+<tr><td>USGS links re-checked in the same run</td><td>%s</td></tr>
+</tbody></table>""" % (
+        int(ps["inputs"]["R_pixels"]), e(doc_url), e(license_txt), e(layer_name), ident_txt,
+        n_class, f"{n_feat:,}", pages, e(states), f"{px['mask_px']:,}",
+        f"{px['mask_px'] * ps['grid']['pixel_m'] / 1000.0:,.0f}",
+        f"{px.get('outside_footprint_px', 0):,}", f"{px['near_label_px']:,}",
+        100 * px["catalogue_already_covers_fraction"], f"{px['proxy_only_px']:,}",
+        f"{px['proxy_only_km']:,.0f}", f"{px['proxy_only_components']['components']:,}",
+        f"{px['proxy_only_components']['largest_km']:,.1f}", f"{labels['fault_km']:,.0f}", link_txt)
+
+    return head + table + warn_note + sweep_html + ok_note
+
+
 def build_metric(ev: dict) -> str:
     ms = ev.get("metric_strategy")
     body = [f"""<h2>Definition</h2>
@@ -596,6 +745,7 @@ coexist (%s): %s</p>
                          "floor on the folds that are <em>not</em> being scored, so the reported mean "
                          "is not selection-optimistic.")) + verdict_html)
 
+    body.append(_proxy_catalogue(ev))
     body.append(_scoring_universe(ev))
     body.append(f"""<h2>Remaining caveats</h2>
 <ul>
@@ -1061,6 +1211,16 @@ def main() -> int:
         "sb": load(ROOT / "data/evidence/sciencebase_dois.json"),
         "linkver": load(DOCS / "link_verification.json"),
         "robustness": load(ROOT / "data/evidence/shift_robustness.json"),
+        # The proxy catalogue: an independent USGS fault set (SGMC, DOI 10.3133/ds1052) split into
+        # "the training labels already contain it" and "they do not".  This is the only local
+        # measurement taken on a population that resembles the SCORED one (new faults).
+        "proxy_stats": load(ROOT / "data/evidence/proxy/proxy_stats.json"),
+        "proxy_fetch": load(ROOT / "data/evidence/proxy/fetch_meta.json"),
+        "proxy_eval": next((load(p) for p in [
+            ROOT / "data/evidence/proxy/eval_reblend_submission.json",
+            ROOT / "data/evidence/proxy/eval_submission.json"] if p.exists()), None),
+        "proxy_eval_combined": load(ROOT / "data/evidence/proxy/eval_submission_combined.json"),
+        "proxy_sweep": load(ROOT / "data/evidence/proxy/eval_sweep.json"),
         "dilate_experiment": next((load(p) for p in [
             ROOT / "data/evidence/runs/35042805806-dilate-ab/blend_report.json",
             ROOT / "data/evidence/runs/35042805806-experiment/blend_report.json"] if p.exists()),

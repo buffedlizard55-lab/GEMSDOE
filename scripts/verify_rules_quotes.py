@@ -214,7 +214,49 @@ def norm(text: str) -> str:
     return t
 
 
-def extract(path: Path) -> str:
+def strip_page_furniture(page_text: str, page_no: int | None = None,
+                         record: list | None = None, prev_tail: str | None = None) -> str:
+    """Remove page-margin furniture (a bare page number) from ONE page's extracted text.
+
+    MEASURED 2026-09-16 (run 35153102372).  pypdf emits a page's number as the first line of that
+    page, so a sentence that continues across a page break comes back with a bare number inside it:
+
+        "... and the 12 relative weight of faults in both test datasets will be determined ..."
+
+    That is furniture, not prose: it is what a reader sees in the margin, and leaving it in makes a
+    genuinely verbatim quotation unmatchable.  Only lines that are *nothing but* a number, at the
+    very start or the very end of a page, are removed; nothing inside the page's text is touched,
+    and every other character is compared exactly as before.  The old behaviour is still available
+    with --keep-page-furniture, so this cannot quietly become a fuzzy match.
+    """
+    lines = [ln.strip() for ln in page_text.splitlines()]
+
+    def _drop(idx: int, why: str) -> None:
+        if record is not None:
+            record.append({"page": page_no, "removed": lines[idx], "why": why})
+        lines.pop(idx)
+
+    while lines and re.fullmatch(r"\d{1,4}", lines[0]):
+        _drop(0, "bare number at the top of the page")
+    while lines and re.fullmatch(r"\d{1,4}", lines[-1]):
+        _drop(len(lines) - 1, "bare number at the foot of the page")
+    # pypdf sometimes emits the page number glued to the first line of that page
+    # ("12 relative weight of faults ..."), so a sentence continuing across the break reads as
+    # "... and the 12 relative weight ...".  Only a leading run of digits EQUAL TO THE PAGE NUMBER
+    # is removed - a number in prose that merely starts a page is left alone.
+    continues = prev_tail is None or not re.search(r"[.!?:;)\]]\s*$", prev_tail.strip())
+    if page_no is not None and lines and continues:
+        m = re.match(r"^(\d{1,4})\s+(\S.*)$", lines[0], flags=re.S)
+        if m and int(m.group(1)) == page_no:
+            if record is not None:
+                record.append({"page": page_no, "removed": m.group(1),
+                               "why": "page number glued to the first line of the page "
+                                      "(the previous page ends mid-sentence)"})
+            lines[0] = m.group(2)
+    return "\n".join(lines)
+
+
+def extract(path: Path, keep_page_furniture: bool = False, notes: list | None = None) -> str:
     if path.suffix.lower() == ".txt":
         return path.read_text(encoding="utf-8", errors="replace")
     try:
@@ -222,7 +264,15 @@ def extract(path: Path) -> str:
     except ImportError:                                             # pragma: no cover
         raise SystemExit("pypdf is required to read a PDF: pip install pypdf")
     reader = PdfReader(str(path))
-    return "\n".join((pg.extract_text() or "") for pg in reader.pages)
+    pages, prev_tail = [], None
+    for i, pg in enumerate(reader.pages, start=1):
+        t = pg.extract_text() or ""
+        if not keep_page_furniture:
+            t = strip_page_furniture(t, i, notes, prev_tail=prev_tail)
+            tail_lines = [ln for ln in t.splitlines() if ln.strip()]
+            prev_tail = " ".join(tail_lines[-2:]) if tail_lines else None
+        pages.append(t)
+    return "\n".join(pages)
 
 
 def fetch(url: str, dest: Path) -> tuple[int, str]:
@@ -242,6 +292,9 @@ def main() -> int:
     ap.add_argument("--out", default=str(ROOT / "data/evidence/rules_quotes.json"))
     ap.add_argument("--expected-sha256", default=None,
                     help="sha256 recorded for the data-tab mirror; proves the two copies are identical")
+    ap.add_argument("--keep-page-furniture", action="store_true",
+                    help="keep bare page numbers at page starts/ends (pre-2026-09-16 behaviour). "
+                         "Kept as a flag so the removal is visible and reversible, not silent.")
     ap.add_argument("--dump-text", default=None,
                     help="also write the NORMALISED extracted text here (public-domain US "
                          "government document).  Without it, every check of a quote costs a CI "
@@ -264,12 +317,18 @@ def main() -> int:
         b = doc_path.read_bytes()
         nbytes, sha = len(b), hashlib.sha256(b).hexdigest()
 
-    text = norm(extract(doc_path))
+    furniture: list = []
+    text = norm(extract(doc_path, keep_page_furniture=a.keep_page_furniture,
+                        notes=furniture))
     if a.dump_text:
         dp = Path(a.dump_text)
         dp.parent.mkdir(parents=True, exist_ok=True)
         dp.write_text(text, encoding="utf-8")
         print(f"wrote the normalised document text to {dp} ({len(text)} chars)")
+    if furniture:
+        print(f"page furniture removed before matching: {len(furniture)} line(s) - "
+              f"{[f['removed'] for f in furniture][:10]}"
+              f"{'...' if len(furniture) > 10 else ''} (recorded in the report)")
     results = []
     for qid, section, quote, why in QUOTES:
         found = norm(quote) in text
@@ -294,7 +353,10 @@ def main() -> int:
         source=dict(url=a.url or str(doc_path), canonical_url=a.source_url, bytes=nbytes,
                     sha256=sha),
         method=("verbatim substring match after NFKC, quote/dash folding, de-hyphenation across line "
-                "breaks and whitespace collapse - no paraphrasing, no fuzzy matching"),
+                "breaks, whitespace collapse and removal of page numbers at page margins - no "
+                "paraphrasing, no fuzzy matching"),
+        page_furniture_stripped=(not a.keep_page_furniture),
+        page_furniture_removed=furniture,
         extracted_text=(dict(path=str(a.dump_text),
                              chars=len(text)) if a.dump_text else None),
         match_against_mirror=dict(expected_sha256=a.expected_sha256,

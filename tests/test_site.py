@@ -70,3 +70,54 @@ def test_scoring_universe_without_evidence_says_so():
     html = mod._scoring_universe({})
     assert "not been machine-verified" in html
     assert "INCOMPLETE" not in html
+
+
+def _proxy_ev():
+    import json as _json
+    root = ROOT / "data/evidence/proxy"
+    def _l(name):
+        p = root / name
+        return _json.loads(p.read_text()) if p.exists() else None
+    return {"proxy_stats": _l("proxy_stats.json"),
+            "proxy_fetch": _l("fetch_meta.json"),
+            "proxy_eval": _l("eval_reblend_submission.json") or _l("eval_submission.json"),
+            "proxy_eval_combined": _l("eval_submission_combined.json"),
+            "proxy_sweep": _l("eval_sweep.json")}
+
+
+def test_proxy_section_renders_the_evidence_not_a_claim():
+    """The proxy section is the site's only number taken on a population like the scored one.
+
+    It must quote the committed evidence (feature count, split of the rasterised catalogue, the
+    submission's DTI and the catalogue-copy baseline), link the publisher, and state the caveat -
+    a page that showed the number without the caveat would be exactly the overclaiming this
+    repository is written against.
+    """
+    ev = _proxy_ev()
+    if not ev["proxy_stats"]:
+        import pytest
+        pytest.skip("proxy evidence not built in this checkout")
+    mod = _site_mod()
+    html = mod._proxy_catalogue(ev)
+    ps = ev["proxy_stats"]
+    assert f"{ps['proxy']['proxy_only_px']:,}" in html, "proxy-only pixel count missing"
+    assert f"{ps['proxy']['mask_px']:,}" in html, "rasterised count missing"
+    assert f"{(ev['proxy_fetch'] or {}).get('result', {}).get('features', 0):,}" in html, \
+        "fetched-feature count missing"
+    assert "doi.org/10.3133/ds1052" in html, "the SGMC publication link is not rendered"
+    assert "catalogue" in html and "absent from the training labels" in html
+    if ev["proxy_eval"]:
+        d = ev["proxy_eval"]["results"]["as_submitted"]["dti"]
+        assert f"{d:.4f}" in html, "the submission's proxy DTI is not rendered"
+        cc = ev["proxy_eval"]["results"]["baselines"]["catalogue_copy"]["dti"]
+        assert f"{cc:.4f}" in html, "the catalogue-copy baseline is not rendered"
+    assert "not</em> the competition metric" in html, "the interpretation caveat is missing"
+    assert len(html) > 2000
+
+
+def test_proxy_section_without_evidence_says_so():
+    mod = _site_mod()
+    html = mod._proxy_catalogue({})
+    assert "not available" in html.lower()
+    assert "0.0247" not in html and "0.0" not in html.split("</h2>")[0], \
+        "a missing proxy must not render numbers"
