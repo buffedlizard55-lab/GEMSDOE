@@ -160,3 +160,35 @@
 - ✅ Validation and dummy submission scripts ready
 - ✅ GitHub Pages site with literature review, methodology, data catalog, submission guide, limitations
 - ✅ Auditable tables with official verified links for manual review
+
+
+---
+
+## 2026-09-16 — measured next experiments (each with an acceptance criterion)
+
+1. **Calibrate the aggregation rule, not just the floor.** Measured this session on the real 6-fold
+   ensemble: per-fold held-out DTI was 0.3351 / 0.2665 / 0.1780 / 0.1776 / 0.0916 / 0.0742 — a 4.5×
+   spread inside one configuration, while the blend averages them equally. Proposal: for each fold `f`,
+   read **all six** full-raster maps at fold `f`'s held-out windows (the window list is in that fold's
+   manifest) and score the *aggregate* against `f`'s held-out labels; average over folds. That makes the
+   aggregation rule (equal / median / trimmed / DTI-weighted / top-k) and the shaping floor tunable on a
+   quantity that at least matches how the map is finally assembled. *Acceptance:* the chosen rule beats
+   equal averaging by >0.01 mean held-out DTI, and the improvement survives on a second, independently
+   seeded ensemble. Note the existing counter-evidence (2-fold toy: DTI weights helped 0.014→0.098;
+   6-fold mini ensemble: they hurt 0.103→0.066) — that is why the criterion is measured, not assumed.
+2. **`neg_fraction` A/B.** Hermant et al. (2025) train only on fault-bearing tiles, explicitly to avoid
+   "learning images without mapped faults when there should be some due to operator observation bias" —
+   i.e. absence from the catalogue is not evidence of absence. Our config keeps 35 % empty windows.
+   *Acceptance:* improve the proxy-catalogue metric (`docs/DISCOVERY_PLAN.md` §3b); a *fall* in catalogue
+   DTI is acceptable and expected, because the catalogue is not the scored universe.
+3. **Proxy-catalogue evaluation harness** (§3b): compile independent fault traces for the GeoDAWN region
+   (state geologic maps — pre-Quaternary faults are by construction absent from the Quaternary database
+   used for the labels), intersect with `labels.tif`, and report DTI on the
+   *present-in-proxy-but-absent-from-labels* subset. *Acceptance:* the harness reproduces the known
+   result that a catalogue-copy submission scores ~0 on that subset, then discriminates between models.
+4. **1 m DEM derivatives**, subset-first. Rules §2 says the DEM is part of the intended feature data and
+   716 tiles are already URL-verified against the live USGS bucket (`data/dem_links.json`); Hermant et al.
+   map faults from elevation and slope at 10 m. Pilot on one survey block, then decide.
+5. **Every workflow step that judges a result must fail loudly.** `pipefail` is now on the steps that
+   mattered; the same audit should be applied to future steps by default, and any step that writes a
+   "report" should assert the thing it reports on exists and is non-degenerate.

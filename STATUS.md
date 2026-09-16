@@ -108,14 +108,36 @@ Nevada. Our config keeps 35 % empty windows (`neg_fraction: 0.35`) — a concret
 * The full test suite now runs **in-sandbox with torch installed** (CPU wheel from PyPI):
   **37/37 pass** (`pytest tests -q`). Previous sessions could not install torch here at all.
 
-## 4. What was rebuilt this session
+## 4. What was rebuilt this session — and it produced the first real submission
 
 `.github/workflows/reblend.yml` (+ trigger `.github/triggers/reblend`) re-runs **only** the blend step
 against the fold artifacts of run 35042805806 — six checkpoints and six full-raster probability maps
 (≈120 MB each) that the runner can still fetch, valid until ~2026-09-30. Cross-run artifact download
-(`actions/download-artifact@v4` with `run-id`) is the mechanism. Output: `submission.tif` written by the
-fixed, read-back-verifying writer, plus `blend_report.json` (now including the discovery diagnostics),
-committed to this branch and uploaded as an artifact.
+(`actions/download-artifact@v4` with `run-id`) is the mechanism. Actions run **35131318033** finished in
+**7 m 46 s** (the training that it reuses took 2 h 36 min) and committed:
+
+| output | value |
+|---|---|
+| `data/evidence/runs/35042805806/submission.tif` | **386,018 B**, tiled, blocks 256×256, sha256 `a5ae61d5…` |
+| grid / format | 3292×3730, 1 band float32, EPSG:32611, 100 m, NaN outside the footprint (57.93 % of pixels), values in [0,1] |
+| emitted area | 21,492 non-zero px of 5,165,852 finite px (0.42 %) |
+| validation | `✅ Validation PASSED` — CRS, resolution, dtype, range, size and transform all match the template (`validation.log`) |
+| pooled shaping | `t0 = 0.470`, `thin = True`; mean held-out DTI 0.1903 (unshaped 0.1560) |
+| informational DTI vs the **known** catalogue | 0.1387 (blanket-ones floor on this grid: 0.0246) — wrong-universe number |
+| **discovery profile** | `novel_fraction = 0.684`; 6,090 px in **617** components that never come within R of a catalogued fault (largest 92 px, ≈8.4 km long); catalogue recall @R = 0.214 |
+
+The discovery profile is the interesting one: **68 % of the emitted probability mass sits farther than
+300 m from any catalogued fault**, so this submission is not merely restating the catalogue — it is
+proposing 617 candidate fault segments the catalogue does not contain. Whether they are real is exactly
+what Phase 2's expert review decides, and what the public leaderboard would score; neither is available
+here.
+
+**Fold spread is wide and worth acting on** (measured, from the same report): held-out DTI per fold was
+0.3351, 0.2665, 0.1780, 0.1776, 0.0916, 0.0742 — a 4.5× spread between the best and worst fold of the
+*same* configuration. Equal averaging is therefore squeezing a weak fold into a strong one. The next
+calibration experiment (acceptance criterion in `SUGGESTIONS.md`) is to score the aggregation rule
+itself on each fold's held-out windows by reading the *other* five folds' full-raster maps there, i.e.
+a leave-one-fold-out evaluation of the blend, instead of the current per-fold calibration.
 
 ## 5. Still needed (unchanged by any of the above)
 
