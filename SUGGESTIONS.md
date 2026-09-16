@@ -176,14 +176,20 @@
    counter-evidence stands (2-fold toy: DTI weights helped 0.014→0.098; 6-fold mini ensemble: they hurt
    0.103→0.066) — which is exactly why the criterion is the LOO number and not the pooled one.
    Evidence lands in `data/evidence/runs/35042805806-dilate-ab/` (workflow `reblend.yml`).
-1b. **Emission width — measured 2026-09-16.** `data/evidence/shift_robustness.json` (script
-   `scripts/measure_shift_robustness.py`): on the one window where a written submission and the
-   official label raster coexist, the skeleton kept 801 px against 5,154 label px and scored 0.0555,
-   while a 6-px band scored 0.1260 (8 px: 0.1249). The curve says the *operator family*, not the floor,
-   was the binding constraint. Motivation for the scored universe: the scored faults are new to the
-   expert-reviewed dataset (rules §1.1/§3.5), never seen in training, so their localisation error is
-   strictly larger than the catalogue's — the regime where a skeleton collects nothing and a band still
-   collects the R-neighbourhood credit. Surfaces on `docs/metric.html`.
+1b. **Emission width — measured 2026-09-16, and the surrogate lost.** The sweep ran on the six real
+   held-out crops (run 35133590776): band 0 px 0.1903, 1 px 0.1525, 2 px 0.1281, 3 px 0.1128,
+   4 px 0.1037, 6 px 0.0908 — monotone decreasing, so the search chose the skeleton and the earlier
+   stress test (`data/evidence/shift_robustness.json`, +0.0705 for a 6-px band on a single window with
+   shifted labels) does not transfer to the population the labels can actually measure. Both numbers
+   are real; they answer different questions ("what if the fault is somewhere else" vs "what if it is
+   where I drew it"), and the scored faults are new faults, so the truth is between them.
+   *What would change the decision:* a measurement on the *scored* population — i.e. the public
+   leaderboard (3 submissions/week, needs the account) — or a proxy-catalogue harness
+   (item 3) that scores against faults the model never trained on. Until one of those exists, the
+   skeleton stands and `--dilate-grid` stays as a documented knob. The LOO floor gain (+0.0083) is
+   below the pre-registered 0.01 acceptance test: the post-processing is a small honest win, and the
+   model - not the shaping - is the lever.
+
 2. **`neg_fraction` A/B.** Hermant et al. (2025) train only on fault-bearing tiles, explicitly to avoid
    "learning images without mapped faults when there should be some due to operator observation bias" —
    i.e. absence from the catalogue is not evidence of absence. Our config keeps 35 % empty windows.

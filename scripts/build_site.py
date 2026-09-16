@@ -518,6 +518,47 @@ fraction of faults found (0.554 → 0.794 → 0.917 for 25/50/75% precise recall
                                          _best["per_shift"]["0"]["mean"]))
     else:
         gain_txt = ""
+    # The runner A/B that the width section motivates.  Reported whether or not it favoured the
+    # wider band - a knob that exists must carry the result of the sweep that tested it, otherwise
+    # the page is advertising a hypothesis.
+    exp = ev.get("dilate_experiment")
+    verdict_html = ""
+    if exp and exp.get("aggregation_calibration"):
+        ac = exp["aggregation_calibration"]["summary"]
+        sh = exp.get("shaping", {})
+        table = sh.get("calibration_table") or []
+        dil_rows = {}
+        for r in table:
+            if r.get("thin") and r.get("dilate") is not None:
+                dil_rows.setdefault(int(r["dilate"]), []).append((float(r["t0"]), r["mean_dti"]))
+        best_per_band = {k: max(v, key=lambda t: t[1]) for k, v in dil_rows.items()}
+        cells = "".join(
+            "<tr><td class=\"num\">%d</td><td class=\"num\">%.4f</td>"
+            "<td class=\"num\">%.4f</td></tr>" % (k, best_per_band[k][1], best_per_band[k][0])
+            for k in sorted(best_per_band))
+        verdict_html = ("<h3>The sweep itself, on the six saved folds</h3>"
+                        "<p>The same search was re-run on a runner over the six fold models "
+                        "(<code>--dilate-grid 0,1,2,3,4,6</code>, no retraining; evidence in "
+                        "<code>data/evidence/runs/</code>). It chose <b>dilate = %d px</b> with "
+                        "floor %.4f - the narrowest option it was given - with a pooled mean "
+                        "held-out DTI of %.4f. So on the population it <em>can</em> measure, the "
+                        "skeleton is still right; the width table above measures the regime the "
+                        "labels here cannot reach.</p>"
+                        "<table><thead><tr><th>band (px)</th><th>best mean DTI on the held-out crops"
+                        "</th><th>at floor</th></tr></thead><tbody>%s</tbody></table>"
+                        "<p>Leave-one-fold-out audit of the floor itself (fitted on the five folds "
+                        "that are not being scored): honest mean <b>%.4f</b> against %.4f unshaped "
+                        "(gain %+.4f, the acceptance test was &gt; 0.01) and an oracle ceiling of "
+                        "%.4f. The gap between the pooled %.4f and the honest %.4f is selection "
+                        "optimism, now a number instead of an assumption - and it says the "
+                        "post-processing is a small, honestly-measured win: the model is the lever."
+                        "</p>" % (int(sh.get("dilate", 0)), float(sh.get("t0", 0.0)),
+                                   float(sh.get("mean_heldout_dti", 0.0)), cells,
+                                   ac["mean_dti_loo"], ac["mean_dti_unshaped"],
+                                   ac["gain_loo_over_unshaped"],
+                                   ac["mean_dti_self_best_oracle"],
+                                   float(sh.get("mean_heldout_dti", 0.0)), ac["mean_dti_loo"]))
+
     rb = ev.get("robustness")
     if rb:
         _rows = []
@@ -552,7 +593,7 @@ coexist (%s): %s</p>
             note("info", "Because of this the shaping search now searches the emission width too "
                          "(<code>--dilate-grid</code>), and <code>--calibrate loo</code> re-fits the "
                          "floor on the folds that are <em>not</em> being scored, so the reported mean "
-                         "is not selection-optimistic.")))
+                         "is not selection-optimistic.")) + verdict_html)
 
     body.append(_scoring_universe(ev))
     body.append(f"""<h2>Remaining caveats</h2>
@@ -1019,6 +1060,10 @@ def main() -> int:
         "sb": load(ROOT / "data/evidence/sciencebase_dois.json"),
         "linkver": load(DOCS / "link_verification.json"),
         "robustness": load(ROOT / "data/evidence/shift_robustness.json"),
+        "dilate_experiment": next((load(p) for p in [
+            ROOT / "data/evidence/runs/35042805806-dilate-ab/blend_report.json",
+            ROOT / "data/evidence/runs/35042805806-experiment/blend_report.json"] if p.exists()),
+            None),
         "runs": [],
     }
     rd = ROOT / "data/evidence/runs"
