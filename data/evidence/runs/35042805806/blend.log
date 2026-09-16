@@ -1,0 +1,23 @@
+loaded 6 fold(s): ['folds/fold-0', 'folds/fold-1', 'folds/fold-2', 'folds/fold-3', 'folds/fold-4', 'folds/fold-5']
+pooled shaping: t0=0.372 thin=True -> mean held-out DTI 0.1927 (unshaped 0.1560)
+Traceback (most recent call last):
+  File "rasterio/_io.pyx", line 1530, in rasterio._io.DatasetWriterBase.__init__
+  File "rasterio/_err.pyx", line 359, in rasterio._err.exc_wrap_pointer
+rasterio._err.CPLE_AppDefinedError: _TIFFVSetField:submission.tif: Bad value 3292 for "TileWidth" tag
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/work/GEMSDOE/GEMSDOE/scripts/blend_submission.py", line 292, in <module>
+    main()
+  File "/home/runner/work/GEMSDOE/GEMSDOE/scripts/blend_submission.py", line 232, in main
+    with rasterio.open(out, "w", **profile) as dst:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/rasterio/env.py", line 463, in wrapper
+    return f(*args, **kwds)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/rasterio/__init__.py", line 366, in open
+    dataset = writer(
+              ^^^^^^^
+  File "rasterio/_io.pyx", line 1543, in rasterio._io.DatasetWriterBase.__init__
+rasterio.errors.RasterBlockError: The height and width of TIFF dataset blocks must be multiples of 16
