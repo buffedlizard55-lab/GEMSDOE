@@ -92,6 +92,84 @@ def _credit_map(pred: np.ndarray, offsets) -> np.ndarray:
 # --------------------------------------------------------------------------------------
 # core metric
 # --------------------------------------------------------------------------------------
+class GtContext:
+    """Ground-truth geometry, computed once and reused for every candidate prediction.
+
+    WHY THIS EXISTS.  Evaluating a candidate shaping (floor, thinning, band width) means scoring
+    hundreds of predictions against the SAME labels.  The general implementation rebuilds two
+    ground-truth objects on every call - a distance transform of the label mask and a full-raster
+    credit map (one temporary per kernel offset, 49 of them at R=3) - and then reads only the |G|
+    label pixels out of it.  Fault labels are ~1-2% of the raster, so that is two orders of
+    magnitude more work than the definition needs.  Measured effect: the leave-one-fold-out audit in
+    scripts/blend_submission.py ran for over 90 minutes on a runner before this existed.
+
+    The definition of TP_w is a sum over exactly |G| terms, so this gathers only what it needs:
+
+        TP_w(g) = max over the R-neighbourhood of  k(d(x,g)) * p(x)
+
+    which is 49 gathers of length |G| instead of 49 passes over H x W.  FP_w still needs the label
+    distance transform (that is inherent - it is a per-pixel penalty over the whole prediction), so
+    it is computed once here and reused.
+
+    Equivalence with the general path is not assumed: tests/test_metric_parity.py compares this
+    against compute_distance_weighted_tversky_reference on random arrays, including NaN/Inf inputs,
+    empty labels and R=1.
+    """
+
+    def __init__(self, gt, R_pixels: int = DEFAULT_R_PIXELS):
+        gt_arr = np.asarray(gt)
+        if gt_arr.ndim != 2:
+            raise ValueError(f"expected a 2-D label array, got {gt_arr.shape}")
+        self.shape = gt_arr.shape
+        self.R = int(R_pixels)
+        self.gt_bool = (gt_arr.astype(bool) if gt_arr.dtype == np.bool_
+                        else (np.nan_to_num(gt_arr, nan=0.0) > 0.5))
+        self.n_gt = int(self.gt_bool.sum())
+        self.offsets = kernel_offsets(self.R)
+        if self.n_gt:
+            yy, xx = np.nonzero(self.gt_bool)
+            self.gy = yy.astype(np.int64)
+            self.gx = xx.astype(np.int64)
+            dist = distance_transform_edt(~self.gt_bool)
+            self.k_to_gt = np.maximum(1.0 - dist / float(self.R), 0.0)
+        else:
+            self.gy = self.gx = None
+            self.k_to_gt = None
+
+    def score(self, pred, alpha: float = DEFAULT_ALPHA, beta: float = DEFAULT_BETA,
+              eps: float = EPS, return_components: bool = False):
+        pred = np.asarray(pred, dtype=np.float64)
+        if pred.shape != self.shape:
+            raise ValueError(f"shape mismatch: pred {pred.shape} vs gt {self.shape}")
+        pred = np.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=0.0)
+        np.clip(pred, 0.0, 1.0, out=pred)
+
+        if self.n_gt == 0:
+            FP_w = float(pred.sum())
+            dti = 0.0 if FP_w > 0 else 1.0
+            return (dti, (0.0, FP_w, 0.0)) if return_components else dti
+
+        H, W = self.shape
+        credit = np.zeros(self.n_gt, dtype=np.float64)
+        for dy, dx, k in self.offsets:
+            yy = self.gy + dy
+            xx = self.gx + dx
+            inside = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
+            if not inside.any():
+                continue
+            vals = np.zeros(self.n_gt, dtype=np.float64)
+            vals[inside] = pred[yy[inside], xx[inside]]
+            vals *= k
+            np.maximum(credit, vals, out=credit)
+
+        TP_w = float(credit.sum())
+        FN_w = float(self.n_gt - TP_w)                 # == sum_g (1 - credit_g) exactly
+        pos = pred > 0
+        FP_w = float((pred[pos] * (1.0 - self.k_to_gt[pos])).sum())
+        dti = TP_w / (TP_w + alpha * FP_w + beta * FN_w + eps)
+        return (dti, (TP_w, FP_w, FN_w)) if return_components else dti
+
+
 def compute_distance_weighted_tversky(
     pred,
     gt,
@@ -101,12 +179,29 @@ def compute_distance_weighted_tversky(
     eps: float = EPS,
     return_components: bool = False,
 ):
-    """Exact DTI on 2-D arrays.
+    """Exact DTI on 2-D arrays (the fast path; see GtContext).
 
-    pred : (H,W) float in [0,1] (NaN / +-inf / <0 / >1 sanitised by clipping after
-           NaN->0, as the submission spec forbids values outside [0,1])
-    gt   : (H,W) ground truth, >0.5 treated as fault
+    Callers that score many predictions against the SAME labels should build one
+    GtContext themselves and call `.score()` on it - that is where the saving is.  This
+    function builds a context per call, so its behaviour is identical to
+    compute_distance_weighted_tversky_reference but it still avoids the full-raster
+    credit map.
     """
+    return GtContext(gt, R_pixels).score(pred, alpha=alpha, beta=beta, eps=eps,
+                                         return_components=return_components)
+
+
+def compute_distance_weighted_tversky_reference(
+    pred,
+    gt,
+    R_pixels: int = DEFAULT_R_PIXELS,
+    alpha: float = DEFAULT_ALPHA,
+    beta: float = DEFAULT_BETA,
+    eps: float = EPS,
+    return_components: bool = False,
+):
+    """The original full-raster formulation.  Kept as the reference the fast path is verified
+    against (tests/test_metric_parity.py); production code uses GtContext."""
     pred = np.asarray(pred, dtype=np.float64)
     gt = np.asarray(gt)
     if pred.ndim != 2 or gt.ndim != 2:

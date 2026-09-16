@@ -40,9 +40,10 @@ import rasterio
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.metrics import compute_distance_weighted_tversky, score_arrays_blocked  # noqa: E402
+from src.metrics import (GtContext, compute_distance_weighted_tversky,        # noqa: E402
+                         score_arrays_blocked)
 from src.submission_optim import optimize_submission, shaping_thresholds  # noqa: E402
-from src.submission_io import clean_profile, write_submission  # noqa: E402
+from src.submission_io import clean_profile, sha256_pixels, write_submission  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -116,8 +117,7 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
         for f in usable:
             f["pred_crop"] = pre(f["pred_crop"])
     table = []
-    raw_mean = float(np.mean([compute_distance_weighted_tversky(f["pred_crop"], f["gt_crop"],
-                                                                 R_pixels=R, alpha=alpha, beta=beta)
+    raw_mean = float(np.mean([_dti(f["pred_crop"], f["gt_crop"], R, alpha, beta)
                               for f in usable]))
     best = (raw_mean, float(thresholds[0]), True, 0, 0)
     for t in thresholds:
@@ -126,10 +126,9 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
             # floor-passing mask is already a blob, and growing it further is a pure FP cost.
             for dila in (dilate_options if thin else (0,)):
                 v = float(np.mean([
-                    compute_distance_weighted_tversky(
-                        optimize_submission(f["pred_crop"], R=R, t0=float(t), thin=thin,
-                                            hard=True, gamma=1.0, dilate=dila),
-                        f["gt_crop"], R_pixels=R, alpha=alpha, beta=beta)
+                    _dti(optimize_submission(f["pred_crop"], R=R, t0=float(t), thin=thin,
+                                             hard=True, gamma=1.0, dilate=dila),
+                         f["gt_crop"], R, alpha, beta)
                     for f in usable]))
                 if v > best[0]:
                     best = (v, float(t), thin, dila, len(table))
@@ -138,8 +137,26 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
     return best[1], best[2], best[0], table, best[3]
 
 
+# One GtContext per label array per radius.  The label geometry (the mask, the label-pixel
+# coordinates, the distance transform that FP_w needs) does not change while a search runs over
+# hundreds of candidate floors against the same held-out crop; rebuilding it per candidate is what
+# made the leave-one-fold-out audit run for over 90 minutes on a runner (2026-09-16).  The cache
+# holds a reference to the array so its id() cannot be recycled while an entry is alive.
+_GT_CACHE: dict = {}
+
+
+def _gt_ctx(gt, R):
+    key = (id(gt), int(R))
+    ctx = _GT_CACHE.get(key)
+    if ctx is None or ctx.source is not gt:
+        ctx = GtContext(gt, R)
+        ctx.source = gt
+        _GT_CACHE[key] = ctx
+    return ctx
+
+
 def _dti(pred, gt, R, alpha, beta):
-    return float(compute_distance_weighted_tversky(pred, gt, R_pixels=R, alpha=alpha, beta=beta))
+    return float(_gt_ctx(gt, R).score(pred, alpha=alpha, beta=beta))
 
 
 def _weighted_mean(preds, ws):
@@ -485,6 +502,7 @@ def main():
                               collapse_factor=(pre_mass / post_mass if post_mass > 0 else None)),
         fold_weights=("equal" if ws is None else [round(float(w), 4) for w in ws]),
         submission=dict(path=str(out), bytes=out.stat().st_size, sha256=sha256(out),
+                        sha256_pixels=sha256_pixels(out),
                         grid=grid, finite_px=int(np.isfinite(q).sum()), total_px=int(q.size),
                         nonzero_px=int(np.count_nonzero(np.nan_to_num(q))),
                         min=float(np.nanmin(q)), max=float(np.nanmax(q)),

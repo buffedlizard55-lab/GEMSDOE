@@ -80,24 +80,77 @@ def dominant_thin(mask: np.ndarray, R: int = 3, p: np.ndarray | None = None,
     # keep only skeleton pixels inside the mask (skeletonize stays inside by construction)
     sel = skel & m
     if sel.any():
-        # uncovered = mask pixels farther than R from any selected pixel
-        for _ in range(max_extra):
-            d = distance_transform_edt(~sel)
-            uncovered = m & (d > R)
-            if not uncovered.any():
-                break
-            # add the pixel covering the most uncovered ones (within R), tie-break by p
-            from scipy.ndimage import uniform_filter
-            dens = uniform_filter(uncovered.astype(np.float64), size=2 * R + 1)
-            cand = m & ~sel
-            if p is not None:
-                score = dens + 1e-3 * p
-            else:
-                score = dens
-            score = np.where(cand, score, -np.inf)
-            iy, ix = np.unravel_index(np.argmax(score), score.shape)
-            sel[iy, ix] = True
+        from scipy.ndimage import uniform_filter
+        H, W = m.shape
+        # uncovered = mask pixels farther than R from any selected pixel.  Both the distance
+        # transform and the density filter are computed on a WINDOW around the uncovered pixels
+        # plus an R+1 halo: any selected pixel within R of a windowed pixel lies inside the halo,
+        # so the windowed result is exact for the only question asked here ("is d > R?"), while a
+        # full-raster EDT per iteration is not.  This loop ran up to max_extra times per call and
+        # is the single most expensive step of a candidate shaping evaluation.
+        win = _window_around(m, R + 1)          # every selected pixel lives inside the mask bbox
+        if win is not None:
+            y0, y1, x0, x1 = win
+            sub_m, sub_sel = m[y0:y1, x0:x1].copy(), sel[y0:y1, x0:x1].copy()
+            # The distance transform is built ONCE and then maintained incrementally: adding one
+            # selected pixel can only lower distances, and only within R of it, so the map is
+            # updated with a (2R+1)^2 minimum instead of a whole-array EDT per iteration.  That is
+            # exact - d(x) = min over selected pixels - and it is where the time went: the greedy
+            # fill used to spend a full EDT per added pixel, 40 times per candidate floor.
+            sub_d = distance_transform_edt(~sub_sel)
+            for _ in range(max_extra):
+                uncovered = sub_m & (sub_d > R)
+                if not uncovered.any():
+                    break
+                dens = uniform_filter(uncovered.astype(np.float64), size=2 * R + 1)
+                cand = sub_m & ~sub_sel
+                score = dens + 1e-3 * p[y0:y1, x0:x1] if p is not None else dens
+                score = np.where(cand, score, -np.inf)
+                iy, ix = np.unravel_index(np.argmax(score), score.shape)
+                sub_sel[iy, ix] = True
+                ys, xs = slice(max(0, iy - R), min(sub_sel.shape[0], iy + R + 1)), \
+                    slice(max(0, ix - R), min(sub_sel.shape[1], ix + R + 1))
+                yy, xx = np.mgrid[ys, xs]
+                np.minimum(sub_d[ys, xs], np.hypot(yy - iy, xx - ix), out=sub_d[ys, xs])
+            sel[y0:y1, x0:x1] = sub_sel
     return sel.astype(np.float32)
+
+
+def _dominant_thin_full_raster(mask: np.ndarray, R: int = 3, p: np.ndarray | None = None,
+                               max_extra: int = 40) -> np.ndarray:
+    """Pre-optimisation formulation, kept as the parity reference (tests/test_shaping_parity.py)."""
+    m = mask > 0.5
+    if not m.any():
+        return m.astype(np.float32)
+    from skimage.morphology import skeletonize
+    from scipy.ndimage import uniform_filter
+    skel = skeletonize(m)
+    sel = (skel & m) if skel.any() else m.copy()
+    for _ in range(max_extra):
+        d = distance_transform_edt(~sel)
+        uncovered = m & (d > R)
+        if not uncovered.any():
+            break
+        dens = uniform_filter(uncovered.astype(np.float64), size=2 * R + 1)
+        cand = m & ~sel
+        score = dens + 1e-3 * p if p is not None else dens
+        score = np.where(cand, score, -np.inf)
+        iy, ix = np.unravel_index(np.argmax(score), score.shape)
+        sel[iy, ix] = True
+    return sel.astype(np.float32)
+
+
+def _window_around(mask: np.ndarray, halo: int):
+    """Bounding box of `mask` grown by `halo` px, clipped to the array; None if empty."""
+    ys, xs = np.nonzero(mask)
+    if ys.size == 0:
+        return None
+    H, W = mask.shape
+    y0 = max(0, int(ys.min()) - halo)
+    y1 = min(H, int(ys.max()) + halo + 1)
+    x0 = max(0, int(xs.min()) - halo)
+    x1 = min(W, int(xs.max()) + halo + 1)
+    return y0, y1, x0, x1
 
 
 def dilate_mask(mask: np.ndarray, radius: int = 1) -> np.ndarray:
@@ -159,6 +212,15 @@ def shaping_thresholds(n: int = 15, lo: float = 1e-4, hi: float = 0.9) -> np.nda
     """
     n = max(2, int(n))
     grid = np.geomspace(max(1e-12, float(lo)), float(hi), n)
+    # Quantise the grid to 6 significant digits.  MEASURED 2026-09-16: two runs of the same six fold
+    # artifacts on the same GitHub runner produced submissions whose pixels were bit-identical
+    # (pixel sha256 7b5ed603...) but whose FILE hash differed, because the chosen floor was written
+    # into a GeoTIFF tag at full float64 precision and geomspace rounds one ULP differently under a
+    # different numpy build (shaping_t0 0.4696741044002384 vs 0.4696741044002383).  A submission's
+    # identity should not depend on which wheel resolved that day.  Six significant digits is two
+    # orders of magnitude finer than the search spacing (the grid spans 1e-4..0.9), and the value that
+    # is *applied* is now the same one that is *reported*.
+    grid = np.array([float(f"{float(x):.6g}") for x in grid], dtype=np.float64)
     return np.unique(np.concatenate(([0.0], grid)))
 
 
