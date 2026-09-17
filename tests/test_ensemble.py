@@ -421,3 +421,70 @@ def test_save_ensemble_writes_the_pre_shaping_input(tmp_path):
     with rasterio.open(tmp_path / "submission.tif") as src:
         sub = src.read(1)
     assert float(np.nansum(ens)) >= float(np.nansum(sub)) - 1e-6
+
+
+def test_min_dilate_restricts_the_pooled_search_space(tmp_path):
+    """`--min-dilate` is how a MEASURED emission width gets shipped.
+
+    The pooled search maximises in-domain held-out DTI, and on the faults the model trained on the
+    narrowest band always wins (0.1903 at width 0 vs 0.0908 at width 6, data/evidence/
+    emission_decision.json).  The scored population is the opposite regime: on faults the labels
+    lack, the shipped skeleton's MEDIAN miss distance is 22 px and every plausible scored-truth
+    size above ~2,000 km prefers a band (data/evidence/proxy/miss_distance-ensemble1.json).
+    Shipping that requires constraining the search space, not overruling the calibration - so the
+    option must (a) be a no-op by default, (b) drop narrower candidates, (c) be recorded.
+    """
+    H = W = 64
+    gt = np.zeros((H, W), np.float32)
+    for k in range(8, 56):
+        gt[k, k] = 1.0
+    from scipy.ndimage import binary_dilation, gaussian_filter
+    rng = np.random.default_rng(2)
+    folds = []
+    for fi in range(2):
+        fd = tmp_path / f"fold-{fi}"
+        fd.mkdir()
+        band = gaussian_filter(binary_dilation(gt > 0.5, iterations=1).astype(np.float32), 1.4)
+        prob = np.clip(0.02 + 0.95 * band + rng.normal(0, 0.02, (H, W)), 0, 1).astype(np.float32)
+        _write_tif(fd / "prob_raw.tif", prob)
+        np.savez_compressed(fd / f"heldout_mc{fi}.npz",
+                            pred=prob[8:48, 8:48].astype(np.float16),
+                            gt=gt[8:48, 8:48].astype(np.uint8))
+        (fd / "manifest.json").write_text(json.dumps({"models": [{"file": f"m{fi}.pt", "dti": 0.4}]}))
+        folds.append(str(fd))
+    _write_tif(tmp_path / "sample.tif", np.zeros((H, W), np.float32))
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("training: {alpha: 0.2, beta: 0.8}\n"
+                   "metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, "
+                   "epsilon: 1.0e-7}\n")
+
+    def blend(extra, name):
+        rep = tmp_path / f"{name}.json"
+        r = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "blend_submission.py"),
+             "--folds", *folds, "--config", str(cfg),
+             "--out", str(tmp_path / f"{name}.tif"), "--report", str(rep),
+             "--dilate-grid", "0,2,3", *extra],
+            capture_output=True, text=True, timeout=900)
+        assert r.returncode == 0, r.stdout + r.stderr
+        return json.loads(rep.read_text())["shaping"], r.stdout
+
+    default, _ = blend([], "default")
+    assert default["min_dilate"] == 0
+    assert default["dilate_grid"] == [0, 2, 3] and default["dilate"] in (0, 2, 3)
+
+    narrow, out = blend(["--min-dilate", "3"], "narrow")
+    assert narrow["min_dilate"] == 3
+    assert narrow["dilate_grid"] == [3]
+    assert "restricted to widths (3,)" in out
+    # dilate == 0 in the report means "the unshaped reference won", never "a narrow band was
+    # selected": calibrate_shaping() seeds its best with the raw (unshaped) row.  The contract the
+    # option has to keep is therefore that no width BELOW the floor is ever selected - that is what
+    # would silently re-ship the skeleton the measurement rejects.
+    assert narrow["dilate"] in (0, 3), narrow
+    excluded = {r["dilate"] for r in narrow["calibration_table"] if r.get("dilate") is not None}
+    assert not (excluded & {1, 2}), f"a width below --min-dilate entered the table: {excluded}"
+
+    # a min-dilate outside the grid still yields a usable search space rather than an empty one
+    outside, _ = blend(["--min-dilate", "5"], "outside")
+    assert outside["dilate_grid"] == [5] and outside["dilate"] in (0, 5)

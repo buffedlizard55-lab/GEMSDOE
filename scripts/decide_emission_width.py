@@ -141,12 +141,56 @@ def crossover(p1: dict, p2: dict) -> dict:
     return out
 
 
+def width_gain_table(sweep: dict) -> dict:
+    """Per-floor DTI contrast between the widest swept band and the pure skeleton.
+
+    This is the FLOOR-CONTROLLED form of the width question, and the reason it is computed inside
+    one sweep file rather than across sweeps: absolute proxy DTI differs between ensembles (each
+    fold set produces a different probability field), so comparing ensemble 2's number with
+    ensemble 1's number would confound the width with the model.  For every swept floor ``t0``
+    that has both ``dilate=0`` and the widest ``dilate``, the contrast is taken at the SAME floor,
+    so the sign and the size of the gain are attributable to the emission width alone.
+
+    The repository's pre-registered acceptance rule for the width change is "same sign and
+    > 0.01" - evaluated here as: every swept floor gains, and the mean gain exceeds 0.01.
+    """
+    rows = [r for r in sweep["results"]["shaping_sweep"] if r["thin"]]
+    widths = sorted({int(r["dilate"]) for r in rows})
+    if not widths:
+        return dict(widest_px=None, per_floor=[], n_floors=0, mean_gain=None, min_gain=None)
+    widest = max(widths)
+    per_floor = []
+    for t in sorted({float(r["t0"]) for r in rows}):
+        d0 = next((float(r["dti"]) for r in rows
+                   if float(r["t0"]) == t and int(r["dilate"]) == 0), None)
+        dw = next((float(r["dti"]) for r in rows
+                   if float(r["t0"]) == t and int(r["dilate"]) == widest), None)
+        if d0 is None or dw is None:
+            continue
+        per_floor.append(dict(t0=t, dti_width0=round(d0, 6), dti_widest=round(dw, 6),
+                              gain=round(dw - d0, 6)))
+    gains = [p["gain"] for p in per_floor]
+    return dict(widest_px=widest, per_floor=per_floor, n_floors=len(gains),
+                mean_gain=(round(sum(gains) / len(gains), 6) if gains else None),
+                min_gain=(min(gains) if gains else None),
+                max_gain=(max(gains) if gains else None),
+                all_floors_positive=bool(gains) and all(g > 0 for g in gains))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--proxy-eval", default="data/evidence/proxy/eval_submission.json")
     ap.add_argument("--reblend-eval", default="data/evidence/proxy/eval_reblend_submission.json")
     ap.add_argument("--sweep", default="data/evidence/proxy/eval_sweep.json")
+    ap.add_argument("--miss-distance", default="data/evidence/proxy/miss_distance-ensemble1.json",
+                    help="scripts/measure_miss_distance.py evidence: the exact metric as a function "
+                         "of the emitted band width, plus the localization/detection split")
+    ap.add_argument("--second-sweep", default=None,
+                    help="sweep of a SECOND, independently trained ensemble (same recipe, different "
+                         "seed/folds). Evaluated as condition 3: the width gain must keep its sign "
+                         "and exceed 0.01 with every floor controlled. Written by the proxy-eval "
+                         "workflow as data/evidence/proxy/eval_sweep-<label>.json")
     ap.add_argument("--in-domain",
                     default="data/evidence/runs/35042805806-experiment/blend_report.json")
     ap.add_argument("--out", default="data/evidence/emission_decision.json")
@@ -280,19 +324,64 @@ def main() -> int:
             "measured": f"{wins}/{len(anchor_rows)} anchors favour it; crossover {cw:,.0f} px "
                         f"({cw * PX_KM:,.0f} km)",
             "passes": bool(wins == len(anchor_rows))})
+        first_gain = width_gain_table(sw)
+        second_gain = None
+        if a.second_sweep and Path(a.second_sweep).exists():
+            second_gain = width_gain_table(load(Path(a.second_sweep)))
+        reproduced = bool(second_gain and second_gain["n_floors"] and
+                          second_gain["all_floors_positive"] and
+                          (second_gain["mean_gain"] or 0.0) > 0.01)
         v["conditions"].append({
             "condition": "reproduced on a second, independently trained ensemble",
             "required": "same sign and > 0.01 on the second ensemble",
-            "measured": "NOT MEASURED: needs a GPU training run plus a second sweep "
-                        "(see SUGGESTIONS.md 7.1)",
-            "passes": False})
-        v["conclusion"] = (
-            f"widen, but not yet: the {widest}-px band beats the shipped skeleton on the new-fault-like "
-            f"population by {gain:+.4f} (condition 1) and at {wins}/{len(anchor_rows)} plausible "
-            f"scored-truth anchors (condition 2), while a scored truth below {cw:,.0f} px "
-            f"({cw * PX_KM:,.0f} km) would still favour the narrower skeleton. Condition 3 - "
-            f"reproduction on a second ensemble - is unmet and is the blocking item, so the "
-            f"shipped default is unchanged and this file is the record of why")
+            "measured": (
+                f"second ensemble ({a.second_sweep}): widest {second_gain['widest_px']} px vs 0 px "
+                f"at {second_gain['n_floors']} common floors -> mean gain "
+                f"{second_gain['mean_gain']:+.4f}, min {second_gain['min_gain']:+.4f}, "
+                f"all floors {'positive' if second_gain['all_floors_positive'] else 'NOT all positive'}"
+                if second_gain and second_gain["n_floors"] else
+                "NOT MEASURED: needs a second, independently trained ensemble sweep "
+                "(see SUGGESTIONS.md 7.1)"),
+            "passes": reproduced})
+        v["width_gain_first_ensemble"] = first_gain
+        if second_gain is not None:
+            v["width_gain_second_ensemble"] = second_gain
+        if reproduced:
+            v["conclusion"] = (
+                f"WIDEN - all three pre-registered conditions are met. The {widest}-px band beats the "
+                f"shipped skeleton on the new-fault-like population by {gain:+.4f} (condition 1), at "
+                f"{wins}/{len(anchor_rows)} plausible scored-truth anchors (condition 2), and the "
+                f"floor-controlled gain reproduces on a second, independently trained ensemble "
+                f"({second_gain['mean_gain']:+.4f} mean over {second_gain['n_floors']} floors, "
+                f"condition 3). The shipped default is therefore changed to emit the measured band: "
+                f"see the workflow's --min-dilate option and SUGGESTIONS.md")
+        else:
+            v["conclusion"] = (
+                f"widen, but not yet: the {widest}-px band beats the shipped skeleton on the "
+                f"new-fault-like population by {gain:+.4f} (condition 1) and at "
+                f"{wins}/{len(anchor_rows)} plausible scored-truth anchors (condition 2), while a "
+                f"scored truth below {cw:,.0f} px ({cw * PX_KM:,.0f} km) would still favour the "
+                f"narrower skeleton. Condition 3 - reproduction on a second ensemble - is unmet and "
+                f"is the blocking item, so the shipped default is unchanged and this file is the "
+                f"record of why")
+
+    # ------------------------------------------------------------------ measured width curve
+    # The sweep searches floor x width on the ensemble probability map; this is the independent,
+    # floor-free measurement on the SHIPPED hard submission (scripts/measure_miss_distance.py):
+    # dilate the emitted set by k px and score with the same metric.  It answers what the sweep
+    # could not - how far the misses actually are - and gives the projected optimum width per
+    # assumed scored-truth size.
+    md = None
+    if a.miss_distance and Path(a.miss_distance).exists():
+        m = load(Path(a.miss_distance))
+        md = {"source": a.miss_distance,
+              "truth_km": m.get("truth_km"), "emitted_km": m.get("emitted_km"),
+              "miss_distance_percentiles_px": m["miss_geometry"]["percentiles_px"],
+              "detection_failure_share_beyond_12px": m["verdict"]["detection_failure_share"],
+              "best_width_px": m["verdict"]["best_width_px"],
+              "gain_from_widening": m["verdict"]["gain_from_widening"],
+              "widening_starts_winning_above_px": m.get("widening_starts_winning_above_px"),
+              "projection": m.get("projection_over_scored_truth_size")}
 
     out = {
         "generated_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
@@ -300,10 +389,12 @@ def main() -> int:
         "purpose": ("reconcile the three disagreeing emission-width measurements and decide the "
                     "shipped shaping policy on the record, using the metric's own scaling in |G|"),
         "inputs": {"proxy_eval": a.proxy_eval, "reblend_eval": a.reblend_eval, "sweep": a.sweep,
+                   "second_sweep": a.second_sweep, "miss_distance": a.miss_distance,
                    "in_domain": a.in_domain,
                    "metric": {"alpha": ALPHA, "beta": BETA, "R_pixels": 3, "R_meters": 300}},
         "proxy_truth_px": gp,
         "policies": rows,
+        "width_vs_scored_truth_size": md,
         "crossovers": {"wide_vs_shipped": v["wide_vs_shipped"],
                        "widest_swept_px": widest,
                        "blanket_vs_shipped": v["blanket_vs_shipped"],
@@ -337,7 +428,10 @@ def main() -> int:
                  r["wrong_mass_FP_w"], r["emission_px"]))
     print("\ncrossovers (the truth size at which the wider/higher-coverage policy takes over):")
     for k, c in out["crossovers"].items():
-        print("  %-22s %s" % (k, c["reason"]))
+        # `crossovers` also carries scalar context (`widest_swept_px`); subscripting every value
+        # as a dict crashed this print AFTER the JSON was written (found 2026-09-17: the step
+        # failed while its evidence landed, so a red step looked like a completed reconciliation).
+        print("  %-22s %s" % (k, c["reason"] if isinstance(c, dict) else c))
     print("\nprojected DTI at the plausible anchors:")
     for x in v.get("anchor_projection", []):
         print("  %-40s shipped %.4f  wide-6px %.4f  %s"

@@ -1,4 +1,96 @@
-# Project status — 2026-09-17 (session 9)
+# Project status — 2026-09-17 (session 10)
+
+## Session 10 — where the error actually is: three quarters of it is detection, not width
+
+*(Session 9 follows below, unchanged.)*
+
+The emission-width question had a split personality: widening the emitted band helps on the
+new-fault-like proxy population and hurts on held-out crops (0.1903 → 0.0908 at a 6 px band).
+Session 10 measured **why**.
+
+### 1. Measured: how far the misses are (`scripts/measure_miss_distance.py`)
+
+Run on the shipped submission of blend run 35042805806 (threshold 0.5), scored with the official
+metric (R = 3 px, α = 0.2, β = 0.8) against the 61,664 px (6,166 km) of USGS SGMC trace that
+`labels.tif` does not contain — the population that stands in for the unseen faults. Evidence:
+`data/evidence/proxy/miss_distance-ensemble1.json`.
+
+| quantity | measured |
+|---|---|
+| emitted pixels (thr 0.5) | 21,492 px (2,149 km) |
+| miss distance p50 / p75 / p90 / p95 | 22.4 / 37.2 / 56.6 / 67.5 px |
+| truth inside the metric's own R = 3 px | 4.9 % |
+| truth within 6 / 12 / 20 / 30 px | 11.3 / 26.0 / 45.0 / 65.0 % |
+| truth with NO emitted pixel within 12 px | **74.0 %** |
+| exact DTI at band 0 / 3 / 6 / 12 / **16** / 20 / 30 / 40 px | 0.0247 / 0.0509 / 0.0637 / 0.0710 / **0.0713** / 0.0713 / 0.0697 / 0.0657 |
+
+Two conclusions, measured rather than argued:
+
+1. **The band width has an interior optimum at 16 px** on this population, and it is the first policy
+   with a measured score above the constant-ones baseline (0.0585). The gain from 0 → 16 px is
+   +0.0466, larger than any other knob measured so far.
+2. **The remaining error is detection, not localization.** 74.0 % of the truth is more than 1.2 km
+   from any emitted pixel; no amount of widening reaches it. Projecting each width onto the unknown
+   size of the scored truth (the metric's own scaling; exact at the proxy's size) puts the crossover
+   at |G| = 20,000 px (2,000 km): the skeleton wins below it, and both plausible anchors (2,604 km
+   GeoDAWN-block fault density, 6,166 km this proxy) sit above it.
+
+The projection and the width curve are embedded in `data/evidence/emission_decision.json`
+(`width_vs_scored_truth_size`), and the proxy sweep's dilate grid now reaches 16 and 20 px so a
+second ensemble can find the optimum the first grid (which stopped at 12) could not.
+
+### 2. Reliability: one failed fold must not discard five
+
+Run 35249562910 (fold offset 6, seed 43) lost fold 4 inside the training step (exit 1) — the Actions
+log blob host is not on the sandbox egress allowlist, so the trainer's own stderr is unrecoverable
+for that run. The ensemble workflow's rule was "refuse to blend unless every fold succeeded", which
+threw away the other five folds' ~15 CPU-hours. Changed, and pinned by tests:
+
+* the blend job now counts fold directories that carry **both** `prob_raw.tif` and a
+  `heldout_mc*.npz` calibration crop, blends at ≥ 4 of 6 (`MIN_FOLDS`), refuses below that, and
+  records any shortfall in the log and the committed evidence (`usable_folds.txt`);
+* failed fold jobs upload a separate `foldlogs-<fold>` diagnostics artifact — named so the `fold-*`
+  download pattern can never mistake a log for a fold;
+* `.github/workflows/reblend.yml` can now rebuild a submission from **any** run's fold artifacts
+  through a committed parameter file (`RUN_ID`, `EVIDENCE_DIR`, `MIN_FOLDS`, `MIN_DILATE`, …), which
+  is the recovery path for run 35249562910's five complete folds.
+
+`tests/test_ensemble_workflow.py` executes the workflows' own shell for exactly these paths (6 usable
+→ 6, 5 + logs-only → 5 with a loud warning, 3 → refused, 0 → refused).
+
+### 3. Review finding: the proxy sweep never scored the shipped floor
+
+Reading the committed ensemble-1 sweep (`data/evidence/proxy/eval_sweep.json`) against the committed
+submission score (`eval_submission.json`) exposed a gap in the *instrument*, not in the result:
+`shaping_thresholds()` is log-spaced, so with the sweep's `SHAPING_GRID=4` the floors evaluated were
+[0, 1e-4, 2.08e-3, 4.33e-2, 0.9]. On the real ensemble field the first four rows are the same mask
+(14,285 px) — the field emits nothing between 0.043 and 0.9 — so the floor dimension was effectively
+binary, and the floor the blend actually shipped (0.469674, 21,492 px, DTI 0.0247 on this population)
+was never a row. The sweep's acceptance rule therefore compared candidates against the t0=0 skeleton
+(0.0144) rather than against the shipped policy (0.0247), i.e. against a policy nobody ships.
+
+Fixed in the instrument:
+
+* `scripts/eval_proxy_catalogue.py` gains `--reference-t0` and `--reference-report` (reads
+  `shaping.t0` from the blend report the sweep job already produces). The shipped floor is added to
+  the grid when absent and becomes the reference row; `sweep_verdict` now records
+  `reference_t0`, `reference_source`, `current_policy_dti` and `beats_current_policy_by`, and the
+  acceptance rule compares against the shipped policy — explicitly saying so when no reference was
+  given rather than silently substituting the t0=0 skeleton;
+* `.github/workflows/proxy-eval.yml` defaults `SHAPING_GRID` to 11 (the same 11-point grid
+  `configs/config_ci_ensemble.yaml` calibrates with) and passes `--reference-report blend_report.json`.
+
+Two new tests execute both paths (reference floor present in the grid at every width, comparison
+against that row, `--reference-report` provenance, loud failure on an unshaped report); reinserting
+the old behaviour fails exactly those two. Suite: **129 passed / 1 skipped**.
+
+### 4. Still open
+
+Condition 3 of the emission decision — the second ensemble's own floor-controlled sweep — needs run
+35249562910's artifacts; the run was still in flight at the end of this session. Until it lands the
+verdict stays *"widen, but not yet"*, even though the miss-distance measurement argues the target
+band is 16 px: the procedure was pre-registered, and a pre-registered procedure that gets overruled
+by a comfortable-looking measurement is not a procedure.
 
 ## Session 9 — the data-placement blocker is resolved; the pipeline runs on the official bytes, in the sandbox and on runners
 

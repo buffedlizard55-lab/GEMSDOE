@@ -1,11 +1,14 @@
 # Ensemble parameters read by .github/workflows/train-ensemble.yml (push-triggered runs).
 # The bot token cannot use workflow_dispatch, so runs are parameterised by this file.
 #
-# DEFAULTS reproduce the original run 35042805806 exactly (offset 0, seed 42).
+# DEFAULTS reproduce run 35042805806 (ensemble 1) exactly (offset 0, seed 42).
 #
-# 2026-09-17 (session 9): fired the SECOND 6-fold ensemble with FOLD_OFFSET=6 / ENSEMBLE_SEED=43
-# (run 35170395055, the queued emission-width decision experiment). The folds read the values at
-# job start, so this reset does not affect that in-flight run; its provenance is recorded in each
-# fold manifest (mc_id 6-11, seed 43) and in this file's git history. RESET to defaults after firing.
-FOLD_OFFSET=0
-ENSEMBLE_SEED=42
+# 2026-09-17 (session 9): fired ensemble 2 with FOLD_OFFSET=6 / ENSEMBLE_SEED=43 (run 35170395055).
+#
+# 2026-09-17 (session 10): that run LOST all six folds - the train step did not apply FOLD_OFFSET,
+# so it wrote heldout_mc0..5.npz while staging looked for heldout_mc6..11.npz (see the workflow
+# header and tests/test_ensemble_workflow.py).  Re-firing ensemble 2 with the fixed workflow.  The
+# effective values are also written into each fold artifact (fold_params.json) and copied into
+# data/evidence/runs/<run_id>/, so provenance does not depend on this file staying put.
+FOLD_OFFSET=6
+ENSEMBLE_SEED=43

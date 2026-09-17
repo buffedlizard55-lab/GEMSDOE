@@ -1,11 +1,13 @@
 {
- "generated_utc": "2026-09-16T23:18:06+00:00",
+ "generated_utc": "2026-09-17T17:04:46+00:00",
  "generated_by": "scripts/decide_emission_width.py",
  "purpose": "reconcile the three disagreeing emission-width measurements and decide the shipped shaping policy on the record, using the metric's own scaling in |G|",
  "inputs": {
   "proxy_eval": "data/evidence/proxy/eval_submission.json",
   "reblend_eval": "data/evidence/proxy/eval_reblend_submission.json",
   "sweep": "data/evidence/proxy/eval_sweep.json",
+  "second_sweep": null,
+  "miss_distance": "data/evidence/proxy/miss_distance-ensemble1.json",
   "in_domain": "data/evidence/runs/35042805806-experiment/blend_report.json",
   "metric": {
    "alpha": 0.2,
@@ -105,6 +107,263 @@
    "note": "the raw pre-shaping ensemble mean (not a legal submission: values outside the footprint are not NaN)"
   }
  ],
+ "width_vs_scored_truth_size": {
+  "source": "data/evidence/proxy/miss_distance-ensemble1.json",
+  "truth_km": 6166.4,
+  "emitted_km": 2149.2,
+  "miss_distance_percentiles_px": {
+   "50": 22.360679626464844,
+   "75": 37.2155876159668,
+   "90": 56.64803695678711,
+   "95": 67.47480773925781
+  },
+  "detection_failure_share_beyond_12px": 0.739783,
+  "best_width_px": 16,
+  "gain_from_widening": 0.046636,
+  "widening_starts_winning_above_px": 20000,
+  "projection": [
+   {
+    "truth_px": 500,
+    "truth_km": 50.0,
+    "best_width_px": 0,
+    "best_dti": 0.002416,
+    "skeleton_dti": 0.002416,
+    "gain_over_skeleton": 0.0,
+    "widening_wins": false,
+    "per_width": {
+     "0": 0.002416,
+     "1": 0.00134,
+     "2": 0.001091,
+     "3": 0.000965,
+     "4": 0.000902,
+     "6": 0.000825,
+     "8": 0.000784,
+     "10": 0.000753,
+     "12": 0.00073,
+     "16": 0.000691,
+     "20": 0.000667,
+     "30": 0.000626,
+     "40": 0.000578
+    }
+   },
+   {
+    "truth_px": 1000,
+    "truth_km": 100.0,
+    "best_width_px": 0,
+    "best_dti": 0.004431,
+    "skeleton_dti": 0.004431,
+    "gain_over_skeleton": 0.0,
+    "widening_wins": false,
+    "per_width": {
+     "0": 0.004431,
+     "1": 0.002601,
+     "2": 0.002144,
+     "3": 0.001909,
+     "4": 0.001789,
+     "6": 0.001641,
+     "8": 0.001563,
+     "10": 0.001501,
+     "12": 0.001456,
+     "16": 0.001379,
+     "20": 0.001332,
+     "30": 0.001251,
+     "40": 0.001156
+    }
+   },
+   {
+    "truth_px": 2500,
+    "truth_km": 250.0,
+    "best_width_px": 0,
+    "best_dti": 0.008869,
+    "skeleton_dti": 0.008869,
+    "gain_over_skeleton": 0.0,
+    "widening_wins": false,
+    "per_width": {
+     "0": 0.008869,
+     "1": 0.005977,
+     "2": 0.005101,
+     "3": 0.004621,
+     "4": 0.004367,
+     "6": 0.004045,
+     "8": 0.003866,
+     "10": 0.003724,
+     "12": 0.003616,
+     "16": 0.003431,
+     "20": 0.003318,
+     "30": 0.003119,
+     "40": 0.002884
+    }
+   },
+   {
+    "truth_px": 5000,
+    "truth_km": 500.0,
+    "best_width_px": 0,
+    "best_dti": 0.013314,
+    "skeleton_dti": 0.013314,
+    "gain_over_skeleton": 0.0,
+    "widening_wins": false,
+    "per_width": {
+     "0": 0.013314,
+     "1": 0.010531,
+     "2": 0.00944,
+     "3": 0.008783,
+     "4": 0.008405,
+     "6": 0.007901,
+     "8": 0.007602,
+     "10": 0.007353,
+     "12": 0.007155,
+     "16": 0.006808,
+     "20": 0.006594,
+     "30": 0.00621,
+     "40": 0.005747
+    }
+   },
+   {
+    "truth_px": 10000,
+    "truth_km": 1000.0,
+    "best_width_px": 0,
+    "best_dti": 0.017768,
+    "skeleton_dti": 0.017768,
+    "gain_over_skeleton": 0.0,
+    "widening_wins": false,
+    "per_width": {
+     "0": 0.017768,
+     "1": 0.017014,
+     "2": 0.016428,
+     "3": 0.015975,
+     "4": 0.015632,
+     "6": 0.015096,
+     "8": 0.014707,
+     "10": 0.014336,
+     "12": 0.01401,
+     "16": 0.013406,
+     "20": 0.013025,
+     "30": 0.012314,
+     "40": 0.011415
+    }
+   },
+   {
+    "truth_px": 20000,
+    "truth_km": 2000.0,
+    "best_width_px": 6,
+    "best_dti": 0.027719,
+    "skeleton_dti": 0.021336,
+    "gain_over_skeleton": 0.006383,
+    "widening_wins": true,
+    "per_width": {
+     "0": 0.021336,
+     "1": 0.02458,
+     "2": 0.026078,
+     "3": 0.027051,
+     "4": 0.027421,
+     "6": 0.027719,
+     "8": 0.027612,
+     "10": 0.027299,
+     "12": 0.026889,
+     "16": 0.026012,
+     "20": 0.025425,
+     "30": 0.02421,
+     "40": 0.022518
+    }
+   },
+   {
+    "truth_px": 26042,
+    "truth_km": 2604.2,
+    "best_width_px": 8,
+    "best_dti": 0.03467,
+    "skeleton_dti": 0.022379,
+    "gain_over_skeleton": 0.012291,
+    "widening_wins": true,
+    "per_width": {
+     "0": 0.022379,
+     "1": 0.027408,
+     "2": 0.030194,
+     "3": 0.032236,
+     "4": 0.033237,
+     "6": 0.034391,
+     "8": 0.03467,
+     "10": 0.034548,
+     "12": 0.03418,
+     "16": 0.033269,
+     "20": 0.032633,
+     "30": 0.031205,
+     "40": 0.029081
+    }
+   },
+   {
+    "truth_px": 61664,
+    "truth_km": 6166.4,
+    "best_width_px": 16,
+    "best_dti": 0.071321,
+    "skeleton_dti": 0.024685,
+    "gain_over_skeleton": 0.046636,
+    "widening_wins": true,
+    "per_width": {
+     "0": 0.024685,
+     "1": 0.035137,
+     "2": 0.043242,
+     "3": 0.050892,
+     "4": 0.055914,
+     "6": 0.063718,
+     "8": 0.067818,
+     "10": 0.070179,
+     "12": 0.070982,
+     "16": 0.071321,
+     "20": 0.071263,
+     "30": 0.069729,
+     "40": 0.065685
+    }
+   },
+   {
+    "truth_px": 100000,
+    "truth_km": 10000.0,
+    "best_width_px": 20,
+    "best_dti": 0.106644,
+    "skeleton_dti": 0.02542,
+    "gain_over_skeleton": 0.081224,
+    "widening_wins": true,
+    "per_width": {
+     "0": 0.02542,
+     "1": 0.038152,
+     "2": 0.049201,
+     "3": 0.060744,
+     "4": 0.069134,
+     "6": 0.083729,
+     "8": 0.092643,
+     "10": 0.098711,
+     "12": 0.101657,
+     "16": 0.104968,
+     "20": 0.106644,
+     "30": 0.106617,
+     "40": 0.101486
+    }
+   },
+   {
+    "truth_px": 250000,
+    "truth_km": 25000.0,
+    "best_width_px": 30,
+    "best_dti": 0.217839,
+    "skeleton_dti": 0.026171,
+    "gain_over_skeleton": 0.191668,
+    "widening_wins": true,
+    "per_width": {
+     "0": 0.026171,
+     "1": 0.041597,
+     "2": 0.056749,
+     "3": 0.0747,
+     "4": 0.089572,
+     "6": 0.120142,
+     "8": 0.143251,
+     "10": 0.162456,
+     "12": 0.174395,
+     "16": 0.192714,
+     "20": 0.204752,
+     "30": 0.217839,
+     "40": 0.214119
+    }
+   }
+  ]
+ },
  "crossovers": {
   "wide_vs_shipped": {
    "between": [
@@ -461,7 +720,7 @@
    {
     "condition": "reproduced on a second, independently trained ensemble",
     "required": "same sign and > 0.01 on the second ensemble",
-    "measured": "NOT MEASURED: needs a GPU training run plus a second sweep (see SUGGESTIONS.md 7.1)",
+    "measured": "NOT MEASURED: needs a second, independently trained ensemble sweep (see SUGGESTIONS.md 7.1)",
     "passes": false
    }
   ],
@@ -489,7 +748,47 @@
     "wide_dti": 0.0393,
     "wide_wins": true
    }
-  ]
+  ],
+  "width_gain_first_ensemble": {
+   "widest_px": 6,
+   "per_floor": [
+    {
+     "t0": 0.0,
+     "dti_width0": 0.014425,
+     "dti_widest": 0.039538,
+     "gain": 0.025113
+    },
+    {
+     "t0": 0.0001,
+     "dti_width0": 0.014425,
+     "dti_widest": 0.039538,
+     "gain": 0.025113
+    },
+    {
+     "t0": 0.00208008,
+     "dti_width0": 0.014425,
+     "dti_widest": 0.039538,
+     "gain": 0.025113
+    },
+    {
+     "t0": 0.0432675,
+     "dti_width0": 0.014425,
+     "dti_widest": 0.039538,
+     "gain": 0.025113
+    },
+    {
+     "t0": 0.9,
+     "dti_width0": 0.0,
+     "dti_widest": 4.1e-05,
+     "gain": 4.1e-05
+    }
+   ],
+   "n_floors": 5,
+   "mean_gain": 0.020099,
+   "min_gain": 4.1e-05,
+   "max_gain": 0.025113,
+   "all_floors_positive": true
+  }
  },
  "caveats": [
   "The projection holds coverage and wrong mass fixed while |G| changes; a model that would be retrained for a different-sized truth would not hold either.",

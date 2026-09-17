@@ -285,6 +285,96 @@ def test_sweep_ranks_emission_widths_on_the_proxy_population(grid, tmp_path, mon
     assert all(k in rep["results"]["sweep_best"] for k in ("t0", "thin", "dilate", "dti"))
 
 
+def test_sweep_scores_the_shipped_floor_and_compares_against_it(grid, tmp_path, monkeypatch):
+    """MEASURED gap (session 10): the ensemble-1 proxy sweep evaluated floors [0, 1e-4, 2.08e-3,
+    4.33e-2, 0.9] - log-spaced, so on that field the first four rows are the SAME mask and the
+    shipped floor (0.469674) was never scored.  Its acceptance rule then compared candidates
+    against the t0=0 skeleton (0.0144) instead of the shipped policy (0.0247).  `--reference-t0`
+    puts the shipped floor in the grid and makes it the reference row."""
+    ev = _load("eval_proxy_catalogue")
+    size = grid["size"]
+    prob = np.zeros((size, size), dtype="float32")
+    prob[10:80, 60] = 0.9
+    prob[10:80, 58:63] = 0.4
+    p_path = tmp_path / "prob.tif"
+    with rasterio.open(p_path, "w", driver="GTiff", height=size, width=size, count=1,
+                       dtype="float32", crs="EPSG:32611", transform=grid["transform"]) as dst:
+        dst.write(prob, 1)
+    truth = np.zeros((size, size), dtype="float32")
+    truth[10:80, 61] = 1.0
+    coded = np.where(truth > 0, 2, 0).astype("uint8")
+    c_path = tmp_path / "coded.tif"
+    with rasterio.open(c_path, "w", driver="GTiff", height=size, width=size, count=1,
+                       dtype="uint8", crs="EPSG:32611", transform=grid["transform"]) as dst:
+        dst.write(coded, 1)
+
+    out = tmp_path / "sweep_ref.json"
+    monkeypatch.setattr(sys, "argv", [
+        "eval_proxy_catalogue.py", "--pred", str(p_path), "--proxy", str(c_path),
+        "--out", str(out), "--sweep", "--shaping-grid", "3", "--dilate-grid", "0,4",
+        "--reference-t0", "0.4"])
+    assert ev.main() == 0
+    rep = json.loads(out.read_text())
+    rows = rep["results"]["shaping_sweep"]
+    at_ref = [r for r in rows if r["t0"] == 0.4]
+    assert [r["dilate"] for r in at_ref] == [0, 4], "the shipped floor must be swept at every width"
+    v = rep["results"]["sweep_verdict"]
+    current = next(r for r in at_ref if r["dilate"] == 0)
+    assert v["reference_t0"] == 0.4 and rep["inputs"]["reference_t0"] == 0.4
+    assert v["current_policy_dti"] == current["dti"] != v["skeleton_dti"]
+    assert v["beats_current_policy_by"] == round(rep["results"]["sweep_best"]["dti"] - current["dti"], 6)
+
+    # without a reference floor the fields are explicit None, never a silent stand-in
+    out2 = tmp_path / "sweep_noref.json"
+    monkeypatch.setattr(sys, "argv", [
+        "eval_proxy_catalogue.py", "--pred", str(p_path), "--proxy", str(c_path),
+        "--out", str(out2), "--sweep", "--shaping-grid", "3", "--dilate-grid", "0"])
+    assert ev.main() == 0
+    v2 = json.loads(out2.read_text())["results"]["sweep_verdict"]
+    assert v2["reference_t0"] is None and v2["current_policy_dti"] is None
+    assert "NOT the shipped policy" in v2["acceptance_rule"]
+
+
+def test_reference_floor_can_come_from_a_blend_report(grid, tmp_path, monkeypatch):
+    """The sweep job already has the blend report of the very policy it is evaluating; read the
+    shipped floor from it rather than hard-coding a number that can drift."""
+    ev = _load("eval_proxy_catalogue")
+    size = grid["size"]
+    prob = np.zeros((size, size), dtype="float32")
+    prob[10:80, 60] = 0.9
+    p_path = tmp_path / "prob.tif"
+    with rasterio.open(p_path, "w", driver="GTiff", height=size, width=size, count=1,
+                       dtype="float32", crs="EPSG:32611", transform=grid["transform"]) as dst:
+        dst.write(prob, 1)
+    coded = np.zeros((size, size), dtype="uint8")
+    coded[10:80, 61] = 2
+    c_path = tmp_path / "coded.tif"
+    with rasterio.open(c_path, "w", driver="GTiff", height=size, width=size, count=1,
+                       dtype="uint8", crs="EPSG:32611", transform=grid["transform"]) as dst:
+        dst.write(coded, 1)
+
+    report = tmp_path / "blend_report.json"
+    report.write_text(json.dumps({"shaping": {"t0": 0.469674, "thin": True, "dilate": 0}}))
+    out = tmp_path / "sweep_report.json"
+    monkeypatch.setattr(sys, "argv", [
+        "eval_proxy_catalogue.py", "--pred", str(p_path), "--proxy", str(c_path),
+        "--out", str(out), "--sweep", "--shaping-grid", "3", "--dilate-grid", "0",
+        "--reference-report", str(report)])
+    assert ev.main() == 0
+    rep = json.loads(out.read_text())
+    assert rep["inputs"]["reference_t0"] == 0.469674
+    assert rep["inputs"]["reference_source"].endswith("blend_report.json:shaping.t0")
+    assert any(r["t0"] == 0.469674 for r in rep["results"]["shaping_sweep"])
+
+    # an unshaped report is a loud error, not a silent 0
+    report.write_text(json.dumps({"shaping": {"t0": None, "thin": None, "dilate": 0}}))
+    monkeypatch.setattr(sys, "argv", [
+        "eval_proxy_catalogue.py", "--pred", str(p_path), "--proxy", str(c_path),
+        "--out", str(tmp_path / "x.json"), "--sweep", "--reference-report", str(report)])
+    with pytest.raises(SystemExit, match="no shaping.t0"):
+        ev.main()
+
+
 # ---------------------------------------------------------------------------------------------
 # The projection onto a hidden scored truth of unknown size (scripts/eval_proxy_catalogue.py).
 #

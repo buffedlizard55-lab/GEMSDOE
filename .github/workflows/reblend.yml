@@ -26,6 +26,21 @@ name: Re-blend existing fold artifacts -> submission
 # unless the file is a single-band float32 raster on the requested grid with
 # non-zero mass.  `set -euo pipefail` on every step means a crash can no longer
 # masquerade as success.
+#
+# SECOND USE (2026-09-17, session 10): the same workflow is the recovery path for a run whose
+# fold MATRIX was not entirely successful.  Run 35249562910 uploaded five complete fold
+# artifacts (fold 4 crashed in training) and the ensemble workflow's own blend job is defined at
+# the triggering commit, so it cannot be relaxed while the run is in flight.  The bot token cannot
+# call workflow_dispatch, so the parameters are read from a committed file - exactly the pattern
+# .github/workflows/train-ensemble.yml uses:
+#
+#   .github/triggers/reblend-params may set
+#     RUN_ID=<actions run id>       (default 35042805806)
+#     EVIDENCE_DIR=<path>           (default data/evidence/runs/<RUN_ID>-experiment)
+#     DILATE_GRID=0,1,2,3,...       (default 0,1,2,3,4,6)
+#     MIN_DILATE=<int>              (default 0 = pure skeleton)
+#     MIN_FOLDS=<int>               (default 4)
+#     CALIBRATE=pooled|loo
 # =============================================================================
 on:
   workflow_dispatch:
@@ -71,8 +86,57 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
+  params:
+    name: read the committed re-blend parameters
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run_id: ${{ steps.p.outputs.run_id }}
+      evidence_dir: ${{ steps.p.outputs.evidence_dir }}
+      dilate_grid: ${{ steps.p.outputs.dilate_grid }}
+      min_dilate: ${{ steps.p.outputs.min_dilate }}
+      min_folds: ${{ steps.p.outputs.min_folds }}
+      calibrate: ${{ steps.p.outputs.calibrate }}
+      weights: ${{ steps.p.outputs.weights }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        name: parameters (run id, evidence dir, grids)
+        run: |
+          set -euo pipefail
+          RUN_ID="${{ github.event.inputs.run_id || '35042805806' }}"
+          ED="${{ github.event.inputs.evidence_dir || '' }}"
+          DIL="${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6' }}"
+          MINF="${{ github.event.inputs.min_folds || '4' }}"
+          CAL="${{ github.event.inputs.calibrate || 'loo' }}"
+          W="${{ github.event.inputs.weights || 'equal' }}"
+          MIND="0"
+          F=".github/triggers/reblend-params"
+          if [ -f "$F" ]; then
+            echo "parameters from $F:"; tr -d '\r' < "$F" | grep -E '^[A-Z_]+=' || true
+            v () { tr -d '\r' < "$F" | sed -n "s/^$1=\(.*\)\$/\1/p" | tail -1 || true; }
+            [ -n "$(v RUN_ID)" ] && RUN_ID="$(v RUN_ID)" || true
+            [ -n "$(v EVIDENCE_DIR)" ] && ED="$(v EVIDENCE_DIR)" || true
+            [ -n "$(v DILATE_GRID)" ] && DIL="$(v DILATE_GRID)" || true
+            [ -n "$(v MIN_DILATE)" ] && MIND="$(v MIN_DILATE)" || true
+            [ -n "$(v MIN_FOLDS)" ] && MINF="$(v MIN_FOLDS)" || true
+            [ -n "$(v CALIBRATE)" ] && CAL="$(v CALIBRATE)" || true
+          fi
+          [ -n "$ED" ] || ED="data/evidence/runs/$RUN_ID-experiment"
+          {
+            echo "run_id=$RUN_ID"
+            echo "evidence_dir=$ED"
+            echo "dilate_grid=$DIL"
+            echo "min_dilate=$MIND"
+            echo "min_folds=$MINF"
+            echo "calibrate=$CAL"
+            echo "weights=$W"
+          } >> "$GITHUB_OUTPUT"
+          echo "RUN_ID=$RUN_ID ED=$ED DIL=$DIL MIN_DILATE=$MIND MIN_FOLDS=$MINF CAL=$CAL W=$W"
+
   blend:
     runs-on: ubuntu-latest
+    needs: params
     timeout-minutes: 120
     steps:
       - name: Checkout (fixed blend code)
@@ -88,21 +152,39 @@ jobs:
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet numpy scipy rasterio scikit-image pyyaml
 
-      - name: Download fold artifacts from run ${{ github.event.inputs.run_id || '35042805806' }}
+      - name: Download fold artifacts from run ${{ needs.params.outputs.run_id }}
         uses: actions/download-artifact@v4
         with:
           pattern: fold-*
           path: folds
-          run-id: ${{ github.event.inputs.run_id || '35042805806' }}
+          run-id: ${{ needs.params.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
 
-      - name: Fold inventory
+      - name: Fold inventory + minimum-fold gate
         run: |
+          # Same contract as the ensemble workflow's gate: count only directories that carry BOTH a
+          # probability raster and a held-out calibration crop, refuse below MIN_FOLDS, and record
+          # any shortfall loudly (a partial ensemble is legitimate; a silent one is not).
           set -euo pipefail
+          shopt -s nullglob
+          n=0
+          : > usable_folds.txt
           for d in folds/fold-*/; do
             echo "== $d"; ls -la "$d"
+            if [ -f "$d/prob_raw.tif" ] && compgen -G "$d/heldout_mc*.npz" > /dev/null; then
+              n=$((n + 1))
+              echo "$d" | sed 's:/$::' >> usable_folds.txt
+            fi
           done
+          echo "usable folds: $n (MIN_FOLDS=${{ needs.params.outputs.min_folds }})"
+          if [ "$n" -lt "${{ needs.params.outputs.min_folds }}" ]; then
+            echo "::error::only $n usable fold artifact(s) in run ${{ needs.params.outputs.run_id }} - refusing to blend"
+            exit 1
+          fi
+          if [ "$n" -lt 6 ]; then
+            echo "::warning::blending $n of 6 folds - the shortfall is recorded in the report"
+          fi
 
       - name: Download labels + sample grid (data-tab Dropbox mirrors)
         run: |
@@ -118,15 +200,16 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/blend_submission.py \
-            --folds folds/fold-*/ \
+            --folds $(cat usable_folds.txt) \
             --config configs/config_ci_ensemble.yaml \
             --sample data/sample_submission.tif \
             --labels data/labels.tif \
             --out submission.tif --report blend_report.json \
             --weights "${{ github.event.inputs.weights || 'equal' }}" \
             --shaping-grid "${{ github.event.inputs.shaping_grid || '15' }}" \
-            --dilate-grid "${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6' }}" \
-            --calibrate "${{ github.event.inputs.calibrate || 'loo' }}" \
+            --dilate-grid "${{ needs.params.outputs.dilate_grid }}" \
+            --min-dilate "${{ needs.params.outputs.min_dilate }}" \
+            --calibrate "${{ needs.params.outputs.calibrate }}" \
             --loo-grid "${{ github.event.inputs.loo_grid || '7' }}" 2>&1 | tee blend.log
 
       - name: Validate submission format (exit code gates the commit)
@@ -164,8 +247,7 @@ jobs:
         run: |
           set -euo pipefail
           # a push-triggered run must not overwrite the original submission's evidence dir
-          D="${{ github.event.inputs.evidence_dir }}"
-          [ -n "$D" ] || D="data/evidence/runs/${{ github.event.inputs.run_id || '35042805806' }}-experiment"
+          D="${{ needs.params.outputs.evidence_dir }}"
           mkdir -p "$D"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -178,7 +260,9 @@ jobs:
           [ -f "$D/submission.tif" ] && { echo "committing $(stat -c%s "$D/submission.tif") bytes"; sha256sum "$D/submission.tif" | tee "$D/submission.sha256"; }
           git add -f "$D" || true
           git diff --cached --quiet && echo "nothing to commit" || {
-            git commit -m "blend(fix): rebuild submission from run ${{ github.event.inputs.run_id || '35042805806' }} fold artifacts [skip ci]"
+            cp -f usable_folds.txt "$D/" 2>/dev/null || true
+            git add -f "$D" || true
+            git commit -m "blend: rebuild submission from run ${{ needs.params.outputs.run_id }} fold artifacts [skip ci]"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           }

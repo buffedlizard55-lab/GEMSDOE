@@ -139,7 +139,7 @@ over this AOI, and the GeoDAWN flight blocks cover
 <table><thead><tr><th>|G|</th><th>baseline blanket ones</th><th>ensemble soft map</th><th>reblend hard 39517px</th><th>sweep t0 0 width6px</th></tr></thead><tbody><tr><td class="num">50 km</td><td class="num">0.0005</td><td class="num">0.0006</td><td class="num">0.0024</td><td class="num">0.0007</td></tr><tr><td class="num">100 km</td><td class="num">0.0010</td><td class="num">0.0011</td><td class="num">0.0046</td><td class="num">0.0014</td></tr><tr><td class="num">250 km</td><td class="num">0.0025</td><td class="num">0.0028</td><td class="num">0.0101</td><td class="num">0.0035</td></tr><tr><td class="num">500 km</td><td class="num">0.0050</td><td class="num">0.0055</td><td class="num">0.0166</td><td class="num">0.0066</td></tr><tr><td class="num">1,000 km</td><td class="num">0.0100</td><td class="num">0.0106</td><td class="num">0.0245</td><td class="num">0.0121</td></tr><tr><td class="num">2,000 km</td><td class="num">0.0198</td><td class="num">0.0197</td><td class="num">0.0323</td><td class="num">0.0207</td></tr><tr><td class="num">2,604 km</td><td class="num">0.0256</td><td class="num">0.0247</td><td class="num">0.0348</td><td class="num">0.0247</td></tr><tr><td class="num">3,000 km</td><td class="num">0.0293</td><td class="num">0.0278</td><td class="num">0.0361</td><td class="num">0.0270</td></tr><tr><td class="num">5,000 km</td><td class="num">0.0480</td><td class="num">0.0412</td><td class="num">0.0398</td><td class="num">0.0359</td></tr><tr><td class="num">6,099 km</td><td class="num">0.0579</td><td class="num">0.0475</td><td class="num">0.0410</td><td class="num">0.0394</td></tr><tr class="hl"><td class="num">6,166 km</td><td class="num">0.0585</td><td class="num">0.0478</td><td class="num">0.0410</td><td class="num">0.0395</td></tr><tr><td class="num">10,000 km</td><td class="num">0.0916</td><td class="num">0.0648</td><td class="num">0.0432</td><td class="num">0.0475</td></tr><tr><td class="num">25,000 km</td><td class="num">0.2012</td><td class="num">0.0986</td><td class="num">0.0455</td><td class="num">0.0591</td></tr></tbody></table>
 
 <h3>The decision, on the record</h3>
-<ul><li><b>beats the shipped default on the new-fault-like population by &gt; 0.01</b> — required &gt; 0.01 measured proxy DTI, measured <b>0.014853</b> → <span class="pill ok">passes</span></li><li><b>wins at the plausible scored-truth sizes (not only in the large-|G| limit)</b> — required every anchor favours the wider band, measured <b>3/3 anchors favour it; crossover 21,328 px (2,133 km)</b> → <span class="pill ok">passes</span></li><li><b>reproduced on a second, independently trained ensemble</b> — required same sign and &gt; 0.01 on the second ensemble, measured <b>NOT MEASURED: needs a GPU training run plus a second sweep (see SUGGESTIONS.md 7.1)</b> → <span class="pill bad">not met</span></li></ul>
+<ul><li><b>beats the shipped default on the new-fault-like population by &gt; 0.01</b> — required &gt; 0.01 measured proxy DTI, measured <b>0.014853</b> → <span class="pill ok">passes</span></li><li><b>wins at the plausible scored-truth sizes (not only in the large-|G| limit)</b> — required every anchor favours the wider band, measured <b>3/3 anchors favour it; crossover 21,328 px (2,133 km)</b> → <span class="pill ok">passes</span></li><li><b>reproduced on a second, independently trained ensemble</b> — required same sign and &gt; 0.01 on the second ensemble, measured <b>NOT MEASURED: needs a second, independently trained ensemble sweep (see SUGGESTIONS.md 7.1)</b> → <span class="pill bad">not met</span></li></ul>
 <div class="note info"><b>Verdict.</b> widen, but not yet: the 6-px band beats the shipped skeleton on the new-fault-like population by +0.0149 (condition 1) and at 3/3 plausible scored-truth anchors (condition 2), while a scored truth below 21,328 px (2,133 km) would still favour the narrower skeleton. Condition 3 - reproduction on a second ensemble - is unmet and is the blocking item, so the shipped default is unchanged and this file is the record of why</div>
 <div class="note warn"><b>Top priority.</b> beating the constant-ones baseline on the new-fault-like population is worth more than the width choice: the shipped skeleton does not beat it at any truth size above the crossover printed above, and the leaderboard&#x27;s top score (0.1972) is 3.4x the blanket&#x27;s 0.0585 on this population</div>
 <p class="muted small">Population C is state-geological-survey surface mapping, not the expert
@@ -147,6 +147,58 @@ interpretation of GeoDAWN geophysics that the prize scores: these are policy com
 leaderboard predictions. Held-out-crop rows for reference, where the same widening costs:
 <table><thead><tr><th>in-domain policy</th><th>mean held-out DTI</th></tr></thead><tbody><tr><td>floor 0.469674, width 0 px</td><td class="num">0.1903</td></tr><tr><td>floor 0.469674, width 1 px</td><td class="num">0.1525</td></tr><tr><td>floor 0.469674, width 3 px</td><td class="num">0.1128</td></tr><tr><td>floor 0.469674, width 6 px</td><td class="num">0.0908</td></tr>
 </tbody></table></p>
+
+<h2 id="miss">How far are the misses? Localization vs detection</h2>
+<p>Every width argument so far came from sweeping <i>floors</i> on the ensemble probability map.
+This is the direct measurement, on the submission that shipped: take its emitted pixels, grow them
+by <i>k</i> pixels, and score with the official metric. The truth is the same
+<span class="mono">61,664 px</span> (6,166 km) of USGS SGMC fault trace
+the labels do not contain. The prediction emits
+21,492 px (2,149 km) at threshold 0.5.</p>
+
+<div class="kv">
+  <span>median miss distance</span><b>22 px</b>
+  <span>p90 miss distance</span><b>57 px</b>
+  <span>truth inside the metric's own R=3 px tolerance</span><b>4.9%</b>
+  <span>truth with nothing emitted within 12 px (1.2 km)</span><b>74.0%</b>
+</div>
+
+<p>Of the 6,166 km of unseen fault trace: within 3px: <b>4.9%</b> · within 6px: <b>11.3%</b> · within 12px: <b>26.0%</b> · within 20px: <b>45.0%</b> · within 30px: <b>65.0%</b>. The median unseen-fault pixel
+sits <b>22 px = 2.2 km</b> from
+anything the model emitted. That is why widening pays here: it is not a bandwidth trick, it is the
+only way a 2.2 km-scale offset can earn credit under a 300 m tolerance.</p>
+
+<h3>What each emitted band width is worth (official metric, same emitted set dilated)</h3>
+<div class="scroll"><table><thead><tr><th>band</th><th>DTI</th><th>emitted px</th>
+<th>emitted km</th><th>FP mass</th></tr></thead><tbody><tr><td class="num">0 px</td><td class="num"><b>0.0247</b></td><td class="num">21,492</td><td class="num">2,149 km</td><td class="num">20,211</td></tr><tr><td class="num">1 px</td><td class="num"><b>0.0351</b></td><td class="num">68,712</td><td class="num">6,871 km</td><td class="num">64,630</td></tr><tr><td class="num">2 px</td><td class="num"><b>0.0432</b></td><td class="num">122,617</td><td class="num">12,262 km</td><td class="num">115,381</td></tr><tr><td class="num">3 px</td><td class="num"><b>0.0509</b></td><td class="num">195,559</td><td class="num">19,556 km</td><td class="num">184,128</td></tr><tr><td class="num">4 px</td><td class="num"><b>0.0559</b></td><td class="num">266,507</td><td class="num">26,651 km</td><td class="num">251,070</td></tr><tr><td class="num">6 px</td><td class="num"><b>0.0637</b></td><td class="num">447,946</td><td class="num">44,795 km</td><td class="num">422,615</td></tr><tr><td class="num">8 px</td><td class="num"><b>0.0678</b></td><td class="num">634,998</td><td class="num">63,500 km</td><td class="num">599,786</td></tr><tr><td class="num">10 px</td><td class="num"><b>0.0702</b></td><td class="num">847,747</td><td class="num">84,775 km</td><td class="num">801,701</td></tr><tr><td class="num">12 px</td><td class="num"><b>0.0710</b></td><td class="num">1,032,431</td><td class="num">103,243 km</td><td class="num">977,253</td></tr><tr class="hl"><td class="num">16 px</td><td class="num"><b>0.0713</b></td><td class="num">1,453,849</td><td class="num">145,385 km</td><td class="num">1,378,823</td></tr><tr><td class="num">20 px</td><td class="num"><b>0.0713</b></td><td class="num">1,867,660</td><td class="num">186,766 km</td><td class="num">1,773,901</td></tr><tr><td class="num">30 px</td><td class="num"><b>0.0697</b></td><td class="num">2,799,068</td><td class="num">279,907 km</td><td class="num">2,664,866</td></tr><tr><td class="num">40 px</td><td class="num"><b>0.0657</b></td><td class="num">3,565,210</td><td class="num">356,521 km</td><td class="num">3,405,129</td></tr></tbody></table></div>
+<p class="muted">Measured, not modelled: each row is the official distance-weighted Tversky index of
+that band against the proxy truth. Best measured width is <b>16 px</b>
+(+0.0466 over the shipped skeleton). A band is not free: at
+40 px the emission is 356,521 km of raster.</p>
+
+<h3>Which width the <i>scored</i> set would want, by its (unknown) size</h3>
+<p>The scored truth size |G| is hidden, and the metric's two error terms scale differently with it
+(wrong mass is set by the prediction, missing mass grows with the hidden truth). Holding each
+width's measured coverage and wrong mass fixed and letting |G| vary — exact at the proxy's own
+61,664 px — gives the projected optimum:</p>
+<div class="scroll"><table><thead><tr><th>assumed |G|</th><th></th><th>best width</th>
+<th>projected DTI</th><th>skeleton</th><th>gain</th></tr></thead><tbody><tr><td class="num">500 px</td><td class="num">50 km</td><td class="num">0 px</td><td class="num">0.0024</td><td class="num">0.0024</td><td class="num">+0.0000</td></tr><tr><td class="num">1,000 px</td><td class="num">100 km</td><td class="num">0 px</td><td class="num">0.0044</td><td class="num">0.0044</td><td class="num">+0.0000</td></tr><tr><td class="num">2,500 px</td><td class="num">250 km</td><td class="num">0 px</td><td class="num">0.0089</td><td class="num">0.0089</td><td class="num">+0.0000</td></tr><tr><td class="num">5,000 px</td><td class="num">500 km</td><td class="num">0 px</td><td class="num">0.0133</td><td class="num">0.0133</td><td class="num">+0.0000</td></tr><tr><td class="num">10,000 px</td><td class="num">1,000 km</td><td class="num">0 px</td><td class="num">0.0178</td><td class="num">0.0178</td><td class="num">+0.0000</td></tr><tr class="hl"><td class="num">20,000 px</td><td class="num">2,000 km</td><td class="num">6 px</td><td class="num">0.0277</td><td class="num">0.0213</td><td class="num">+0.0064</td></tr><tr class="hl"><td class="num">26,042 px</td><td class="num">2,604 km</td><td class="num">8 px</td><td class="num">0.0347</td><td class="num">0.0224</td><td class="num">+0.0123</td></tr><tr class="hl"><td class="num">61,664 px</td><td class="num">6,166 km</td><td class="num">16 px</td><td class="num">0.0713</td><td class="num">0.0247</td><td class="num">+0.0466</td></tr><tr class="hl"><td class="num">100,000 px</td><td class="num">10,000 km</td><td class="num">20 px</td><td class="num">0.1066</td><td class="num">0.0254</td><td class="num">+0.0812</td></tr><tr class="hl"><td class="num">250,000 px</td><td class="num">25,000 km</td><td class="num">30 px</td><td class="num">0.2178</td><td class="num">0.0262</td><td class="num">+0.1917</td></tr></tbody></table></div>
+<p><b>Widening starts winning above
+20,000 px
+(2,000 km)</b> of scored fault trace. Both plausible
+anchors in the decision record — the fault density over the GeoDAWN flight blocks
+(2,604 km → 8 px) and the proxy population itself
+(6,166 km → 16 px) — sit above that line. Below it,
+the narrow skeleton wins, and it wins by more than the wide band wins at large |G|.</p>
+<p class="muted">Caveats, spelled out because this table is the one that could change the shipped
+policy: the projection holds each policy's measured coverage and wrong mass fixed as |G| varies
+(the assumption, not a measurement); the proxy population is state-geological-survey surface
+mapping, not the expert interpretation of GeoDAWN geophysics; and the 22 px
+median offset is a property of <i>this</i> proxy's traces, so a scored set digitised from the same
+geophysics the model reads would sit closer and prefer a narrower band. The pre-registered rule in
+the decision record therefore still requires a second, independently trained ensemble to reproduce
+the gain before the default changes.</p>
+
 <h2>What the metric is actually computed against</h2>
 <p>Both prize phases are scored on the <b>new fault dataset</b> — faults that are <em>not</em> in the
 public catalogue the competition hands out for training. The training labels are the existing fault
@@ -177,7 +229,7 @@ the first honest signal; the private split and the Phase-2 revision are hidden.<
 </ul>
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-17 01:33 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-17 17:11 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>

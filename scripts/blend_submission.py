@@ -289,6 +289,18 @@ def main():
                          "src.submission_optim.dilate_mask for why the scored (new-fault) universe "
                          "may prefer k > 0, and data/evidence/shift_robustness.json for the "
                          "measurement that motivated the search.")
+    ap.add_argument("--min-dilate", type=int, default=0,
+                    help="drop every candidate narrower than this many pixels from the pooled "
+                         "search. The pooled search maximises IN-DOMAIN held-out DTI (the faults "
+                         "the model trained on), which always prefers the narrowest band; the "
+                         "scored population is the opposite regime. MEASURED 2026-09-17 "
+                         "(data/evidence/proxy/miss_distance-ensemble1.json): on faults absent from "
+                         "the labels the shipped skeleton has a 22 px MEDIAN miss distance, and "
+                         "widening to 8 px / 16 px projects better at every plausible scored-truth "
+                         "size above ~2,000 km (8 px is optimal at the GeoDAWN-blocks anchor, 16 px "
+                         "at the proxy's own). This option is how a measured width is shipped; it "
+                         "changes the search SPACE, never the reported calibration. Default 0 = "
+                         "unchanged behaviour until the width decision's condition 3 is met.")
     ap.add_argument("--loo-grid", type=int, default=9,
                     help="threshold count for the leave-one-fold-out search (cheaper than the "
                          "submission grid; the LOO search runs n_folds times)")
@@ -357,6 +369,11 @@ def main():
     # workflow happens in this script.  See src/submission_optim.shaping_thresholds.
     thr = shaping_thresholds(n_grid)
     dil = tuple(sorted({int(v) for v in str(args.dilate_grid).split(",") if v.strip()}))
+    if int(args.min_dilate) > 0:
+        kept = tuple(d for d in dil if d >= int(args.min_dilate))
+        print(f"--min-dilate {args.min_dilate}: pooled search restricted to widths {kept} "
+              f"(the in-domain calibration would otherwise always return the narrowest band)")
+        dil = kept or (int(args.min_dilate),)
     t0b, thinb, mean_dti, table, dilb = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta,
                                                           pre=enh, dilate_options=dil)
     print(f"pooled shaping: t0={t0b:.3f} thin={thinb} dilate={dilb}px -> mean held-out DTI "
@@ -511,6 +528,7 @@ def main():
         metric=dict(R_pixels=R, alpha=alpha, beta=beta),
         aggregation_calibration=loo,
         shaping=dict(t0=t0b, thin=bool(thinb), dilate=int(dilb), dilate_grid=list(dil),
+                     min_dilate=int(args.min_dilate),
                      mean_heldout_dti=float(mean_dti),
                      unshaped_mean_heldout_dti=float(table[0]["mean_dti"]),
                      calibration_table=table),
