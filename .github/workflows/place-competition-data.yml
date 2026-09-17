@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - name: Checkout (full history: this job pushes a commit)
+      - name: Checkout (full history - this job pushes a commit)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
