@@ -1,12 +1,12 @@
 {
- "generated_utc": "2026-09-17T19:33:52+00:00",
+ "generated_utc": "2026-09-17T20:20:21+00:00",
  "generated_by": "scripts/decide_emission_width.py",
  "purpose": "reconcile the three disagreeing emission-width measurements and decide the shipped shaping policy on the record, using the metric's own scaling in |G|",
  "inputs": {
   "proxy_eval": "data/evidence/proxy/eval_submission.json",
   "reblend_eval": "data/evidence/proxy/eval_reblend_submission.json",
   "sweep": "data/evidence/proxy/eval_sweep.json",
-  "second_sweep": null,
+  "second_sweep": "data/evidence/proxy/eval_sweep-ensemble2.json",
   "miss_distance": "data/evidence/proxy/miss_distance-ensemble1.json",
   "in_domain": "data/evidence/runs/35042805806-experiment/blend_report.json",
   "metric": {
@@ -1182,7 +1182,7 @@
    {
     "condition": "reproduced on a second, independently trained ensemble",
     "required": "same sign and > 0.01 on the second ensemble",
-    "measured": "NOT MEASURED: needs a second, independently trained ensemble sweep (see SUGGESTIONS.md 7.1)",
+    "measured": "second ensemble (data/evidence/proxy/eval_sweep-ensemble2.json): widest 20 px vs 0 px at 12 common floors -> mean gain +0.0318, min -0.0341, all floors NOT all positive",
     "passes": false
    }
   ],
@@ -1201,7 +1201,14 @@
     "crossover_px": 2718.3,
     "reason": "shipped_skeleton_dilate0 wins below 2718.3 px (271.8 km); sweep_best_t0_0.1_width0px wins above"
    },
-   "reproduced_on_second_ensemble": null,
+   "reproduced_on_second_ensemble": {
+    "t0": 0.1,
+    "width_px": 0,
+    "measured_dti": 0.077671,
+    "reference_policy_dti": 0.032022,
+    "contrast_vs_reference": 0.045649,
+    "reference_is": "sweep_verdict.current_policy_dti of that same sweep"
+   },
    "why_this_is_recorded": "the pre-registered rule's candidate set has to be stated, not assumed: the best measured candidate on this population is ranked here, so a verdict cannot be reached with it excluded",
    "widths_at_that_floor": {
     "0": 0.136452,
@@ -1321,6 +1328,88 @@
    "mean_gain": 0.024649,
    "min_gain": -0.07542,
    "max_gain": 0.063496,
+   "all_floors_positive": false
+  },
+  "width_gain_second_ensemble": {
+   "widest_px": 20,
+   "per_floor": [
+    {
+     "t0": 0.0,
+     "dti_width0": 0.014184,
+     "dti_widest": 0.05389,
+     "gain": 0.039706
+    },
+    {
+     "t0": 0.05,
+     "dti_width0": 0.095341,
+     "dti_widest": 0.061248,
+     "gain": -0.034093
+    },
+    {
+     "t0": 0.1,
+     "dti_width0": 0.077671,
+     "dti_widest": 0.06335,
+     "gain": -0.014321
+    },
+    {
+     "t0": 0.2,
+     "dti_width0": 0.054959,
+     "dti_widest": 0.064533,
+     "gain": 0.009574
+    },
+    {
+     "t0": 0.3,
+     "dti_width0": 0.039592,
+     "dti_widest": 0.065193,
+     "gain": 0.025601
+    },
+    {
+     "t0": 0.362091,
+     "dti_width0": 0.032022,
+     "dti_widest": 0.066729,
+     "gain": 0.034707
+    },
+    {
+     "t0": 0.4,
+     "dti_width0": 0.028889,
+     "dti_widest": 0.06772,
+     "gain": 0.038831
+    },
+    {
+     "t0": 0.5,
+     "dti_width0": 0.021122,
+     "dti_widest": 0.069975,
+     "gain": 0.048853
+    },
+    {
+     "t0": 0.6,
+     "dti_width0": 0.015702,
+     "dti_widest": 0.070904,
+     "gain": 0.055202
+    },
+    {
+     "t0": 0.7,
+     "dti_width0": 0.010457,
+     "dti_widest": 0.07178,
+     "gain": 0.061323
+    },
+    {
+     "t0": 0.8,
+     "dti_width0": 0.006444,
+     "dti_widest": 0.070671,
+     "gain": 0.064227
+    },
+    {
+     "t0": 0.9,
+     "dti_width0": 0.00273,
+     "dti_widest": 0.054123,
+     "gain": 0.051393
+    }
+   ],
+   "n_floors": 12,
+   "mean_gain": 0.03175,
+   "min_gain": -0.034093,
+   "max_gain": 0.064227,
    "all_floors_positive": false
   }
  },
