@@ -964,6 +964,61 @@ def _miss_distance(ev: dict) -> str:
            p["gain_over_skeleton"]) for p in proj)
     reaches = " · ".join(f'{k.replace("_", " ")}: <b>{100 * vv:.1f}%</b>'
                          for k, vv in mg.items() if k.startswith("within_"))
+    # Oracle ceiling: arithmetic about the metric, not a submission.  A perfect localizer that
+    # emits the truth scores 1.0; one that still writes a band of width w pays FP_w = sum d(x)/R.
+    oc = ev.get("oracle_ceiling") or {}
+    oc_rows_data = ((oc.get("oracle_band_ceiling") or {}).get("rows") or [])
+    by_width = {r["width_px"]: r["dti"] for r in curve}
+    oc_rows = "".join(
+        '<tr><td class="num">%d px</td><td class="num">%.4f</td><td class="num">%.4f</td>'
+        '<td class="num">%s</td><td class="num">%.1f%%</td></tr>'
+        % (r["width_px"], r["oracle_dti"], by_width.get(r["width_px"], float("nan")),
+           f'{r["emission_px"]:,}',
+           100 * by_width.get(r["width_px"], 0.0) / r["oracle_dti"] if r["oracle_dti"] else 0.0)
+        for r in oc_rows_data)
+    # Value axis: the same support, two ways of filling it.  Supports are equal pixel for pixel
+    # by construction, so the difference is the values alone.
+    va = ((ev.get("value_axis") or {}).get("results") or {}).get("shaping_sweep") or []
+    hard = {r["dilate"]: r["dti"] for r in va if not r.get("soft") and r.get("thin")}
+    soft = {(r["dilate"], r.get("gamma", 1.0)): r["dti"] for r in va if r.get("soft")}
+    va_widths = sorted(set(hard) & {w for w, _ in soft})
+    va_rows = "".join(
+        '<tr><td class="num">%d px</td><td class="num"><b>%.4f</b></td><td class="num">%.4f</td>'
+        '<td class="num">%.4f</td><td class="num">%.0f%%</td></tr>'
+        % (w, hard[w], soft.get((w, 1.0), float("nan")), soft.get((w, 2.0), float("nan")),
+           100 * soft.get((w, 1.0), 0.0) / hard[w] if hard[w] else 0.0)
+        for w in va_widths)
+    va_panel = f"""
+<h3>Same support, two ways of filling it: a hard band beats a distance ramp</h3>
+<p>The width question is about <i>which pixels</i>. This is the other half: given the pixels, what
+values to write. A hard band writes 1; the ramp (<code>soft_band</code>) writes values decaying from
+1 on the skeleton to 0 at the band edge. The supports are <b>identical pixel for pixel</b> by
+construction (<code>inside = d &le; width</code>), so the table isolates the values alone.</p>
+<div class="scroll"><table><thead><tr><th>band width</th><th>hard band (p = 1)</th>
+<th>ramp &gamma; = 1</th><th>ramp &gamma; = 2</th><th>ramp &divide; hard</th></tr></thead>
+<tbody>{va_rows}</tbody></table></div>
+<p class="muted">The hard band wins at every width; the ramp's deficit narrows as the band widens,
+because the ring a ramp discounts most is the one a hard band charges for least efficiently. A
+plausible idea, measured and rejected — it stays a control arm rather than a shipped default.
+Evidence: <span class="mono">data/evidence/proxy/eval_value_axis.json</span>.</p>""" if va_rows else ""
+    oc_panel = f"""
+<h3>The ceiling above every band: what a perfect localizer would score at the same width</h3>
+<p>Arithmetic, not a submission. Emitting the truth itself scores <b>1.0</b> (TP<sub>w</sub> = |G|
+and FP<sub>w</sub> = 0). A localizer that is perfect but still writes a band of half-width w pays
+FP<sub>w</sub> = Σ d(x)/R, so the ceiling is 1/(1 + 0.2·FP<sub>w</sub>/|G|) — and because both terms
+scale with |G| for a self-similar truth, that ceiling does <i>not</i> depend on how large the hidden
+truth is. It is therefore the one upper bound that can be quoted for a truth set we cannot see.</p>
+<div class="scroll"><table><thead><tr><th>band width</th><th>oracle ceiling</th>
+<th>this model, same width</th><th>oracle emission px</th><th>captured</th></tr></thead>
+<tbody>{oc_rows}</tbody></table></div>
+<p class="muted">Read together: the measured curve peaks at {vd["best_width_px"]} px because the
+model's <i>placement</i> error is large, not because wide bands are good — at
+{vd["best_width_px"]} px the model captures only
+{100 * by_width.get(vd["best_width_px"], 0.0) / max(r["oracle_dti"] for r in oc_rows_data if r["width_px"] == vd["best_width_px"]):.0f}%
+of what the same band would be worth if it were centred on the truth. A perfect localizer would emit
+the truth and want width 0. Widening is compensation for detection error; detection is the thing to
+fix.</p>""" if oc_rows_data and oc else ""
+    reaches = reaches
     return f"""
 <h2 id="miss">How far are the misses? Localization vs detection</h2>
 <p>Every width argument so far came from sweeping <i>floors</i> on the ensemble probability map.
@@ -992,6 +1047,10 @@ only way a 2.2 km-scale offset can earn credit under a 300 m tolerance.</p>
 that band against the proxy truth. Best measured width is <b>{vd['best_width_px']} px</b>
 ({vd['gain_from_widening']:+.4f} over the shipped skeleton). A band is not free: at
 {curve[-1]['width_px']} px the emission is {curve[-1]['emission_km']:,.0f} km of raster.</p>
+
+{oc_panel}
+
+{va_panel}
 
 <h3>Which width the <i>scored</i> set would want, by its (unknown) size</h3>
 <p>The scored truth size |G| is hidden, and the metric's two error terms scale differently with it
@@ -1679,6 +1738,13 @@ def main() -> int:
         "miss_distance": next((load(p) for p in [
             ROOT / "data/evidence/proxy/miss_distance-ensemble2.json",
             ROOT / "data/evidence/proxy/miss_distance-ensemble1.json"] if p.exists()), None),
+        # The ORACLE CEILING of a band: a perfect localizer that still writes a band of the same
+        # width.  It bounds every policy of that width, and - because TP_w and FP_w both scale with
+        # |G| for a self-similar truth - it does not need the hidden truth size.
+        "oracle_ceiling": load(ROOT / "data/evidence/proxy/oracle_ceiling-proxy.json"),
+        # The value axis at MATCHED support: a hard band versus a distance ramp that emits on the
+        # same pixels with values decaying to the band edge (src.submission_optim.soft_band).
+        "value_axis": load(ROOT / "data/evidence/proxy/eval_value_axis.json"),
         "dilate_experiment": next((load(p) for p in [
             ROOT / "data/evidence/runs/35042805806-dilate-ab/blend_report.json",
             ROOT / "data/evidence/runs/35042805806-experiment/blend_report.json"] if p.exists()),

@@ -150,3 +150,57 @@ def test_stale_proxy_evidence_is_flagged_by_the_km_field():
         # document the known-stale set precisely (updated by the next proxy-eval run)
         assert set(stale) <= {"eval_submission.json", "eval_sweep.json",
                               "eval_reblend_submission.json"}, stale
+
+
+def test_ramp_rows_are_policies_but_never_a_width():
+    """Session 11 added a second sweep axis: the VALUES written on a support (hard vs ramp).
+
+    A ramp candidate is identified by (floor, width, gamma) - nothing in the string "width 6 px"
+    says which of the two it is.  So the decision script must (a) rank ramp candidates as policies
+    like any other, and (b) keep them out of the width machinery, whose whole premise is that one
+    number (the band width) describes the candidate.
+    """
+    from scripts.decide_emission_width import width_gain_table
+
+    sw = _sweep([0.0149, 0.0200, 0.0251])                 # hard rows, widths 0/3/6
+    hard_rows = sw["results"]["shaping_sweep"]
+    # a ramp twin of every width-6 row, worth slightly more than the hard band of the same width
+    for r in list(hard_rows):
+        if r["dilate"] == 6:
+            sw["results"]["shaping_sweep"].append(dict(r, soft=True, gamma=1.0, dti=r["dti"] + 0.004))
+
+    t = width_gain_table(sw)
+    assert t["widest_px"] == 6, "a ramp row must not be mistaken for a wider hard band"
+    assert sorted(t["per_floor"][0]["gain"].__class__.__name__ for _ in [0]) == ["float"]
+
+    # the same table with the ramp rows REMOVED must be identical: proof of non-interference
+    sw2 = _sweep([0.0149, 0.0200, 0.0251])
+    assert width_gain_table(sw2) == t
+
+
+def test_ramp_candidates_appear_in_the_decision_ranking(tmp_path):
+    paths = _evidence(tmp_path)
+    sw = json.loads(paths["--sweep"].read_text())
+    for r in list(sw["results"]["shaping_sweep"]):
+        if r["dilate"] == 6:
+            sw["results"]["shaping_sweep"].append(dict(r, soft=True, gamma=2.0))
+    paths["--sweep"].write_text(json.dumps(sw))
+    r, out = _run(tmp_path, paths)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    names = [p["policy"] for p in out["policies"]]
+    assert any("ramp" in n for n in names), names
+    assert "ramp emission candidates scored" in r.stdout
+
+
+def test_width_gain_table_ignores_ramp_rows_entirely():
+    """The contrast must be hard vs hard: a ramp row that only exists at the widest width would
+    otherwise define "the widest band" while having no width-0 counterpart."""
+    from scripts.decide_emission_width import width_gain_table
+
+    sw = _sweep([0.02, 0.02, 0.02], floors=(0.0, 0.05, 0.1), widths=(0, 3, 6))
+    clean = width_gain_table(sw)
+    # a ramp row at a width that the hard grid does not contain at all
+    sw["results"]["shaping_sweep"].append(dict(t0=0.0, thin=True, dilate=12, soft=True, gamma=1.0,
+                                               dti=0.5, TP_w=1.0, FP_w=1.0, FN_w=1.0,
+                                               mass=1.0, emission_px=1))
+    assert width_gain_table(sw) == clean

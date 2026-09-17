@@ -138,3 +138,38 @@ def test_truth_mode_only_excludes_faults_the_labels_cover(tmp_path):
     assert d["inputs"]["truth_mode"] == "only"
     assert d["truth_px"] == 20                      # the code-1 line is excluded
     assert d["miss_geometry"]["credited_within_R"] == 1.0
+
+
+def test_oracle_ceiling_bounds_every_policy_of_that_width(tmp_path):
+    """The ceiling is arithmetic about the METRIC, so it must come out exactly.
+
+    A perfect localizer that emits the truth scores 1.0.  A perfect localizer that still writes a
+    band of half-width w pays FP_w = sum over band pixels of d(x)/R (at p = 1) while TP_w = |G|, so
+    the ceiling is 1/(1 + 0.2*FP_w/|G|) - independent of how large the hidden truth is, which is the
+    only reason it can be quoted for a truth set we cannot see.  On a 50 px line, three of whose
+    rows are within R, the numbers are exact.
+    """
+    proxy, pred = _scene(tmp_path, truth_row=32, pred_row=40)
+    op = tmp_path / "oracle.json"
+    r = subprocess.run([sys.executable, str(SCRIPT), "--pred", str(pred), "--proxy", str(proxy),
+                        "--widths", "0,1,3", "--out", str(op), "--oracle"],
+                       cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    d = json.loads(op.read_text())
+    ceil = {row["width_px"]: row for row in d["oracle_band_ceiling"]["rows"]}
+    assert ceil[0]["oracle_dti"] == 1.0, "emitting the truth itself is a perfect score"
+    # Width 1 on a 50 px horizontal line, disk(1) being the 4-connected cross: the band is the two
+    # neighbouring rows (50 px each, d = 1 -> fp 1/3 each) plus the two end pixels of the middle row
+    # (d = 1 -> 1/3 each, the part of the cost a finite line pays that a long one does not).
+    fp_per_px = (2 * 50 * (1 / 3) + 2 * (1 / 3)) / 50
+    assert ceil[1]["fp_per_truth_px"] == pytest.approx(fp_per_px, abs=1e-6)
+    assert ceil[1]["oracle_dti"] == pytest.approx(1 / (1 + 0.2 * fp_per_px), rel=1e-6)
+    # and the ceiling must dominate the measured policy at the same width (it is an upper bound)
+    measured = {row["width_px"]: row["dti"] for row in d["width_curve"]}
+    for w, row in ceil.items():
+        assert measured[w] <= row["oracle_dti"] + 1e-9, f"measured DTI exceeds the ceiling at {w} px"
+    assert d["oracle_band_ceiling"]["truth_size_independent"] is True
+    # without the flag nothing is computed, so the evidence file cannot imply a measurement happened
+    r2, d2 = _run(tmp_path, proxy, pred, out="plain.json")
+    assert r2.returncode == 0
+    assert d2["oracle_band_ceiling"] is None

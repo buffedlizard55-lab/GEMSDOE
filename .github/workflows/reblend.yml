@@ -35,7 +35,8 @@ name: Re-blend existing fold artifacts -> submission
 # .github/workflows/train-ensemble.yml uses:
 #
 #   .github/triggers/reblend-params may set
-#     RUN_ID=<actions run id>       (default 35042805806)
+#     RUN_ID=<actions run id>       (default 35042805806; a comma-separated list blends several
+#                                    ensembles into one submission, e.g. 35042805806,35249562910)
 #     EVIDENCE_DIR=<path>           (default data/evidence/runs/<RUN_ID>-experiment)
 #     DILATE_GRID=0,1,2,3,...       (default 0,1,2,3,4,6)
 #     MIN_DILATE=<int>              (default 0 = pure skeleton)
@@ -92,6 +93,8 @@ jobs:
     timeout-minutes: 10
     outputs:
       run_id: ${{ steps.p.outputs.run_id }}
+      run_id_2: ${{ steps.p.outputs.run_id_2 }}
+      run_id_3: ${{ steps.p.outputs.run_id_3 }}
       evidence_dir: ${{ steps.p.outputs.evidence_dir }}
       dilate_grid: ${{ steps.p.outputs.dilate_grid }}
       min_dilate: ${{ steps.p.outputs.min_dilate }}
@@ -123,8 +126,25 @@ jobs:
             [ -n "$(v CALIBRATE)" ] && CAL="$(v CALIBRATE)" || true
           fi
           [ -n "$ED" ] || ED="data/evidence/runs/$RUN_ID-experiment"
+          # MULTI-ENSEMBLE BLEND (2026-09-17, session 11).  One ensemble is 6 folds on one seed;
+          # two independent ensembles are 11-12 folds over two seeds, which is strictly more
+          # averaging for the same shaping.  RUN_ID may therefore be a comma-separated list and
+          # up to three runs are downloaded into separate directories (folds, folds2, folds3).
+          # The evidence directory defaults to the FIRST run id, so the record stays locatable.
+          # NOTE: `cut -f2` returns the WHOLE line when there is no delimiter in it, so a
+          # single run id would silently become both run_id and run_id_2 and the same fold
+          # artifacts would be blended twice (a silent double-count, not an error).  Parse only
+          # when a comma is actually present.
+          RUN1="$(printf '%s' "$RUN_ID" | cut -d, -f1 | tr -d ' ')"
+          R2=""; R3=""
+          if printf '%s' "$RUN_ID" | grep -q ','; then
+            R2="$(printf '%s' "$RUN_ID" | cut -d, -f2 | tr -d ' ')"
+            R3="$(printf '%s' "$RUN_ID" | cut -d, -f3 | tr -d ' ')"
+          fi
           {
-            echo "run_id=$RUN_ID"
+            echo "run_id=$RUN1"
+            echo "run_id_2=$R2"
+            echo "run_id_3=$R3"
             echo "evidence_dir=$ED"
             echo "dilate_grid=$DIL"
             echo "min_dilate=$MIND"
@@ -161,6 +181,26 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
 
+      - name: Download fold artifacts from run ${{ needs.params.outputs.run_id_2 }} (second ensemble)
+        if: ${{ needs.params.outputs.run_id_2 != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fold-*
+          path: folds2
+          run-id: ${{ needs.params.outputs.run_id_2 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+
+      - name: Download fold artifacts from run ${{ needs.params.outputs.run_id_3 }} (third ensemble)
+        if: ${{ needs.params.outputs.run_id_3 != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fold-*
+          path: folds3
+          run-id: ${{ needs.params.outputs.run_id_3 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+
       - name: Fold inventory + minimum-fold gate
         run: |
           # Same contract as the ensemble workflow's gate: count only directories that carry BOTH a
@@ -170,21 +210,38 @@ jobs:
           shopt -s nullglob
           n=0
           : > usable_folds.txt
-          for d in folds/fold-*/; do
-            echo "== $d"; ls -la "$d"
-            if [ -f "$d/prob_raw.tif" ] && compgen -G "$d/heldout_mc*.npz" > /dev/null; then
-              n=$((n + 1))
-              echo "$d" | sed 's:/$::' >> usable_folds.txt
-            fi
+          # Every download path is inventoried; MIN_FOLDS applies to the TOTAL (11 folds over two
+          # ensembles is a legitimate ensemble), and any run contributing fewer than its own folds
+          # is named in the log so a silently-empty download cannot pass as a successful one.
+          for base in folds folds2 folds3; do
+            [ -d "$base" ] || continue
+            k=0
+            for d in "$base"/fold-*/; do
+              echo "== $d"; ls -la "$d"
+              if [ -f "$d/prob_raw.tif" ] && compgen -G "$d/heldout_mc*.npz" > /dev/null; then
+                n=$((n + 1)); k=$((k + 1))
+                echo "$d" | sed 's:/$::' >> usable_folds.txt
+              fi
+            done
+            echo "usable folds from $base: $k"
           done
           echo "usable folds: $n (MIN_FOLDS=${{ needs.params.outputs.min_folds }})"
+          cat usable_folds.txt || true
           if [ "$n" -lt "${{ needs.params.outputs.min_folds }}" ]; then
-            echo "::error::only $n usable fold artifact(s) in run ${{ needs.params.outputs.run_id }} - refusing to blend"
+            echo "::error::only $n usable fold artifact(s) across runs ${{ needs.params.outputs.run_id }},${{ needs.params.outputs.run_id_2 }},${{ needs.params.outputs.run_id_3 }} - refusing to blend"
             exit 1
           fi
           if [ "$n" -lt 6 ]; then
             echo "::warning::blending $n of 6 folds - the shortfall is recorded in the report"
           fi
+          # A fold's directory name repeats across runs (fold-0 exists in every ensemble), so the
+          # provenance of what was blended is recorded explicitly: dir -> mc id -> run.
+          : > fold_provenance.txt
+          for d in $(cat usable_folds.txt); do
+            mc=$(python -c "import json,sys;print(json.load(open(sys.argv[1]))['mc_id'])" "$d/fold_params.json" 2>/dev/null || echo "?")
+            echo "$d mc_id=$mc" >> fold_provenance.txt
+          done
+          cat fold_provenance.txt
 
       - name: Download labels + sample grid (data-tab Dropbox mirrors)
         run: |
@@ -260,7 +317,7 @@ jobs:
           [ -f "$D/submission.tif" ] && { echo "committing $(stat -c%s "$D/submission.tif") bytes"; sha256sum "$D/submission.tif" | tee "$D/submission.sha256"; }
           git add -f "$D" || true
           git diff --cached --quiet && echo "nothing to commit" || {
-            cp -f usable_folds.txt "$D/" 2>/dev/null || true
+            cp -f usable_folds.txt fold_provenance.txt "$D/" 2>/dev/null || true
             git add -f "$D" || true
             git commit -m "blend: rebuild submission from run ${{ needs.params.outputs.run_id }} fold artifacts [skip ci]"
             git pull --rebase origin "${GITHUB_REF_NAME}"

@@ -477,14 +477,14 @@ def test_min_dilate_restricts_the_pooled_search_space(tmp_path):
     assert narrow["min_dilate"] == 3
     assert narrow["dilate_grid"] == [3]
     assert "restricted to widths (3,)" in out
-    # dilate == 0 in the report means "the unshaped reference won", never "a narrow band was
-    # selected": calibrate_shaping() seeds its best with the raw (unshaped) row.  The contract the
-    # option has to keep is therefore that no width BELOW the floor is ever selected - that is what
-    # would silently re-ship the skeleton the measurement rejects.
-    assert narrow["dilate"] in (0, 3), narrow
+    # The unshaped row may NOT win once a width has been asked for: it used to seed the search, so
+    # on the catalogue (where the raw soft map can beat every band) a run told to ship a 3 px band
+    # would have returned dilate=0 - a silent no-op.  The seed now loses by construction.
+    assert narrow["dilate"] == 3, narrow
+    assert narrow["calibration_table"][0]["excluded_from_search"] is True
     excluded = {r["dilate"] for r in narrow["calibration_table"] if r.get("dilate") is not None}
     assert not (excluded & {1, 2}), f"a width below --min-dilate entered the table: {excluded}"
 
     # a min-dilate outside the grid still yields a usable search space rather than an empty one
     outside, _ = blend(["--min-dilate", "5"], "outside")
-    assert outside["dilate_grid"] == [5] and outside["dilate"] in (0, 5)
+    assert outside["dilate_grid"] == [5] and outside["dilate"] == 5

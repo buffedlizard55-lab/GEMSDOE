@@ -11,3 +11,8 @@ proxy-eval
 # pre-shaping ensemble map.  This run also clips every candidate to the data footprint (a legal
 # submission is NaN outside it), extends the width grid to 12 px because the proxy curve was still
 # rising at 6, and writes data/evidence/emission_decision.json from the sweep.
+
+
+# 2026-09-17 (session 11): fire the EXTENDED sweep on the first ensemble (run 35042805806) -
+# explicit floors + field_mass_profile + ramp candidates + a width grid that reaches the measured
+# optimum (16 px).  Settings live in .github/triggers/proxy-eval-params.

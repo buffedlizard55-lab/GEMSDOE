@@ -1,3 +1,21 @@
+## Sessions 11–12 (2026-09-17) — current status of every blocker, line by line
+
+Each row states the limitation, what it costs, and the smallest piece of access that would remove it.
+Nothing in the repository can substitute for the first row.
+
+| # | Limitation | Measured cost today | What would remove it |
+|---|---|---|---|
+| 1 | **No DrivenData account or enrolment** | Cannot enter the competition at all: no submission upload (3/week), no public leaderboard, no forum. The data tab redirects to login | A DrivenData account with the GEMS Prize accepted — a person, not code |
+| 2 | **No GPU in this workspace** | Training is capped at resnet34 / 45 epochs / ~2.5 h per fold on free CPU runners. `configs/config.yaml` (EfficientNet-B5, 10 folds, 60 epochs) has never been run end to end | One CUDA GPU (A100-class, 24 GB+) or paid runner minutes |
+| 3 | **Sandbox egress allowlist** (github.com, api.github.com, codeload.github.com, pypi.org/files.pythonhosted.org) | Dropbox, DrivenData, ArcGIS, ScienceBase, S3 and the Actions artifact host are unreachable from the dev sandbox. Competition rasters arrive as sha256-pinned git objects; every measurement that needs the network runs on a GitHub-hosted runner | Nothing needed — the two-hop design works; a general egress proxy would simplify it |
+| 4 | **Hidden scored labels** | Every local number is a diagnostic, never a leaderboard score. The scored faults are the *new* expert set (rules §1.1/§3.3), disjoint from `labels.tif`; a catalogue-copy submission scores exactly 0.0 on the proxy population (asserted) | The public leaderboard, which only row 1 unlocks |
+| 5 | **The proxy population is a stand-in** | USGS SGMC state-map traces, not the expert interpretation of GeoDAWN geophysics. It bounds the *choice* between policies, not the score | Nothing available locally; it is a proxy by construction |
+| 6 | **Trained on the catalogue, scored on what the catalogue lacks** | Selection (early stopping, pooled floor, fold weights) maximises in-domain DTI, which is the opposite regime: the in-domain optimum is always the narrowest band (0.1903 → 0.0908 at 6 px) | A selection signal on a population resembling the scored one — the proxy is the closest, and it is a proxy |
+| 7 | **External data is inventoried but not downloaded** | 1 m DEM derivatives (`src/external_data.py`, `scripts/download_dem_tiles.py`) and the GeoDAWN/INGENIOUS products are unreachable in bulk from here; ~50 GB storage and S3/ArcGIS egress on a runner would be needed | A runner job with storage, or a machine with unrestricted network |
+| 8 | **No cross-catalogue transfer measurement yet** | Emitting an external fault catalogue (allowed by the rules) is the highest-upside unmeasured idea: the proxy cannot evaluate it, because the proxy IS the catalogue (score 0.0 by construction). Only a second independent catalogue can measure the transfer | One independent, free, licensed catalogue (e.g. the USGS Quaternary fault and fold database) fetched on a runner |
+| 9 | **Eligibility** (rules §1.3: an individual prize competitor must be a U.S. citizen or permanent resident; teams, entities and academia have their own clauses) | Retroactive: ineligible work cannot be submitted regardless of score | Confirmation of eligibility before the deadline |
+| 10 | **Deadline artefacts** (rules §3.2: assets sufficient to reproduce + the generative-AI disclosure in the narrative; §3.5: one final submission for both rounds) | Not started; they are a human step on the submission path | Human authoring at submission time |
+
 # Limitations & Required Access — GEMS Prize
 
 **Verified sources:**

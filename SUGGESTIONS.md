@@ -3,6 +3,58 @@
 **Review update 2026-09-17:** official competition pages were fetched again; see
 [`REVIEW_2026-09-17.md`](REVIEW_2026-09-17.md) for the line-by-line source table and limitations.
 
+## Session 12 (2026-09-17) — measured + hardened
+
+| Improvement | Why it matters | Status / evidence |
+|---|---|---|
+| Oracle ceiling per band width | Bounds every policy of that width and is independent of the hidden truth size | ✅ 16 px caps at **0.1618** while the model captures 44.1 % of it; `--oracle`, `data/evidence/proxy/oracle_ceiling-proxy.json`, exact-line test in `tests/test_miss_distance.py` |
+| Value axis measured at matched support | "Hard band vs distance ramp" was plausible but unmeasured; now it is measured on the shipped submission's own support | ✅ hard wins at 3/6/12/16 px (3 px: 0.0509 vs 0.0316; 16 px: 0.0713 vs 0.0595); `data/evidence/proxy/eval_value_axis.json` |
+| `--min-dilate` can no longer be a silent no-op | The raw unshaped row seeded the search and the un-thinned branch had width 0, so a run asked for a 16 px band could ship the skeleton and report success | ✅ seed loses by construction, un-thinned branch excluded, `excluded_from_search` in the report, `main()` asserts the width; `tests/test_ensemble.py` now requires `dilate == 3` for `--min-dilate 3` |
+| Third independent ensemble fired | The final submission should be one nanmean over every live fold set | ✅ folds 12–17, seed 44, run 35263581931; the width is applied later at blend time (`MIN_DILATE`), so folds stay reusable |
+
+### Session 12 queue, in order
+
+1. **Condition 3** of the pre-registered decision: sweep ensemble 2 (run 35249562910) and ensemble 3
+   (35263581931) on the proxy population; ship widening only if the floor-controlled contrast
+   reproduces above +0.01. The path is `reblend.yml` (`RUN_ID=a,b[,c]`) → `MIN_DILATE` at blend time.
+2. **Detection is the thing to fix, and it is now quantified.** The oracle table says a perfect
+   localizer that emits the truth scores 1.0 while every band is capped below it, and the model
+   captures 44 % of the 16 px cap. More independent folds, then the two experiments below.
+3. **Cross-catalogue transfer measurement.** Emitting an external fault catalogue (allowed by the
+   rules) would raise recall on unmapped faults directly, but the proxy population CANNOT measure it:
+   the proxy *is* the catalogue (a catalogue copy scores 0.0 there by the acceptance test). The
+   honest design is to emit catalogue A and score against an independent catalogue B (e.g. the USGS
+   Quaternary fault and fold database), reporting the transfer as a prior on what A captures of the
+   hidden expert set. Nothing in the repository measures that yet; it is the highest-upside
+   unmeasured idea left.
+4. **Spatial block-holdout** — resolves the in-domain/proxy sign conflict by construction instead of
+   choosing between populations.
+5. **Reset the training trigger** before the next ensemble fire: `.github/triggers/ensemble-params`
+   currently holds `FOLD_OFFSET=12` / `ENSEMBLE_SEED=44` for run 35263581931; the next fire needs a
+   new offset (18) and seed (45).
+6. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
+   check (§1.3), Pages source setting, generative-AI + code assets at the deadline.
+
+## Session 11 (2026-09-17) — implemented + measured
+
+| Improvement | Why it matters | Status / evidence |
+|---|---|---|
+| Ramp emission as a second, separately measured axis | The width sweep answered "what support"; nothing had measured "what VALUES on that support" | ✅ `src/submission_optim.soft_band` (support identical to the hard band by construction), `scripts/eval_proxy_catalogue.py --soft-band`, `tests/test_shaping_band.py` (8 tests) |
+| Measured answer: hard band beats the ramp at equal support | Stops a plausible-sounding idea from being shipped on plausibility | ✅ every width, same support: 3 px 0.0509 vs 0.0316, 16 px 0.0713 vs 0.0595 (γ=1); `data/evidence/proxy/eval_value_axis.json` |
+| Auditable floor grid (`field_mass_profile`) | Session 10 found the floor axis was binary but only by reconstruction; the evidence file never said so | ✅ support above floor recorded before thinning on every candidate floor; `distinct_supports: 1` on the shipped field |
+| Explicit floor candidates (`--shaping-values`) | The log-spaced grid jumped 4.3e-2 → 0.9 on this field | ✅ the sweep can now be given an interpretable grid, and the workflow passes it through (`SHAPING_VALUES`) |
+| Multi-ensemble blend (`RUN_ID=a,b,c`) | The final submission should be one nanmean over every live fold set, not one ensemble | ✅ `reblend.yml` + `fold_provenance.txt` + `tests/test_reblend_workflow.py` |
+| MIN_DILATE reaches the ensemble blend job | A measured width that no workflow reads cannot ship | ✅ `train-ensemble.yml` reads it from the committed trigger file; 2 tests execute the step |
+| `cut -f2` single-run defect | Without a delimiter `cut` returns the WHOLE line: one run id would have been blended twice | ✅ fixed + pinned by executing the workflow's own shell |
+
+### Session 11 rationale, kept for the record
+
+The queue that session 11 wrote for itself was: (1) raise recall on faults absent from `labels.tif`
+(the oracle table below puts a number on how much room there is), (2) reproduce the width gain on a
+second ensemble, (3) measure the transfer of an external fault catalogue with a second independent
+catalogue, (4) build the spatial block-holdout, (5) the human-only steps. Session 12 carries all
+five forward in its own queue above.
+
 ## Session 10 (2026-09-17) — implemented + measured
 
 | Improvement | Why it matters | Status / evidence |

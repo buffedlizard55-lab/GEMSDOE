@@ -87,13 +87,13 @@ all three run by the <em>Proxy catalogue</em> workflow.</p>
 <table><thead><tr><th>quantity</th><th>value</th></tr></thead><tbody>
 <tr><td>source</td><td><a href="https://doi.org/10.3133/ds1052">USGS State Geologic Map Compilation, Data Series 1052</a>
  (Horton, San Juan &amp; Stoeser 2017) — US public domain (USGS); no credentials used; read through the published FeatureServer layer
- <code>SGMC_Structure</code>, service-to-DOI identity could not be re-established on this run and is recorded as such, not assumed: HTTPError: HTTP Error 403: Forbidden</td></tr>
+ <code>SGMC_Structure</code>, tied to the data release by measurement: the DOI resolves to ScienceBase item <code>5888bf4fe4b05ccb964bab9d</code>, which is exactly the item id inside the service name</td></tr>
 <tr><td>selection rule</td><td>10 fault classes taken from the service's own coded-value domain
  (every class whose published name contains "fault"), 21,765 polylines in 22 paged requests</td></tr>
 <tr><td>states present</td><td>CA 1,410, NV 20,355</td></tr>
-<tr><td>rasterised on the competition grid</td><td>217,404 px (21,740 km of trace); 0 px of it lie outside
+<tr><td>rasterised on the competition grid</td><td>217,404 px (21,740 km of trace); 135,249 px of it lie outside
  the data footprint</td></tr>
-<tr><td>already within R of a training label</td><td>20,491 px (9.4 % of the in-footprint proxy)</td></tr>
+<tr><td>already within R of a training label</td><td>20,491 px (24.9 % of the in-footprint proxy)</td></tr>
 <tr><td><b>absent from the training labels</b> — the proxy truth set</td><td><b>61,664 px</b> = 6,166 km of
  trace in 2,083 components (largest 157.1 km)</td></tr>
 <tr><td>for scale</td><td>the training labels hold 6,099 km of trace, so the absent set is not a rarer
@@ -176,6 +176,38 @@ that band against the proxy truth. Best measured width is <b>16 px</b>
 (+0.0466 over the shipped skeleton). A band is not free: at
 40 px the emission is 356,521 km of raster.</p>
 
+
+<h3>The ceiling above every band: what a perfect localizer would score at the same width</h3>
+<p>Arithmetic, not a submission. Emitting the truth itself scores <b>1.0</b> (TP<sub>w</sub> = |G|
+and FP<sub>w</sub> = 0). A localizer that is perfect but still writes a band of half-width w pays
+FP<sub>w</sub> = Σ d(x)/R, so the ceiling is 1/(1 + 0.2·FP<sub>w</sub>/|G|) — and because both terms
+scale with |G| for a self-similar truth, that ceiling does <i>not</i> depend on how large the hidden
+truth is. It is therefore the one upper bound that can be quoted for a truth set we cannot see.</p>
+<div class="scroll"><table><thead><tr><th>band width</th><th>oracle ceiling</th>
+<th>this model, same width</th><th>oracle emission px</th><th>captured</th></tr></thead>
+<tbody><tr><td class="num">0 px</td><td class="num">1.0000</td><td class="num">0.0247</td><td class="num">61,664</td><td class="num">2.5%</td></tr><tr><td class="num">1 px</td><td class="num">0.8852</td><td class="num">0.0351</td><td class="num">181,568</td><td class="num">4.0%</td></tr><tr><td class="num">3 px</td><td class="num">0.5795</td><td class="num">0.0509</td><td class="num">429,471</td><td class="num">8.8%</td></tr><tr><td class="num">6 px</td><td class="num">0.3460</td><td class="num">0.0637</td><td class="num">788,357</td><td class="num">18.4%</td></tr><tr><td class="num">12 px</td><td class="num">0.2031</td><td class="num">0.0710</td><td class="num">1,415,512</td><td class="num">35.0%</td></tr><tr><td class="num">16 px</td><td class="num">0.1618</td><td class="num">0.0713</td><td class="num">1,802,824</td><td class="num">44.1%</td></tr><tr><td class="num">20 px</td><td class="num">0.1364</td><td class="num">0.0713</td><td class="num">2,157,083</td><td class="num">52.2%</td></tr><tr><td class="num">30 px</td><td class="num">0.1021</td><td class="num">0.0697</td><td class="num">2,918,382</td><td class="num">68.3%</td></tr><tr><td class="num">40 px</td><td class="num">0.0839</td><td class="num">0.0657</td><td class="num">3,572,351</td><td class="num">78.3%</td></tr></tbody></table></div>
+<p class="muted">Read together: the measured curve peaks at 16 px because the
+model's <i>placement</i> error is large, not because wide bands are good — at
+16 px the model captures only
+44%
+of what the same band would be worth if it were centred on the truth. A perfect localizer would emit
+the truth and want width 0. Widening is compensation for detection error; detection is the thing to
+fix.</p>
+
+
+<h3>Same support, two ways of filling it: a hard band beats a distance ramp</h3>
+<p>The width question is about <i>which pixels</i>. This is the other half: given the pixels, what
+values to write. A hard band writes 1; the ramp (<code>soft_band</code>) writes values decaying from
+1 on the skeleton to 0 at the band edge. The supports are <b>identical pixel for pixel</b> by
+construction (<code>inside = d &le; width</code>), so the table isolates the values alone.</p>
+<div class="scroll"><table><thead><tr><th>band width</th><th>hard band (p = 1)</th>
+<th>ramp &gamma; = 1</th><th>ramp &gamma; = 2</th><th>ramp &divide; hard</th></tr></thead>
+<tbody><tr><td class="num">3 px</td><td class="num"><b>0.0509</b></td><td class="num">0.0316</td><td class="num">0.0261</td><td class="num">62%</td></tr><tr><td class="num">6 px</td><td class="num"><b>0.0637</b></td><td class="num">0.0422</td><td class="num">0.0323</td><td class="num">66%</td></tr><tr><td class="num">12 px</td><td class="num"><b>0.0710</b></td><td class="num">0.0552</td><td class="num">0.0455</td><td class="num">78%</td></tr><tr><td class="num">16 px</td><td class="num"><b>0.0713</b></td><td class="num">0.0595</td><td class="num">0.0514</td><td class="num">83%</td></tr></tbody></table></div>
+<p class="muted">The hard band wins at every width; the ramp's deficit narrows as the band widens,
+because the ring a ramp discounts most is the one a hard band charges for least efficiently. A
+plausible idea, measured and rejected — it stays a control arm rather than a shipped default.
+Evidence: <span class="mono">data/evidence/proxy/eval_value_axis.json</span>.</p>
+
 <h3>Which width the <i>scored</i> set would want, by its (unknown) size</h3>
 <p>The scored truth size |G| is hidden, and the metric's two error terms scale differently with it
 (wrong mass is set by the prediction, missing mass grows with the hidden truth). Holding each
@@ -229,7 +261,7 @@ the first honest signal; the private split and the Phase-2 revision are hidden.<
 </ul>
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-17 17:11 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-17 19:17 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>

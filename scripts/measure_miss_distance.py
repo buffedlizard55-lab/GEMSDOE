@@ -92,6 +92,11 @@ def main() -> int:
                     help="band widths in pixels to measure the exact metric at")
     ap.add_argument("--out", required=True)
     ap.add_argument("--label", default=None, help="optional label recorded in the evidence file")
+    ap.add_argument("--oracle", action="store_true",
+                    help="also measure the ORACLE CEILING of each band width: the emitted set is "
+                         "the truth dilated by the same width, i.e. a perfect localizer that still "
+                         "writes a band. Bounds what any policy of that width can ever score, so a "
+                         "projected value above it is provably wrong.")
     a = ap.parse_args()
 
     pred, pmeta = read(Path(a.pred))
@@ -144,6 +149,41 @@ def main() -> int:
                      dti_gain=round(curve[i + 1]["dti"] - curve[i]["dti"], 6),
                      px_added=curve[i + 1]["emission_px"] - curve[i]["emission_px"])
                 for i in range(len(curve) - 1)]
+
+    # ---- the ceiling: what a PERFECT localizer scores if it still emits a band ----------------
+    #
+    # Arithmetic, not a submission.  Emitting the truth itself scores exactly 1.0 (TP_w = |G|,
+    # FP_w = 0), so the interesting question is what a band costs even when it is centred
+    # perfectly: FP_w = sum over band pixels of p*(1 - max_g k(d(x,g))) = sum d(x)/R at p = 1,
+    # and TP_w = |G| with FN_w = 0.  Because both TP_w and FP_w scale with |G| for a band around a
+    # self-similar truth, the ceiling 1/(1 + 0.2*FP_w/|G|) does NOT depend on the hidden truth
+    # size - which is what makes it usable here at all (see the projection further down).
+    oracle = None
+    if a.oracle:
+        rows = []
+        for w in widths:
+            m = dilate_mask(truth.astype(np.float32), radius=w) if w \
+                else truth.astype(np.float32)
+            dti, (tp, fp, fn) = ctx.score(m, alpha=ALPHA, beta=BETA, return_components=True)
+            rows.append(dict(width_px=w, oracle_dti=round(float(dti), 6),
+                             emission_px=int(m.sum()),
+                             fp_per_truth_px=round(float(fp) / max(n_truth, 1), 4)))
+        oracle = {
+            "rows": rows,
+            "defined_as": ("the emitted set is the truth dilated by the same width with p = 1: a "
+                           "perfect localizer that still writes a band. Emission of the truth "
+                           "itself (width 0) scores 1.0 by construction"),
+            "truth_size_independent": True,
+            "why": ("TP_w and FP_w both scale with |G| for a band around a self-similar truth, so "
+                    "the ceiling depends only on the width, not on how large the hidden truth is"),
+            "reading": ("a candidate whose PROJECTED value exceeds the oracle ceiling at its own "
+                        "width is wrong - the projection assumes the coverage a perfect localizer "
+                        "would need"),
+        }
+        print("\n  oracle ceiling (perfect localizer, same band width):")
+        for r in rows:
+            print("    width %3d px -> DTI %.4f  (emits %d px, FP_w/|G| = %.3f)"
+                  % (r["width_px"], r["oracle_dti"], r["emission_px"], r["fp_per_truth_px"]))
 
     # ---- how much of the truth is unreachable at ANY plausible width ------------------------
     unreachable = {f"beyond_{k}px": round(1.0 - frac_within(k), 6) for k in (6, 12, 20, 30)}
@@ -202,6 +242,7 @@ def main() -> int:
         "miss_geometry": localization,
         "unreachable_by_widening": unreachable,
         "width_curve": curve,
+        "oracle_band_ceiling": oracle,
         "marginal_gain_per_width": marginal,
         "projection_over_scored_truth_size": projection,
         "widening_starts_winning_above_px": widen_above,

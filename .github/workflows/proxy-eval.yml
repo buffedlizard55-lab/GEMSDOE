@@ -54,6 +54,15 @@ on:
       extra_classes:
         description: "extra SGMC classes to include besides faults (e.g. Lineament)"
         default: ""
+      shaping_values:
+        description: "explicit comma-separated floor candidates (empty = log-spaced shaping_grid)"
+        default: ""
+      soft_band:
+        description: "1 = also score ramp emission candidates on the same supports"
+        default: "0"
+      band_gammas:
+        description: "ramp exponents to score (default 1,2)"
+        default: "1,2"
       skip_sweep:
         description: "1 = only build the proxy and score the committed submission"
         default: "0"
@@ -85,6 +94,14 @@ on:
 #                               shipped floor is always a row and the acceptance rule compares
 #                               against the shipped policy, not the t0=0 skeleton)
 #   SUBMISSION=<path>          (default data/evidence/runs/<RUN_ID>/submission.tif)
+#   SHAPING_VALUES=0,0.02,...  explicit floor grid (default: log-spaced SHAPING_GRID candidates).
+#                              Both are recorded alongside field_mass_profile, which shows how
+#                              many pixels the field has above each floor BEFORE thinning - a
+#                              finer floor grid changes nothing if that column is constant.
+#   SOFT_BAND=1                also score ramp emission (same support, values decaying to 0 at
+#                              the band edge: src/submission_optim.soft_band) - the second axis,
+#                              values on a fixed support, measured separately from band width.
+#   BAND_GAMMAS=1,2            ramp exponents to score (default 1,2)
 # ---------------------------------------------------------------------------
 
 permissions:
@@ -108,6 +125,9 @@ jobs:
       sweep_label: ${{ steps.p.outputs.sweep_label }}
       dilate_grid: ${{ steps.p.outputs.dilate_grid }}
       shaping_grid: ${{ steps.p.outputs.shaping_grid }}
+      shaping_values: ${{ steps.p.outputs.shaping_values }}
+      soft_band: ${{ steps.p.outputs.soft_band }}
+      band_gammas: ${{ steps.p.outputs.band_gammas }}
       submission: ${{ steps.p.outputs.submission }}
     steps:
       - uses: actions/checkout@v4
@@ -119,6 +139,9 @@ jobs:
           LABEL="${{ github.event.inputs.sweep_label || '' }}"
           DIL="${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6,8,10,12,16,20' }}"
           GRID="${{ github.event.inputs.shaping_grid || '11' }}"
+          SVAL="${{ github.event.inputs.shaping_values || '' }}"
+          SOFT="${{ github.event.inputs.soft_band || '0' }}"
+          GAM="${{ github.event.inputs.band_gammas || '1,2' }}"
           SUB=""
           F=".github/triggers/proxy-eval-params"
           if [ -f "$F" ]; then
@@ -128,6 +151,9 @@ jobs:
             [ -n "$(v SWEEP_LABEL)" ] && LABEL="$(v SWEEP_LABEL)" || true
             [ -n "$(v DILATE_GRID)" ] && DIL="$(v DILATE_GRID)" || true
             [ -n "$(v SHAPING_GRID)" ] && GRID="$(v SHAPING_GRID)" || true
+            [ -n "$(v SHAPING_VALUES)" ] && SVAL="$(v SHAPING_VALUES)" || true
+            [ -n "$(v SOFT_BAND)" ] && SOFT="$(v SOFT_BAND)" || true
+            [ -n "$(v BAND_GAMMAS)" ] && GAM="$(v BAND_GAMMAS)" || true
             SUB="$(v SUBMISSION)" || true
           else
             echo "no $F - sweeping run $RUN_ID with grid $DIL"
@@ -138,9 +164,12 @@ jobs:
             echo "sweep_label=$LABEL"
             echo "dilate_grid=$DIL"
             echo "shaping_grid=$GRID"
+            echo "shaping_values=$SVAL"
+            echo "soft_band=$SOFT"
+            echo "band_gammas=$GAM"
             echo "submission=$SUB"
           } >> "$GITHUB_OUTPUT"
-          echo "RUN_ID=$RUN_ID LABEL=$LABEL DILATE=$DIL SHAPING=$GRID SUB=$SUB"
+          echo "RUN_ID=$RUN_ID LABEL=$LABEL DILATE=$DIL SHAPING=$GRID SVAL=$SVAL SOFT=$SOFT SUB=$SUB"
 
   proxy:
     name: build the proxy catalogue + score the submission
@@ -289,11 +318,22 @@ jobs:
           SUF=""; [ -n "$LABEL" ] && SUF="-$LABEL"
           # Labeled sweeps let ensemble 1 and ensemble 2 coexist as evidence, which is what the
           # reproduction condition in scripts/decide_emission_width.py consumes.
+          SVAL_FLAG=""
+          [ -n "${{ needs.params.outputs.shaping_values }}" ] && \
+            SVAL_FLAG="--shaping-values ${{ needs.params.outputs.shaping_values }}"
+          SOFT_FLAG=""
+          [ "${{ needs.params.outputs.soft_band }}" = "1" ] && SOFT_FLAG="--soft-band"
+          # Two axes are measured in one run: the SUPPORT (floor x thinning x band width, the
+          # original sweep) and the VALUES written on that support (hard 1.0 vs the distance ramp
+          # of src.submission_optim.soft_band, identical support).  --soft-band adds the ramp
+          # candidates; without it this is exactly the previous sweep.
           python scripts/eval_proxy_catalogue.py --pred ensemble_mean.tif \
             --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
             --out "data/evidence/proxy/eval_sweep$SUF.json" --sweep \
             --shaping-grid "${{ needs.params.outputs.shaping_grid }}" \
+            $SVAL_FLAG \
             --dilate-grid "${{ needs.params.outputs.dilate_grid }}" \
+            $SOFT_FLAG --band-gammas "${{ needs.params.outputs.band_gammas }}" \
             --reference-report blend_report.json \
             2>&1 | tee "data/evidence/proxy/eval_sweep$SUF.log"
 

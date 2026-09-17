@@ -1,0 +1,22 @@
+# Proxy-eval sweep parameters (read by .github/workflows/proxy-eval.yml, job `params`).
+#
+# 2026-09-17 (session 11) - FIRST ENSEMBLE, EXTENDED INSTRUMENT.
+#
+# Why this run: the committed ensemble-1 sweep (data/evidence/proxy/eval_sweep.json,
+# 2026-09-16) stopped at 6 px of emission width, and the width curve measured since
+# (data/evidence/proxy/miss_distance-ensemble1.json) does not peak until 16 px - a grid that
+# stops at 6 cannot see the optimum it is supposed to be searching for.  The same run also
+# carries the two new axes added in session 11:
+#   * SHAPING_VALUES  - an EXPLICIT floor grid.  The log-spaced default jumped 4.3e-2 -> 0.9 on
+#                       this field, so four of its five rows were the same mask; the sweep now
+#                       also records field_mass_profile (pixels above each floor BEFORE thinning),
+#                       which says whether the floor axis can matter at all.
+#   * SOFT_BAND=1     - ramp emission candidates on the SAME support as the hard band, so the
+#                       value of the values written into a band is measured separately from its
+#                       geometry (src/submission_optim.soft_band).
+RUN_ID=35042805806
+SWEEP_LABEL=
+DILATE_GRID=0,1,2,3,4,6,8,10,12,16,20
+SHAPING_VALUES=0,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9
+SOFT_BAND=1
+BAND_GAMMAS=1,2

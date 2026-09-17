@@ -87,7 +87,7 @@ def load_folds(fold_dirs: list[str]):
 
 
 def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta: float, pre=None,
-                      dilate_options=(0,)):
+                      dilate_options=(0,), min_dilate: int = 0):
     """Pooled held-out search over (t0, thin, dilate). Returns (t0*, thin*, mean_dti*, table, dilate*).
 
     Each fold contributes DTI(shaped fold-model crop, fold gt crop); the chosen point
@@ -123,9 +123,23 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
     table = []
     raw_mean = float(np.mean([_dti(f["pred_crop"], f["gt_crop"], R, alpha, beta)
                               for f in usable]))
-    best = (raw_mean, float(thresholds[0]), True, 0, 0)
+    # The unshaped row seeds the search so the shaped candidates must EARN their place.  When a
+    # minimum emission width has been decided from the new-fault-like measurement (--min-dilate),
+    # the seed must not be able to smuggle the old behaviour back in: on the catalogue the raw
+    # unshaped map really can beat every band, and the returned parameters would then be a
+    # width-0 skeleton written by a run that was asked for a band (a silent no-op, which is
+    # exactly the failure mode the option exists to prevent).  The seed is therefore the poorest
+    # possible score, so the best candidate AT AN ALLOWED WIDTH wins and the report records that
+    # the exclusion happened.
+    # The un-thinned branch is also excluded: its only width is 0, so it is the same silent no-op
+    # wearing a different hat (an un-thinned blob emits the mask, not a band).
+    thin_options = (True,) if int(min_dilate) > 0 else (False, True)
+    if int(min_dilate) > 0:
+        best = (float("-inf"), float(thresholds[0]), True, int(min(dilate_options)), -1)
+    else:
+        best = (raw_mean, float(thresholds[0]), True, 0, 0)
     for t in thresholds:
-        for thin in (False, True):
+        for thin in thin_options:
             # dilation only makes sense on a thinned skeleton: on the un-thinned branch the
             # floor-passing mask is already a blob, and growing it further is a pure FP cost.
             for dila in (dilate_options if thin else (0,)):
@@ -137,7 +151,8 @@ def calibrate_shaping(folds, R: int, thresholds: np.ndarray, alpha: float, beta:
                 if v > best[0]:
                     best = (v, float(t), thin, dila, len(table))
                 table.append(dict(t0=float(t), thin=bool(thin), dilate=int(dila), mean_dti=v))
-    table.insert(0, dict(t0=None, thin=None, dilate=0, mean_dti=raw_mean, raw=raw_mean))
+    table.insert(0, dict(t0=None, thin=None, dilate=0, mean_dti=raw_mean, raw=raw_mean,
+                         excluded_from_search=bool(int(min_dilate) > 0)))
     return best[1], best[2], best[0], table, best[3]
 
 
@@ -375,7 +390,13 @@ def main():
               f"(the in-domain calibration would otherwise always return the narrowest band)")
         dil = kept or (int(args.min_dilate),)
     t0b, thinb, mean_dti, table, dilb = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta,
-                                                          pre=enh, dilate_options=dil)
+                                                          pre=enh, dilate_options=dil,
+                                                          min_dilate=int(args.min_dilate))
+    if int(args.min_dilate) > 0:
+        assert int(dilb) >= int(args.min_dilate), (
+            f"the pooled search returned dilate={dilb} although --min-dilate "
+            f"{args.min_dilate} was requested and the search space was restricted to {dil}; "
+            "a requested band that is not shipped is the defect this option exists to prevent")
     print(f"pooled shaping: t0={t0b:.3f} thin={thinb} dilate={dilb}px -> mean held-out DTI "
           f"{mean_dti:.4f} (unshaped {table[0]['mean_dti']:.4f}; "
           f"skeleton r=0 {next((r['mean_dti'] for r in table if r.get('dilate') == 0 and r.get('thin')), float('nan')):.4f})")
