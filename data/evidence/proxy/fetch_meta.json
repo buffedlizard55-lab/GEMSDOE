@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-16T21:30:26+00:00",
+ "generated_utc": "2026-09-17T19:06:27+00:00",
  "generated_by": "scripts/fetch_proxy_faults.py",
  "purpose": "independent fault catalogue (proxy) for the GeoDAWN footprint - stands in for the scored 'new fault' population, which is not downloadable",
  "source": {
@@ -18,10 +18,11 @@
   "license": "US public domain (USGS); no credentials used",
   "official_identity": {
    "doi": "https://doi.org/10.5066/F7WH2N65",
-   "resolved": null,
-   "item_id_in_service": null,
-   "match": null,
-   "error": "HTTPError: HTTP Error 403: Forbidden"
+   "item_id_in_service": "5888bf4fe4b05ccb964bab9d",
+   "match": true,
+   "route": "doi.org redirect",
+   "resolved": "https://www.sciencebase.gov/catalog/item/5888bf4fe4b05ccb964bab9d",
+   "meaning": "the FeatureServer queried is the published service of this data release"
   },
   "documented_links_checked": {
    "https://pubs.usgs.gov/ds/1052/ds1052.pdf": "OK_200 (report)",
