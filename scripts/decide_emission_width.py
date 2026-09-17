@@ -183,6 +183,9 @@ def main() -> int:
     ap.add_argument("--proxy-eval", default="data/evidence/proxy/eval_submission.json")
     ap.add_argument("--reblend-eval", default="data/evidence/proxy/eval_reblend_submission.json")
     ap.add_argument("--sweep", default="data/evidence/proxy/eval_sweep.json")
+    ap.add_argument("--miss-distance", default="data/evidence/proxy/miss_distance-ensemble1.json",
+                    help="scripts/measure_miss_distance.py evidence: the exact metric as a function "
+                         "of the emitted band width, plus the localization/detection split")
     ap.add_argument("--second-sweep", default=None,
                     help="sweep of a SECOND, independently trained ensemble (same recipe, different "
                          "seed/folds). Evaluated as condition 3: the width gain must keep its sign "
@@ -362,16 +365,36 @@ def main() -> int:
                 f"is the blocking item, so the shipped default is unchanged and this file is the "
                 f"record of why")
 
+    # ------------------------------------------------------------------ measured width curve
+    # The sweep searches floor x width on the ensemble probability map; this is the independent,
+    # floor-free measurement on the SHIPPED hard submission (scripts/measure_miss_distance.py):
+    # dilate the emitted set by k px and score with the same metric.  It answers what the sweep
+    # could not - how far the misses actually are - and gives the projected optimum width per
+    # assumed scored-truth size.
+    md = None
+    if a.miss_distance and Path(a.miss_distance).exists():
+        m = load(Path(a.miss_distance))
+        md = {"source": a.miss_distance,
+              "truth_km": m.get("truth_km"), "emitted_km": m.get("emitted_km"),
+              "miss_distance_percentiles_px": m["miss_geometry"]["percentiles_px"],
+              "detection_failure_share_beyond_12px": m["verdict"]["detection_failure_share"],
+              "best_width_px": m["verdict"]["best_width_px"],
+              "gain_from_widening": m["verdict"]["gain_from_widening"],
+              "widening_starts_winning_above_px": m.get("widening_starts_winning_above_px"),
+              "projection": m.get("projection_over_scored_truth_size")}
+
     out = {
         "generated_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "generated_by": "scripts/decide_emission_width.py",
         "purpose": ("reconcile the three disagreeing emission-width measurements and decide the "
                     "shipped shaping policy on the record, using the metric's own scaling in |G|"),
         "inputs": {"proxy_eval": a.proxy_eval, "reblend_eval": a.reblend_eval, "sweep": a.sweep,
-                   "second_sweep": a.second_sweep, "in_domain": a.in_domain,
+                   "second_sweep": a.second_sweep, "miss_distance": a.miss_distance,
+                   "in_domain": a.in_domain,
                    "metric": {"alpha": ALPHA, "beta": BETA, "R_pixels": 3, "R_meters": 300}},
         "proxy_truth_px": gp,
         "policies": rows,
+        "width_vs_scored_truth_size": md,
         "crossovers": {"wide_vs_shipped": v["wide_vs_shipped"],
                        "widest_swept_px": widest,
                        "blanket_vs_shipped": v["blanket_vs_shipped"],

@@ -42,10 +42,15 @@ on:
         default: "4"
       dilate_grid:
         # MEASURED 2026-09-16 (run 35152701740): on the new-fault-like population the proxy DTI was
-        # still rising at 6 px (0.0144 -> 0.0395 monotone), so the default grid now reaches 12 px.
-        # Cost: ~21 s per candidate on the full grid, 5 floors x 9 widths ~ 16 min (job limit 150).
+        # still rising at 6 px (0.0144 -> 0.0395 monotone), so the grid was extended to 12 px.
+        # MEASURED 2026-09-17 (session 10, data/evidence/proxy/miss_distance-ensemble1.json): on the
+        # SHIPPED submission the width curve is interior - 0.0247 (0 px) -> 0.0713 (16 px) -> 0.0697
+        # (30 px) - and the projection puts the optimum at 8 px if the scored truth is the
+        # GeoDAWN-blocks anchor and 16 px at the proxy's own size.  A grid that stops at 12 px
+        # cannot see that optimum, so it now reaches 20 px.
+        # Cost: ~21 s per candidate on the full grid, 4 floors x 11 widths ~ 15 min (job limit 150).
         description: "emission widths (px) in the proxy sweep"
-        default: "0,1,2,3,4,6,8,10,12"
+        default: "0,1,2,3,4,6,8,10,12,16,20"
       extra_classes:
         description: "extra SGMC classes to include besides faults (e.g. Lineament)"
         default: ""
@@ -108,7 +113,7 @@ jobs:
           set -euo pipefail
           RUN_ID="${{ github.event.inputs.run_id || '35042805806' }}"
           LABEL="${{ github.event.inputs.sweep_label || '' }}"
-          DIL="${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6,8,10,12' }}"
+          DIL="${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6,8,10,12,16,20' }}"
           GRID="${{ github.event.inputs.shaping_grid || '4' }}"
           SUB=""
           F=".github/triggers/proxy-eval-params"

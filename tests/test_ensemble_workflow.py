@@ -49,6 +49,7 @@ def _step(job: str, name: str) -> dict:
 def _render(script: str, matrix_fold: int = 0) -> str:
     """Substitute the GitHub expression syntax the runner would expand."""
     return (script.replace("${{ matrix.fold }}", str(matrix_fold))
+                  .replace("${{ needs.fold.result }}", "failure")
                   .replace("${{ github.run_id }}", "99999999999")
                   .replace("${{ github.sha }}", "deadbeef")
                   .replace("${{ github.ref_name }}", "test-branch"))
@@ -164,12 +165,80 @@ def test_fold_artifact_upload_runs_even_when_staging_fails():
     assert up["with"]["path"] == "fold/"
 
 
-def test_blend_job_checkout_runs_before_the_refusal_check():
+def test_fold_diagnostics_artifact_cannot_be_mistaken_for_a_fold():
+    """A crashed trainer must leave a log artifact - named so the `fold-*` download never sees it."""
+    steps = _workflow()["jobs"]["fold"]["steps"]
+    diag = [s for s in steps if str(s.get("name", "")).startswith("Upload fold diagnostics")]
+    assert diag, [s.get("name") for s in steps]
+    name = diag[0]["with"]["name"]
+    assert "foldlogs-" in name and not name.startswith("fold-"), name
+    assert diag[0]["with"]["path"] == "diag/"
+    keep = [s for s in steps if str(s.get("name", "")).startswith("Keep the trainer")]
+    assert keep and keep[0].get("if") == "failure()", keep
+
+
+def test_blend_job_checkout_runs_first_and_always():
     """A failed ensemble must still be able to commit FAILED.json (needs a .git directory)."""
     steps = _workflow()["jobs"]["blend"]["steps"]
     assert steps[0].get("name") == "Checkout", [s.get("name") for s in steps]
     assert steps[0].get("if") == "always()", steps[0].get("if")
-    assert steps[1].get("name") == "Refuse to blend incomplete fold set"
+
+
+def test_blend_is_gated_on_usable_folds_not_on_the_job_result(tmp_path):
+    """Run 35249562910: five folds trained for 3 h, one failed, and the binary rule discarded all five.
+
+    The gate must count fold directories that actually carry a probability raster AND a held-out
+    calibration crop, blend at or above MIN_FOLDS, and refuse below it (or with none at all).
+    """
+    script = _render(_step("blend", "Fold inventory + minimum-fold gate")["run"])
+    env_file = tmp_path / "github_env"
+    env_file.touch()
+    import os
+
+    def run(n_good: int, n_bad: int = 0, min_folds: str = "4"):
+        import shutil
+        shutil.rmtree(tmp_path / "folds", ignore_errors=True)
+        (tmp_path / "folds").mkdir()
+        for i in range(n_good):
+            d = tmp_path / "folds" / f"fold-{i}"
+            d.mkdir()
+            (d / "prob_raw.tif").write_bytes(b"x")
+            np.savez_compressed(d / f"heldout_mc{i}.npz", pred=np.zeros((2, 2)), gt=np.zeros((2, 2)))
+        for i in range(n_bad):
+            d = tmp_path / "folds" / f"fold-{90 + i}"
+            d.mkdir()
+            (d / "train.log").write_text("crashed\n")          # logs only, no raster
+        env = dict(os.environ)
+        env.update({"GITHUB_ENV": str(env_file), "MIN_FOLDS": min_folds})
+        env.pop("FOLD_COUNT", None)
+        env_file.write_text("")
+        r = subprocess.run(["bash", "-c", script], cwd=tmp_path, env=env,
+                           capture_output=True, text=True)
+        written = dict(line.split("=", 1) for line in env_file.read_text().splitlines() if "=" in line)
+        return r, written
+
+    r, w = run(n_good=6)
+    assert r.returncode == 0 and w["FOLD_COUNT"] == "6", (r.stdout, r.stderr)
+
+    r, w = run(n_good=5, n_bad=1)          # exactly the run-35249562910 shape
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert w["FOLD_COUNT"] == "5"
+    assert "blending 5 of 6 folds" in r.stdout
+
+    r, w = run(n_good=4)                   # at the floor: allowed, still recorded
+    assert r.returncode == 0 and w["FOLD_COUNT"] == "4"
+
+    r, _ = run(n_good=3)                   # below the floor: refuse loudly
+    assert r.returncode != 0
+    assert "below MIN_FOLDS" in (r.stdout + r.stderr)
+
+    r, _ = run(n_good=0)                   # nothing usable at all
+    assert r.returncode != 0
+    assert "no usable fold artifacts" in (r.stdout + r.stderr)
+
+    # the blend step must consume the inventory, not a raw glob (an unusable dir would crash it)
+    blend_run = _step("blend", "Blend + shape + write submission")["run"]
+    assert "--folds $(cat usable_folds.txt)" in blend_run, blend_run
 
 
 def test_blend_commit_step_pushes_with_retries_and_a_hard_failure():

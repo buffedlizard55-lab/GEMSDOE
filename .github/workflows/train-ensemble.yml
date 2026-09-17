@@ -203,6 +203,18 @@ jobs:
           } > fold/fold_params.json
           ls -la fold/
 
+      - name: Keep the trainer's logs when the fold fails
+        if: failure()
+        run: |
+          # A failed training step used to leave NOTHING behind: its logs exist only on the runner,
+          # and the Actions log blob is not reachable from the development sandbox (egress allowlist).
+          # Run 35249562910's fold 4 failed with exit code 1 and no diagnostic could be recovered.
+          set -uo pipefail
+          mkdir -p diag
+          cp -f train.log inference.log diag/ 2>/dev/null || true
+          cp -f outputs/manifest.json outputs/train_history.json diag/ 2>/dev/null || true
+          ls -la diag/ || true
+
       - name: Upload fold artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -212,12 +224,26 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+      - name: Upload fold diagnostics (logs; never matches the fold-* download pattern)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foldlogs-${{ matrix.fold }}
+          path: diag/
+          retention-days: 30
+          if-no-files-found: ignore
+
   blend:
     name: blend folds -> submission.tif
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: fold
     if: always()
+    env:
+      # 4 of 6: the pooled shaping calibration and the ensemble mean both degrade gracefully with a
+      # missing fold, and the report records n_folds, so refusing below two thirds keeps the
+      # guarantee (no silent degradation) without throwing away hours of successful training.
+      MIN_FOLDS: "4"
     steps:
       # Checkout comes FIRST and is `if: always()`: when the refusal step below failed, every
       # non-`always()` step was skipped - including this one - and the `if: always()` evidence
@@ -227,11 +253,6 @@ jobs:
         if: always()
         uses: actions/checkout@v4
 
-      - name: Refuse to blend incomplete fold set
-        if: needs.fold.result != 'success'
-        run: |
-          echo "fold matrix result was ${{ needs.fold.result }}; no complete ensemble exists"
-          exit 1
 
       - uses: actions/setup-python@v5
         with:
@@ -243,10 +264,48 @@ jobs:
           python -m pip install --quiet numpy scipy rasterio scikit-image pyyaml
 
       - name: Download fold artifacts
+        if: always()
         uses: actions/download-artifact@v4
         with:
           pattern: fold-*
           path: folds
+
+      - name: Fold inventory + minimum-fold gate
+        if: always()
+        run: |
+          # WHY NOT "refuse unless needs.fold.result == success" (the previous rule): on 2026-09-17
+          # run 35249562910 had five folds train for ~3 h and ONE fold fail in training, and the
+          # binary rule threw all five away.  A 5-of-6 Monte-Carlo ensemble is a legitimate
+          # ensemble - what must never happen is a degraded run being presented as a complete one.
+          # So: count the fold directories that actually carry a probability raster AND a held-out
+          # calibration crop, refuse below MIN_FOLDS (default 4 of 6), and record the shortfall
+          # loudly in the log and in the committed report.
+          set -euo pipefail
+          shopt -s nullglob
+          n=0
+          : > usable_folds.txt
+          for d in folds/fold-*/; do
+            if [ -f "$d/prob_raw.tif" ] && compgen -G "$d/heldout_mc*.npz" > /dev/null; then
+              n=$((n + 1))
+              echo "$d" | sed 's:/$::' >> usable_folds.txt
+            else
+              echo "dropping unusable fold dir: $d (needs prob_raw.tif + heldout_mc*.npz)"
+            fi
+          done
+          echo "usable folds: $n"
+          cat usable_folds.txt || true
+          echo "FOLD_COUNT=$n" >> "$GITHUB_ENV"
+          if [ "$n" -eq 0 ]; then
+            echo "::error::no usable fold artifacts in this run - nothing can be blended"
+            exit 1
+          fi
+          if [ "$n" -lt "${MIN_FOLDS:-4}" ]; then
+            echo "::error::only $n usable fold(s), below MIN_FOLDS=${MIN_FOLDS:-4}: refusing to blend"
+            exit 1
+          fi
+          if [ "$n" -lt 6 ]; then
+            echo "::warning::blending $n of 6 folds (fold matrix result: ${{ needs.fold.result }}); the shortfall is recorded in the report and the committed evidence"
+          fi
 
       - name: Place labels + sample grid (sha256-pinned git bridge; Dropbox fallback)
         run: |
@@ -267,7 +326,7 @@ jobs:
         run: |
           set -uo pipefail
           python scripts/blend_submission.py \
-            --folds folds/fold-*/ \
+            --folds $(cat usable_folds.txt) \
             --config configs/config_ci_ensemble.yaml \
             --sample data/sample_submission.tif \
             --labels data/labels.tif \
@@ -287,6 +346,7 @@ jobs:
           mkdir -p "$D"
           cp -f blend_report.json "$D/" 2>/dev/null || true
           cp -f blend.log validation.log "$D/" 2>/dev/null || true
+          cp -f usable_folds.txt "$D/" 2>/dev/null || true
           # Only a real submission may be committed.  Run 35042805806 committed a 110-byte
           # GDAL stub left behind by the crashed writer, and every downstream reader treated
           # it as a submission.  Size + a read-back check are cheap and decisive.

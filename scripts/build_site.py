@@ -282,6 +282,28 @@ faults back is therefore not the goal; finding the <em>unmapped</em> ones is.</p
 {lvline}
 
 <h2>Where this stands</h2>
+<p><b>2026-09-17 (session 10): the ensemble that was supposed to answer the width question had
+already lost six fully-trained folds.</b> Run 35170395055 — the queued second ensemble, fired in
+session 9 — trained all six folds for ~3 hours and then staged nothing: the workflow told the
+trainer <code>mc_id = matrix.fold</code> (0…5) while the staging step looked for
+<code>heldout_mc(FOLD_OFFSET + fold).npz</code> (6…11), so <code>cp</code> failed on every fold,
+the artifact upload was skipped, and the blend job correctly refused an incomplete fold set. The
+failure record could not be committed either, because the blend job's <code>Checkout</code> had
+been skipped and the evidence step ran without a <code>.git</code> directory. The fold identity now
+reaches the trainer, staging globs whatever the trainer wrote and asserts the manifest's fold id,
+uploads run even when staging fails, and <code>tests/test_ensemble_workflow.py</code> <em>executes</em>
+the workflow's own shell against planted artefacts (re-introducing either defect fails 4 tests).
+The second ensemble has been re-fired on the fixed workflow.</p>
+<p><b>The width question got a direct measurement, and the answer is uncomfortable.</b> Instead of
+sweeping floors on the probability map, <code>scripts/measure_miss_distance.py</code> takes the
+shipped submission, grows its emitted pixels by <i>k</i> and scores with the official metric against
+the USGS faults the training labels do not contain. The median unseen-fault pixel sits
+<b>22 px = 2.2 km</b> from anything the model emitted, only 4.9% of that truth is inside the metric's
+own 300 m tolerance, and widening the band to <b>16 px lifts the score from 0.0247 to 0.0713</b> —
+the first measured policy here that beats the constant-ones baseline (0.0585). 74% of the truth has
+nothing emitted within 1.2 km, so the model's <em>detection</em>, not the band width, is the binding
+constraint. See <a href="metric.html#miss">Metric</a> for the curve and the projection against the
+hidden scored-truth size; the default still waits for the second ensemble to reproduce the gain.</p>
 <p><b>2026-09-17 (session 9): the data-placement blocker is resolved.</b> The three official rasters
 are committed to the branch as sha256-pinned git parts (<code>data/bridge/</code>) and reassembled into
 <code>data/</code> with every hash re-verified; <code>scripts/prepare_data.py</code> passes on the real
@@ -909,6 +931,93 @@ all three run by the <em>Proxy catalogue</em> workflow.</p>
     return head + table + warn_note + sweep_html + ok_note
 
 
+def _miss_distance(ev: dict) -> str:
+    """How far the misses actually are, and what a wider emitted band is worth.
+
+    The width question was previously argued through floor sweeps on the ensemble probability map.
+    This is the independent, floor-free measurement of the SAME question: take the shipped hard
+    submission, dilate the emitted set by k pixels, and score with the official metric.  The
+    distance transform of the truth to the nearest emitted pixel then splits the error into
+    localization error (inside a plausible band: a wider band converts it into credit) and
+    detection error (beyond it: the model emitted nothing near the fault, and no width fixes that).
+    """
+    m = ev.get("miss_distance")
+    if not m:
+        return missing("The localization/detection split of the error on the new-fault-like "
+                       "population.",
+                       "python scripts/measure_miss_distance.py --pred <submission.tif> "
+                       "--out data/evidence/proxy/miss_distance-ensemble1.json")
+    mg, vd = m["miss_geometry"], m["verdict"]
+    curve = m["width_curve"]
+    curve_rows = "".join(
+        '<tr%s><td class="num">%d px</td><td class="num"><b>%.4f</b></td><td class="num">%s</td>'
+        '<td class="num">%s</td><td class="num">%s</td></tr>'
+        % (' class="hl"' if r["width_px"] == vd["best_width_px"] else "", r["width_px"], r["dti"],
+           f'{r["emission_px"]:,}', f'{r["emission_km"]:,.0f} km', f'{r["FP_w"]:,.0f}')
+        for r in curve)
+    proj = m.get("projection_over_scored_truth_size") or []
+    proj_rows = "".join(
+        '<tr%s><td class="num">%s px</td><td class="num">%s km</td><td class="num">%d px</td>'
+        '<td class="num">%.4f</td><td class="num">%.4f</td><td class="num">%+.4f</td></tr>'
+        % (' class="hl"' if p["widening_wins"] else "", f'{p["truth_px"]:,}',
+           f'{p["truth_km"]:,.0f}', p["best_width_px"], p["best_dti"], p["skeleton_dti"],
+           p["gain_over_skeleton"]) for p in proj)
+    reaches = " · ".join(f'{k.replace("_", " ")}: <b>{100 * vv:.1f}%</b>'
+                         for k, vv in mg.items() if k.startswith("within_"))
+    return f"""
+<h2 id="miss">How far are the misses? Localization vs detection</h2>
+<p>Every width argument so far came from sweeping <i>floors</i> on the ensemble probability map.
+This is the direct measurement, on the submission that shipped: take its emitted pixels, grow them
+by <i>k</i> pixels, and score with the official metric. The truth is the same
+<span class="mono">{m['truth_px']:,} px</span> ({m['truth_km']:,.0f} km) of USGS SGMC fault trace
+the labels do not contain. The prediction emits
+{m['emitted_px']:,} px ({m['emitted_km']:,.0f} km) at threshold {m['inputs']['pred']['threshold']:g}.</p>
+
+<div class="kv">
+  <span>median miss distance</span><b>{mg['percentiles_px']['50']:.0f} px</b>
+  <span>p90 miss distance</span><b>{mg['percentiles_px']['90']:.0f} px</b>
+  <span>truth inside the metric's own R=3 px tolerance</span><b>{100 * mg['credited_within_R']:.1f}%</b>
+  <span>truth with nothing emitted within 12 px (1.2 km)</span><b>{100 * vd['detection_failure_share']:.1f}%</b>
+</div>
+
+<p>Of the {m['truth_km']:,.0f} km of unseen fault trace: {reaches}. The median unseen-fault pixel
+sits <b>{mg['percentiles_px']['50']:.0f} px = {mg['percentiles_px']['50'] * 0.1:.1f} km</b> from
+anything the model emitted. That is why widening pays here: it is not a bandwidth trick, it is the
+only way a 2.2 km-scale offset can earn credit under a 300 m tolerance.</p>
+
+<h3>What each emitted band width is worth (official metric, same emitted set dilated)</h3>
+<div class="scroll"><table><thead><tr><th>band</th><th>DTI</th><th>emitted px</th>
+<th>emitted km</th><th>FP mass</th></tr></thead><tbody>{curve_rows}</tbody></table></div>
+<p class="muted">Measured, not modelled: each row is the official distance-weighted Tversky index of
+that band against the proxy truth. Best measured width is <b>{vd['best_width_px']} px</b>
+({vd['gain_from_widening']:+.4f} over the shipped skeleton). A band is not free: at
+{curve[-1]['width_px']} px the emission is {curve[-1]['emission_km']:,.0f} km of raster.</p>
+
+<h3>Which width the <i>scored</i> set would want, by its (unknown) size</h3>
+<p>The scored truth size |G| is hidden, and the metric's two error terms scale differently with it
+(wrong mass is set by the prediction, missing mass grows with the hidden truth). Holding each
+width's measured coverage and wrong mass fixed and letting |G| vary — exact at the proxy's own
+{m['truth_px']:,} px — gives the projected optimum:</p>
+<div class="scroll"><table><thead><tr><th>assumed |G|</th><th></th><th>best width</th>
+<th>projected DTI</th><th>skeleton</th><th>gain</th></tr></thead><tbody>{proj_rows}</tbody></table></div>
+<p><b>Widening starts winning above
+{vd['widening_starts_winning_above_px']:,} px
+({vd['widening_starts_winning_above_km']:,.0f} km)</b> of scored fault trace. Both plausible
+anchors in the decision record — the fault density over the GeoDAWN flight blocks
+({proj[6]['truth_km']:,.0f} km → {proj[6]['best_width_px']} px) and the proxy population itself
+({proj[7]['truth_km']:,.0f} km → {proj[7]['best_width_px']} px) — sit above that line. Below it,
+the narrow skeleton wins, and it wins by more than the wide band wins at large |G|.</p>
+<p class="muted">Caveats, spelled out because this table is the one that could change the shipped
+policy: the projection holds each policy's measured coverage and wrong mass fixed as |G| varies
+(the assumption, not a measurement); the proxy population is state-geological-survey surface
+mapping, not the expert interpretation of GeoDAWN geophysics; and the {mg['percentiles_px']['50']:.0f} px
+median offset is a property of <i>this</i> proxy's traces, so a scored set digitised from the same
+geophysics the model reads would sit closer and prefer a narrower band. The pre-registered rule in
+the decision record therefore still requires a second, independently trained ensemble to reproduce
+the gain before the default changes.</p>
+"""
+
+
 def build_metric(ev: dict) -> str:
     ms = ev.get("metric_strategy")
     body = [f"""<h2>Definition</h2>
@@ -1056,6 +1165,7 @@ coexist (%s): %s</p>
 
     body.append(_proxy_catalogue(ev))
     body.append(_emission_decision(ev))
+    body.append(_miss_distance(ev))
     body.append(_scoring_universe(ev))
     body.append(f"""<h2>Remaining caveats</h2>
 <ul>
@@ -1563,6 +1673,12 @@ def main() -> int:
         # The reconciliation of the three disagreeing emission-width measurements, and the decision
         # that follows from it (scripts/decide_emission_width.py).
         "emission_decision": load(ROOT / "data/evidence/emission_decision.json"),
+        # The localization/detection split on the new-fault-like population: how far the unseen
+        # faults actually are from the emitted set, and what each emitted band width is worth
+        # (scripts/measure_miss_distance.py).
+        "miss_distance": next((load(p) for p in [
+            ROOT / "data/evidence/proxy/miss_distance-ensemble2.json",
+            ROOT / "data/evidence/proxy/miss_distance-ensemble1.json"] if p.exists()), None),
         "dilate_experiment": next((load(p) for p in [
             ROOT / "data/evidence/runs/35042805806-dilate-ab/blend_report.json",
             ROOT / "data/evidence/runs/35042805806-experiment/blend_report.json"] if p.exists()),
