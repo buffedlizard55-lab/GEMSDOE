@@ -16,3 +16,7 @@ proxy-eval
 # 2026-09-17 (session 11): fire the EXTENDED sweep on the first ensemble (run 35042805806) -
 # explicit floors + field_mass_profile + ramp candidates + a width grid that reaches the measured
 # optimum (16 px).  Settings live in .github/triggers/proxy-eval-params.
+
+# 2026-09-17 (session 12): fire the SECOND-ENSEMBLE sweep (run 35249562910, folds 6-11, seed 43) so
+# the emission decision's condition 3 can be evaluated against the same grid the first ensemble ran.
+# Settings: .github/triggers/proxy-eval-params (SWEEP_LABEL=ensemble2).
