@@ -19,9 +19,10 @@
    shipped candidate still rank 1 of 132 by worst-case contrast (`eval_sweep-mean12.json`, committed
    by the same run at `8713331`). The next field-level confirmation is the 3-ensemble mean once
    ensemble 3 has landed.
-2. **Ensemble 3** (run 35263581931, folds 12–17, seed 44): fold 4 failed in training and fold 0 is
-   still running (started 19:13Z, >3 h at the last check). Fire recipe when it lands — never ship an
-   unmeasured field: (a) `RUN_ID=35042805806,35249562910,35263581931` + `SWEEP_LABEL=ens123` in
+2. **Ensemble 3 FIRED** (`SWEEP_LABEL=ens123`, run queued from this session, 16 live folds over
+   ensembles 1+2+3). Ensemble 3 (run 35263581931, folds 12–17, seed 44) landed with five live folds
+   — fold 4 failed in training, folds 0,1,2,3,5 uploaded — so the field that would be submitted is no
+   longer the one the adopted policy was measured on. Never ship an unmeasured field: (a) `RUN_ID=35042805806,35249562910,35263581931` + `SWEEP_LABEL=ens123` in
    `.github/triggers/proxy-eval-params`, then touch `.github/triggers/proxy-eval`; the run blends
    every fold into ONE mean and sweeps that exact field, and its decide step hands every committed
    sweep to condition 3, so the record gains a THIRD independent field. (b) only if that record still
