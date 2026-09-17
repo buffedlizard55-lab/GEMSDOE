@@ -72,9 +72,22 @@ on the second.
 `blend_submission.py` now takes `--shaping-t0/--shaping-dilate/--shaping-source`: a MEASURED joint
 policy replaces the in-domain calibration (which maximises DTI against the faults the model trained
 on and therefore always prefers the narrow, high-floor skeleton). Half a policy is a parse error.
-The re-blend writes `data/evidence/runs/ens12-adopted-floor0.1-w0/` over ensembles 1+2 (11 live
-folds, `MIN_FOLDS` pinned to the exact count) and stamps the source into the report and the
-submission's TIFF tags.
+The re-blend (run 35275312372, commit `c4f194e`) wrote `data/evidence/runs/ens12-adopted-floor0.1-w0/`
+over ensembles 1+2 — 11 live folds, `MIN_FOLDS` pinned to that exact count, so a short download
+fails the run instead of shipping a thinner ensemble. Verified after the fact, from the committed
+bytes rather than from the log:
+
+| check | value |
+|---|---|
+| `blend_report.shaping.source` / `.adopted` | `adopted_measured_policy` / `{t0: 0.1, thin: true, dilate: 0, evidence: data/evidence/emission_decision.json}` |
+| in-domain control (same run) | `t0 = 0.469674`, un-thinned, 0.2065 held-out — reported, not shipped |
+| submission | sha256 `a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009`, 569,531 B, 3292×3730 float32, EPSG:32611 |
+| written support | **172,974 px** — identical to the mean12 sweep's measured emission for (floor 0.1, width 0), i.e. the raster is that policy applied to the 11-fold mean |
+| TIFF tags | `shaping_t0=0.1`, `shaping_thin=True`, `shaping_dilate=0`, `shaping_source=adopted_measured_policy`, `shaping_evidence=data/evidence/emission_decision.json` |
+| format validation | passed (CRS, 100 m res, single band, float32, values ⊂ [0,1], size/transform match the sample); NaN outside the GeoDAWN footprint as the rules require |
+
+That tagged raster is the submission this branch would upload — `reblend.yml` is the only pipeline
+path that applies an adopted policy (see the queue item about the other two paths).
 
 In the same push, `proxy-eval.yml` was fired on the **field that would actually be submitted** — the
 mean of ensembles 1+2, one blend of `folds` + `folds2` via the multi-run support — because a floor is
