@@ -52,9 +52,31 @@ on:
       skip_sweep:
         description: "1 = only build the proxy and score the committed submission"
         default: "0"
+      sweep_label:
+        description: "suffix for the sweep evidence file (empty -> eval_sweep.json)"
+        default: ""
   push:
     branches: ["arena/**"]
     paths: [".github/triggers/proxy-eval"]
+
+# ---------------------------------------------------------------------------
+# WHY THERE IS A `params` JOB (2026-09-17, session 10)
+#
+# The bot token cannot call workflow_dispatch, so runs are fired by pushing
+# .github/triggers/proxy-eval - and a push event carries no inputs.  That left the sweep job
+# hard-wired to run 35042805806's fold artifacts, i.e. only the FIRST ensemble could ever be
+# swept, which is exactly why `emission_decision.json` condition 3 ("reproduced on a second,
+# independently trained ensemble") stayed unmet.  Job OUTPUTS (unlike $GITHUB_ENV) are usable in
+# `${{ }}` expressions such as `actions/download-artifact`'s `run-id`, so a tiny first job reads
+# the committed parameter file and publishes the parameters to the other jobs.
+#
+# .github/triggers/proxy-eval-params may set:
+#   RUN_ID=<actions run id whose fold-* artifacts to sweep>   (default 35042805806 = ensemble 1)
+#   SWEEP_LABEL=<suffix>       -> data/evidence/proxy/eval_sweep-<label>.json (default: no suffix)
+#   DILATE_GRID=0,1,2,3,...    (default 0,1,2,3,4,6,8,10,12 - the proxy curve was still rising at 6)
+#   SHAPING_GRID=<int>         (default 4 floor candidates)
+#   SUBMISSION=<path>          (default data/evidence/runs/<RUN_ID>/submission.tif)
+# ---------------------------------------------------------------------------
 
 permissions:
   contents: write
@@ -68,9 +90,53 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
+  params:
+    name: read the committed sweep parameters
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run_id: ${{ steps.p.outputs.run_id }}
+      sweep_label: ${{ steps.p.outputs.sweep_label }}
+      dilate_grid: ${{ steps.p.outputs.dilate_grid }}
+      shaping_grid: ${{ steps.p.outputs.shaping_grid }}
+      submission: ${{ steps.p.outputs.submission }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        name: parameters (run id, label, grids)
+        run: |
+          set -euo pipefail
+          RUN_ID="${{ github.event.inputs.run_id || '35042805806' }}"
+          LABEL="${{ github.event.inputs.sweep_label || '' }}"
+          DIL="${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6,8,10,12' }}"
+          GRID="${{ github.event.inputs.shaping_grid || '4' }}"
+          SUB=""
+          F=".github/triggers/proxy-eval-params"
+          if [ -f "$F" ]; then
+            echo "parameters from $F:"; tr -d '\r' < "$F" | grep -E '^[A-Z_]+=' || true
+            v () { tr -d '\r' < "$F" | sed -n "s/^$1=\(.*\)\$/\1/p" | tail -1 || true; }
+            [ -n "$(v RUN_ID)" ] && RUN_ID="$(v RUN_ID)" || true
+            [ -n "$(v SWEEP_LABEL)" ] && LABEL="$(v SWEEP_LABEL)" || true
+            [ -n "$(v DILATE_GRID)" ] && DIL="$(v DILATE_GRID)" || true
+            [ -n "$(v SHAPING_GRID)" ] && GRID="$(v SHAPING_GRID)" || true
+            SUB="$(v SUBMISSION)" || true
+          else
+            echo "no $F - sweeping run $RUN_ID with grid $DIL"
+          fi
+          [ -n "$SUB" ] || SUB="data/evidence/runs/$RUN_ID/submission.tif"
+          {
+            echo "run_id=$RUN_ID"
+            echo "sweep_label=$LABEL"
+            echo "dilate_grid=$DIL"
+            echo "shaping_grid=$GRID"
+            echo "submission=$SUB"
+          } >> "$GITHUB_OUTPUT"
+          echo "RUN_ID=$RUN_ID LABEL=$LABEL DILATE=$DIL SHAPING=$GRID SUB=$SUB"
+
   proxy:
     name: build the proxy catalogue + score the submission
     runs-on: ubuntu-latest
+    needs: params
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -161,7 +227,7 @@ jobs:
   sweep:
     name: emission-width sweep on the proxy population
     runs-on: ubuntu-latest
-    needs: proxy
+    needs: [params, proxy]
     if: ${{ github.event.inputs.skip_sweep != '1' }}
     timeout-minutes: 150
     steps:
@@ -179,12 +245,12 @@ jobs:
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet numpy scipy rasterio scikit-image pyyaml
 
-      - name: Download fold artifacts from run ${{ github.event.inputs.run_id || '35042805806' }}
+      - name: Download fold artifacts from run ${{ needs.params.outputs.run_id }}
         uses: actions/download-artifact@v4
         with:
           pattern: fold-*
           path: folds
-          run-id: ${{ github.event.inputs.run_id || '35042805806' }}
+          run-id: ${{ needs.params.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
 
@@ -210,27 +276,47 @@ jobs:
       - name: Sweep floor x thinning x emission width on the PROXY population
         run: |
           set -euo pipefail
+          LABEL="${{ needs.params.outputs.sweep_label }}"
+          SUF=""; [ -n "$LABEL" ] && SUF="-$LABEL"
+          # Labeled sweeps let ensemble 1 and ensemble 2 coexist as evidence, which is what the
+          # reproduction condition in scripts/decide_emission_width.py consumes.
           python scripts/eval_proxy_catalogue.py --pred ensemble_mean.tif \
             --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
-            --out data/evidence/proxy/eval_sweep.json --sweep \
-            --shaping-grid "${{ github.event.inputs.shaping_grid || '4' }}" \
-            --dilate-grid "${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6' }}" \
-            2>&1 | tee data/evidence/proxy/eval_sweep.log
+            --out "data/evidence/proxy/eval_sweep$SUF.json" --sweep \
+            --shaping-grid "${{ needs.params.outputs.shaping_grid }}" \
+            --dilate-grid "${{ needs.params.outputs.dilate_grid }}" \
+            2>&1 | tee "data/evidence/proxy/eval_sweep$SUF.log"
 
       - name: Score the submission this run produced, on both truth sets
         run: |
           set -euo pipefail
+          LABEL="${{ needs.params.outputs.sweep_label }}"
+          SUF=""; [ -n "$LABEL" ] && SUF="-$LABEL"
           python scripts/eval_proxy_catalogue.py --pred submission.tif \
             --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
-            --out data/evidence/proxy/eval_reblend_submission.json --truth only \
-            2>&1 | tee data/evidence/proxy/eval_reblend_submission.log
+            --out "data/evidence/proxy/eval_reblend_submission$SUF.json" --truth only \
+            2>&1 | tee "data/evidence/proxy/eval_reblend_submission$SUF.log"
+          python - "${{ needs.params.outputs.run_id }}" "$SUF" <<'PF'
+          import json, pathlib, sys
+          d = pathlib.Path("data/evidence/proxy")
+          (d / f"sweep_source{sys.argv[2]}.json").write_text(json.dumps({
+              "swept_run_id": sys.argv[1],
+              "note": "fold-* artifacts of this Actions run were re-blended and swept",
+              "sweep_file": f"eval_sweep{sys.argv[2]}.json"}, indent=1))
+          PF
 
       - name: Reconcile the measurements into the emission decision record
         run: |
           set -euo pipefail
+          LABEL="${{ needs.params.outputs.sweep_label }}"
+          SUF=""; [ -n "$LABEL" ] && SUF="-$LABEL"
+          # The first ensemble's sweep (eval_sweep.json) stays the reference record; a labeled
+          # sweep is handed in as the SECOND ensemble so condition 3 can be evaluated.
+          SECOND=""
+          [ -n "$LABEL" ] && SECOND="--second-sweep data/evidence/proxy/eval_sweep$SUF.json"
           python scripts/decide_emission_width.py \
-            --out data/evidence/emission_decision.json \
-            2>&1 | tee data/evidence/proxy/emission_decision.log
+            --out data/evidence/emission_decision.json $SECOND \
+            2>&1 | tee "data/evidence/proxy/emission_decision$SUF.log"
 
       - name: Commit the sweep evidence
         if: always()
