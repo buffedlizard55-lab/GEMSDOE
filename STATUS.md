@@ -96,7 +96,31 @@ completed and the answer is yes: on the shipping field floor 0.1 beats the refer
 **+0.0695** (0.0999 vs 0.0304, `eval_sweep-mean12.json`), and the decision step rewrote
 `data/evidence/emission_decision.json` with all three fields in condition 3 (commit `8713331`).
 
-### 6. What is left
+### 6. The inference path stopped silently shipping the old policy
+
+`reblend.yml` was the only path that applied the adopted policy. `python -m src.inference` — which is
+what `train-and-submit.yml` drives — shaped with `manifest["shaping"]`, the floor calibrated against
+the faults the model trained on, and said nothing about which policy it had used. The two are not
+close on the population that is scored: **0.0247 (calibration) vs 0.1365 (adopted)** on the
+new-fault-like population.
+
+`src/inference.py` now resolves shaping through `effective_shaping()`, in this order:
+
+1. an explicit `inference.submission_shaping.t0` in the config — kept, but tagged
+   `explicit_config_override` and *reported as having overridden a measurement* when one exists, so
+   an experiment can never pass for the adopted default;
+2. the SHIP record's best measured candidate (the default, because the shipped configs carry nulls);
+3. the manifest's in-domain calibration — reached only when no measurement exists, and labelled.
+
+Every written raster now carries the same provenance tags as the blend path
+(`shaping_t0/thin/dilate/source/evidence`), the emission width is actually passed to
+`optimize_submission` (it was dropped, so a future adopted non-zero width would have been applied as
+0 while the summary claimed otherwise), and the run summary records both the adopted policy and the
+in-domain counterfactual. `tests/test_inference_adopted_shaping.py` (9 tests) pins all of it — the
+precedence, the tags, the `ast`-level check that `dilate` reaches the call, and that a record which
+does not say SHIP is never adopted.
+
+### 7. What is left
 
 1. ~~Mean-of-1+2 sweep~~ **DONE** (run 35275312337, `SWEEP_LABEL=mean12`): the adopted policy beats
    the reference policy on the exact field it is applied to by +0.0695, and the decision record now

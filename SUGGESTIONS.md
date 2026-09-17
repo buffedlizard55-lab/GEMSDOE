@@ -30,12 +30,17 @@
    `SHAPING_T0=0.1`/`SHAPING_DILATE=0`/`SHAPING_SOURCE=data/evidence/emission_decision.json` and
    `MIN_FOLDS` pinned to the fold count) and touch `.github/triggers/reblend`. A 17-fold mean over
    three seeds is the improvement; the policy is applied after the blend either way.
-3. **Two paths can still ship the OLD policy.** `.github/workflows/reblend.yml` is the only path that
-   applies the adopted policy; `configs/config.yaml` (`submission_shaping.t0: null`) and a plain
-   `src/inference.py` run fall back to the IN-DOMAIN calibrated floor (0.469674), which the proxy
-   population measures at 0.0247 against the adopted policy's 0.1365. Either make every submission
-   path read `data/evidence/emission_decision.json` or make a non-adopted shaping abort loudly; today
-   it is silent, and the difference is larger than every other knob in this file.
+3. ~~Two paths can still ship the OLD policy~~ **FIXED this session.** `python -m src.inference` (the
+   path `train-and-submit.yml` drives) used to shape with `manifest["shaping"]`, the floor calibrated
+   against the faults the model trained on — worth 0.0247 on the new-fault-like population against the
+   adopted 0.1365 — and said nothing about which it had used. `src/inference.py` now resolves the
+   policy through `effective_shaping()`: an explicit config floor wins but is tagged
+   `explicit_config_override` and reported as having overridden a measurement; otherwise the SHIP
+   record is adopted; the in-domain calibration is reached only when no measurement exists, and is
+   labelled as such. Every written raster now carries `shaping_t0/thin/dilate/source/evidence` tags
+   (matching `blend_submission.py`) and the run summary records the adopted policy AND the in-domain
+   counterfactual. `tests/test_inference_adopted_shaping.py` pins all of it, including that a record
+   which does not say SHIP is never adopted.
 4. **Detection is the binding constraint, now quantified.** 74 % of the new-fault-like truth lies
    more than 12 px from any emitted pixel (`miss_distance-ensemble1.json`); the oracle ceiling is
    1.0000 at width 0 and 0.1618 at 16 px, and the leaderboard's top score (0.1972) is 7.9× the

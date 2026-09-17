@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -45,6 +46,74 @@ def _gaussian_weight(p: int, sigma_frac: float = 0.25) -> np.ndarray:
     c = (p - 1) / 2.0
     g = np.exp(-((y - c) ** 2 + (x - c) ** 2) / (2 * (sigma_frac * p) ** 2))
     return (g / g.max()).astype(np.float32)
+
+
+ADOPTED_EVIDENCE_PATH = "data/evidence/emission_decision.json"
+
+
+def adopted_shaping(evidence_path: str | Path = ADOPTED_EVIDENCE_PATH) -> dict | None:
+    """The emission policy MEASURED on the new-fault-like population, when the record says SHIP.
+
+    The in-domain calibration (`manifest["shaping"]`) maximises DTI against the faults the model
+    TRAINED on.  Both prize phases score faults those labels do not contain, and the two populations
+    disagree on sign (see scripts/decide_emission_width.py): the calibrated floor is worth 0.0247 on
+    the proxy population while the measured candidate is worth 0.1365 there.  A plain
+    `python -m src.inference` run therefore has to read the decision record, not the manifest, or it
+    silently writes the wrong policy - which is what happened until this was wired in.
+
+    Returns `{"t0", "thin", "dilate", "source", "evidence"}` or None when the file is absent, is
+    unreadable, or does not end in a SHIP verdict (in that case the caller keeps the old behaviour
+    and says so in the summary/TIFF tags).
+    """
+    path = Path(evidence_path)
+    if not path.exists():
+        return None
+    try:
+        d = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    verdict = (d.get("verdict") or {})
+    if not str(verdict.get("conclusion", "")).startswith("SHIP"):
+        return None
+    name = str((verdict.get("best_measured_candidate") or {}).get("policy", ""))
+    m = re.search(r"t0_([0-9.]+)_width([0-9]+)px", name)
+    if not m:
+        return None
+    return {"t0": float(m.group(1)), "thin": True, "dilate": int(m.group(2)),
+            "source": "adopted_measured_policy", "evidence": str(path)}
+
+
+def effective_shaping(manifest_shaping: dict | None, cfg_shaping: dict | None,
+                      adopted: dict | None) -> dict:
+    """Decide which shaping a submission write uses, and record where it came from.
+
+    Precedence, in order:
+      1. an explicit `inference.submission_shaping.t0` in the config (an experiment that says what
+         it wants) - kept, but tagged `explicit_config_override` and reported as having overridden a
+         measured policy when one exists, so it can never pass for an adopted default;
+      2. the adopted measured policy, when the decision record says SHIP (the default path: the
+         config ships with nulls precisely so this is what happens);
+      3. the manifest's in-domain calibration (the historical behaviour, only reached when no
+         measurement exists yet) - tagged `in_domain_manifest_calibration`.
+    """
+    shp = dict(manifest_shaping or {})
+    overrides = {k: v for k, v in (cfg_shaping or {}).items() if v is not None}
+    explicit_floor = "t0" in overrides
+    shp.update(overrides)
+    out = {"t0": shp.get("t0"), "thin": shp.get("thin", True), "hard": shp.get("hard", True),
+           "gamma": shp.get("gamma", 1.0), "dilate": int(shp.get("dilate") or 0),
+           "source": "in_domain_manifest_calibration", "adopted": None,
+           "in_domain_control": {"t0": (manifest_shaping or {}).get("t0"),
+                                 "thin": (manifest_shaping or {}).get("thin")}}
+    if explicit_floor:
+        out["source"] = "explicit_config_override"
+        out["overrode_adopted"] = adopted
+        return out
+    if adopted:
+        out.update({"t0": adopted["t0"], "thin": bool(adopted["thin"]),
+                    "dilate": int(adopted["dilate"]), "source": adopted["source"],
+                    "adopted": adopted})
+    return out
 
 
 def _tta_variants(x: torch.Tensor, tta: bool):
@@ -202,17 +271,35 @@ def main():
         shp, _binary = {}, None
     else:
         final, _binary = postprocess_pipeline(final, cfg.get("postprocess", {}))
-        # metric-aware shaping (floor + distance-R dominating thinning).  Parameters come
-        # from the training manifest (calibrated on held-out windows); config can override.
-        shp = dict(manifest.get("shaping") or {})
-        shp.update({k: v for k, v in (cfg["inference"].get("submission_shaping") or {}).items() if v is not None})
+        # metric-aware shaping (floor + distance-R dominating thinning + emission width).
+        # The policy that SHIPS is the one measured on the new-fault-like population
+        # (data/evidence/emission_decision.json); the manifest's in-domain calibration is only
+        # reached when no such measurement exists.  See effective_shaping() for the precedence.
+        shp = effective_shaping(manifest.get("shaping"),
+                                cfg["inference"].get("submission_shaping"),
+                                adopted_shaping())
+        if shp["source"] == "adopted_measured_policy":
+            print(f"ADOPTED measured emission policy: t0={shp['t0']:g} thin={shp['thin']} "
+                  f"dilate={shp['dilate']}px  (evidence: {shp['adopted']['evidence']}; the in-domain "
+                  f"calibration would have used t0={shp['in_domain_control']['t0']})")
+        elif shp["source"] == "explicit_config_override":
+            print(f"WARNING submission_shaping came from the CONFIG (t0={shp['t0']}), not from a "
+                  f"measurement - this is an experiment path, and the written tags say so.")
+            if shp.get("overrode_adopted"):
+                a = shp["overrode_adopted"]
+                print(f"WARNING it OVERRIDES the adopted measured policy (t0={a['t0']:g}, "
+                      f"width {a['dilate']}px) recorded in {a['evidence']}.")
+        elif shp["t0"] is None:
+            print("NOTE no adopted policy and no calibrated floor found: the submission is being "
+                  "written UNSHAPED.")
     pre_mass = float(np.nansum(final))          # machine-checkable record for the docs table
     if not args.raw and (shp.get("t0") is not None or shp.get("enabled")):
         from .submission_optim import optimize_submission
         pre = pre_mass
         final = optimize_submission(final, R=R_px_infer(cfg), t0=float(shp.get("t0", 0.3)),
                                     thin=bool(shp.get("thin", True)), hard=bool(shp.get("hard", True)),
-                                    gamma=float(shp.get("gamma", 1.0)))
+                                    gamma=float(shp.get("gamma", 1.0)),
+                                    dilate=int(shp.get("dilate") or 0))
         print(f"submission shaping {shp}: probability mass {pre:.0f} -> {float(np.nansum(final)):.0f}")
     final = np.clip(final, 0.0, 1.0).astype(np.float32)
     final[~valid] = np.nan                                  # "outside the bounds is null or nan"
@@ -254,7 +341,14 @@ def main():
         args.out, final, profile,
         band_description="fault-presence probability (distance-weighted Tversky submission)",
         tags={"source": "GEMSDOE ensemble", "models": ";".join(c.name for c in ckpts),
-              "n_models": len(ckpts), "tta": not args.no_tta},
+              "n_models": len(ckpts), "tta": not args.no_tta,
+              # Provenance, mirroring scripts/blend_submission.py: a written submission says which
+              # policy shaped it and where that policy came from, so "measured" is distinguishable
+              # from "the calibration happened to agree" by reading the raster alone.
+              "shaping_t0": str(shp.get("t0")), "shaping_thin": str(bool(shp.get("thin", True))),
+              "shaping_dilate": str(int(shp.get("dilate") or 0)),
+              "shaping_source": str(shp.get("source")),
+              "shaping_evidence": str((shp.get("adopted") or {}).get("evidence", ""))},
     )
     print(f"wrote {args.out}  valid_px={written['finite_px']}/{written['total_px']} "
           f"nonzero={written['nonzero_px']} mass={written['prob_mass']:.1f} "
@@ -267,6 +361,10 @@ def main():
         "grid": {"width": int(w), "height": int(h), "crs": str(crs)},
         "shaping_applied": bool(shp.get("t0") is not None or shp.get("enabled")),
         "shaping": {k: shp.get(k) for k in ("t0", "thin", "hard", "gamma")},
+        "shaping_source": shp.get("source"),
+        "shaping_dilate": int(shp.get("dilate") or 0),
+        "shaping_adopted": shp.get("adopted"),
+        "shaping_in_domain_control": shp.get("in_domain_control"),
         "prob_mass_pre_shaping": round(pre_mass, 1),
         "prob_mass_post_shaping": round(float(np.nansum(final)), 1),
         "nonzero_px": int(np.count_nonzero(np.nan_to_num(final))),
