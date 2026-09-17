@@ -73,20 +73,23 @@ jobs:
 
       - name: Train
         run: |
+          # Keep the trainer's exit status visible.  A filtered subshell ending in
+          # `|| true` masks a crashed trainer because `tee` still exits zero; that
+          # failure mode previously produced an unreadable submission stub.
           set -euo pipefail
           if [ "${{ github.event.inputs.profile || 'smoke' }}" = "full" ]; then
-            python -m src.train --config configs/config.yaml 2>&1 | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee train.log
+            python -m src.train --config configs/config.yaml 2>&1 | tr '\r' '\n' | tee train.log
           else
-            python -m src.train --config configs/config_ci_smoke.yaml 2>&1 | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee train.log
+            python -m src.train --config configs/config_ci_smoke.yaml 2>&1 | tr '\r' '\n' | tee train.log
           fi
 
       - name: Inference -> submission.tif
         run: |
-          set -uo pipefail
+          set -euo pipefail
           CFG=configs/config_ci_smoke.yaml
           [ "${{ github.event.inputs.profile || 'smoke' }}" = "full" ] && CFG=configs/config.yaml
-          # strip \r progress-bar frames so the committed log stays readable
-          python -m src.inference --config "$CFG" --out submission.tif --score-against data/labels.tif 2>&1 | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee inference.log
+          # Normalize progress-bar carriage returns without changing the exit status.
+          python -m src.inference --config "$CFG" --out submission.tif --score-against data/labels.tif 2>&1 | tr '\r' '\n' | tee inference.log
 
       - name: Validate submission format (exit code gates the rest)
         run: |

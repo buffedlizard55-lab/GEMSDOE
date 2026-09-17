@@ -83,19 +83,19 @@ jobs:
 
       - name: Train fold ${{ matrix.fold }}
         run: |
-          # pipefail: without it a crashed training run still exits 0 through `tee`
-          # (that is how run 35042805806's blend failure went unnoticed).
-          set -uo pipefail
+          # Do not mask a failed trainer with a successful filtering subshell.
+          # The previous pattern let a broken fold reach the blend job.
+          set -euo pipefail
           python -m src.train --config configs/config_ci_ensemble.yaml \
             --override training.mc_id=${{ matrix.fold }} 2>&1 \
-            | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee train.log
+            | tr '\r' '\n' | tee train.log
 
       - name: Inference (raw, 8-way TTA) -> prob map
         run: |
-          set -uo pipefail
+          set -euo pipefail
           python -m src.inference --config configs/config_ci_ensemble.yaml --raw \
             --out outputs/prob_raw.tif 2>&1 \
-            | tr '\r' '\n' | (grep -vE "it/s\]$|s/it\]$" || true) | tee inference.log
+            | tr '\r' '\n' | tee inference.log
 
       - name: Stage fold outputs
         run: |
@@ -120,6 +120,12 @@ jobs:
     needs: fold
     if: always()
     steps:
+      - name: Refuse to blend incomplete fold set
+        if: needs.fold.result != 'success'
+        run: |
+          echo "fold matrix result was ${{ needs.fold.result }}; no complete ensemble exists"
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
 

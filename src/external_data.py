@@ -17,7 +17,8 @@ import os
 import numpy as np
 from pathlib import Path
 import rasterio
-from scipy.ndimage import gaussian_filter, sobel, generic_filter
+from rasterio.warp import Resampling, reproject
+from scipy.ndimage import gaussian_filter, generic_filter
 
 def compute_slope(dem, resolution=100):
     """Slope in degrees from DEM."""
@@ -68,40 +69,79 @@ def detrended_elevation(dem, sigma=50):
     smoothed = gaussian_filter(dem, sigma=sigma, mode='nearest')
     return dem - smoothed
 
-def augment_with_dem_features(X, dem_channel_index=None, resolution=100):
-    """
-    X: (H,W,C) includes elevation channel? We assume channel 4? Let's detect.
-    If dem_channel_index is None, we try to find elevation-like channel by heuristic (largest variance).
-    Actually for GEMS, detrended elevation is channel? We will just use first channel as DEM proxy if needed.
-    Better: user provides separate DEM array.
-    This function adds 5 new channels: slope, curvature, TPI, TRI, detrended.
-    """
-    # If X has at least 1 channel, use channel 0 as DEM for demo, but in real pipeline use external DEM.
-    # For this function, we expect X's last dim is features, and we have a DEM array (H,W) separately.
-    # We'll handle both.
-    if isinstance(X, np.ndarray) and X.ndim == 3:
-        # If dem_channel_index provided, use that channel as DEM base
-        if dem_channel_index is not None:
-            dem = X[:, :, dem_channel_index]
-        else:
-            # Use channel that looks like elevation: try channel 2 or 3? Fallback to 0
-            dem = X[:, :, 0]
-    else:
-        dem = X  # assume (H,W)
+def load_dem_to_grid(path, target_meta, shape, *, resolution=Resampling.average):
+    """Read a DEM mosaic and aggregate/reproject it onto the feature grid.
 
-    slope = compute_slope(dem, resolution=resolution)
-    curv = compute_curvature(dem, resolution=resolution)
-    tpi = compute_tpi(dem, radius=3)
-    tri = compute_tri(dem)
-    detrended = detrended_elevation(dem, sigma=50)
+    The competition supplies URLs to 1 m tiles rather than a ready-made 100 m raster.
+    This function deliberately accepts a *local mosaic* created by
+    ``scripts/download_dem_tiles.py``; it never downloads an undocumented source at
+    training time. ``Resampling.average`` reduces the 1 m elevation to the 100 m
+    feature cells while keeping the operation reproducible.
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"DEM mosaic not found: {path}")
+    destination = np.full(tuple(shape), np.nan, dtype=np.float32)
+    with rasterio.open(path) as src:
+        reproject(
+            source=rasterio.band(src, 1),
+            destination=destination,
+            src_transform=src.transform,
+            src_crs=src.crs,
+            src_nodata=src.nodata,
+            dst_transform=target_meta["transform"],
+            dst_crs=target_meta["crs"],
+            dst_nodata=np.nan,
+            resampling=resolution,
+        )
+    destination[~np.isfinite(destination)] = np.nan
+    return destination
 
-    # Stack
-    if isinstance(X, np.ndarray) and X.ndim == 3:
-        new_features = np.stack([slope, curv, tpi, tri, detrended], axis=-1)
-        X_aug = np.concatenate([X, new_features], axis=-1)
-        return X_aug
-    else:
-        return np.stack([slope, curv, tpi, tri, detrended], axis=-1)
+
+def _dem_derivatives(dem, resolution=100):
+    """Return five deterministic DEM derivatives while preserving the footprint mask."""
+    dem = np.asarray(dem, dtype=np.float32)
+    valid = np.isfinite(dem)
+    if not valid.any():
+        return np.full(dem.shape + (5,), np.nan, dtype=np.float32)
+    # Derivatives and neighbourhood statistics cannot operate on NaN. Fill only while
+    # calculating; restore the original invalid footprint after every derivative.
+    filled = np.where(valid, dem, float(np.nanmedian(dem))).astype(np.float32)
+    features = np.stack([
+        compute_slope(filled, resolution=resolution),
+        compute_curvature(filled, resolution=resolution),
+        compute_tpi(filled, radius=3),
+        compute_tri(filled),
+        detrended_elevation(filled, sigma=50),
+    ], axis=-1).astype(np.float32)
+    features[~valid, :] = np.nan
+    return features
+
+
+def augment_with_dem_features(X, dem=None, dem_channel_index=None, resolution=100):
+    """Append slope/curvature/TPI/TRI/detrended elevation to ``X``.
+
+    ``dem`` should be a grid-aligned ``(H,W)`` array. For backwards compatibility,
+    omitting it uses ``dem_channel_index`` (or channel 0), but production code should
+    pass the reprojected 1 m mosaic explicitly rather than guessing from a feature band.
+    """
+    X = np.asarray(X)
+    if X.ndim == 3:
+        if dem is None:
+            dem = X[:, :, dem_channel_index] if dem_channel_index is not None else X[:, :, 0]
+        derivatives = _dem_derivatives(dem, resolution=resolution)
+        if derivatives.shape[:2] != X.shape[:2]:
+            raise ValueError(f"DEM grid {derivatives.shape[:2]} != feature grid {X.shape[:2]}")
+        return np.concatenate([X.astype(np.float32, copy=False), derivatives], axis=-1)
+    if X.ndim == 2:
+        return _dem_derivatives(X if dem is None else dem, resolution=resolution)
+    raise ValueError(f"expected X with shape (H,W,C) or DEM with shape (H,W), got {X.shape}")
+
+
+def augment_from_dem_path(X, dem_path, target_meta, resolution=100):
+    """Load a local DEM mosaic on the exact feature grid, then append five bands."""
+    dem = load_dem_to_grid(dem_path, target_meta, X.shape[:2], resolution=Resampling.average)
+    return augment_with_dem_features(X, dem=dem, resolution=resolution)
 
 def download_instructions():
     print("""

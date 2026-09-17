@@ -56,6 +56,21 @@ def test_inference_raw_flag_exists():
     assert 'if not args.raw and (shp.get("t0")' in src
 
 
+def test_inference_uses_the_fail_loud_submission_writer():
+    """The single-model inference path must have the same TIFF safeguards as blending.
+
+    The previous ensemble fix only changed ``scripts/blend_submission.py``; direct
+    ``src.inference`` still forced TILED=YES onto the striped competition template.
+    Keep the two production paths on the same writer so a user following the README
+    cannot recreate the 110-byte stub failure.
+    """
+    src = (ROOT / "src" / "inference.py").read_text()
+    assert "from .submission_io import clean_profile, write_submission" in src
+    assert "write_submission(" in src
+    assert 'TILED="YES"' not in src
+    assert "clean_profile(source_profile" in src
+
+
 # --------------------------------------------------------------------------- 3
 def _write_tif(path, arr, crs="EPSG:32611"):
     profile = dict(driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1,

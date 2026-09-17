@@ -136,8 +136,16 @@ def test_every_quoted_sentence_matches_the_committed_extraction():
     if not report.get("page_furniture_stripped"):
         import pytest
         pytest.skip("committed extraction predates the page-furniture strip")
-    text_path = ROOT / (report.get("extracted_text") or {}).get("path", "")
-    if not text_path.exists():
+    extracted = report.get("extracted_text")
+    # verify-sources.yml intentionally records the quote verdict without committing the
+    # normalised PDF text; only verify-rules.yml, which receives --dump-text, has it.
+    # Treat that as an unavailable optional artifact, not ROOT/"" (which is a directory
+    # and used to raise IsADirectoryError in a clean checkout).
+    if not extracted or not extracted.get("path"):
+        import pytest
+        pytest.skip("this evidence report has no committed extracted text")
+    text_path = ROOT / extracted["path"]
+    if not text_path.is_file():
         import pytest
         pytest.skip("extracted text not committed in this checkout")
     text = text_path.read_text(encoding="utf-8")

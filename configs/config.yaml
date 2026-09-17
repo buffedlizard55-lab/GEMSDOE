@@ -11,11 +11,15 @@ data:
   sample_submission_path: "data/sample_submission.tif"
   dem_links_csv: "data/1m_DEM_links.csv"
   external_dir: "data/external"
+  external_dem_path: null         # local USGS 3DEP mosaic; set this only after creating it
   output_dir: "outputs"
   norm_mode: "clip_zscore"        # percentile-clip -> robust z -> [0,1]; stats persisted
   clip_percentile: [1.0, 99.0]    # reference solution uses plain min-max; clipping is our
                                   # robustness change (magnetic/gravity outliers are heavy-tailed)
-  use_external_dem: true          # add 3DEP-derived bands (scripts/download_dem_tiles.py)
+  # Optional 1 m DEM derivatives are now wired symmetrically into train and inference.
+  # Keep disabled until a local mosaic is supplied; silently adding bands was a
+  # train/inference mismatch in the previous config.
+  use_external_dem: false
   use_ingenious_extra: false
 
 training:
