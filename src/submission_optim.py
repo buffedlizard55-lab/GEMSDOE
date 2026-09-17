@@ -38,7 +38,7 @@ from scipy.ndimage import binary_dilation, distance_transform_edt
 
 from .metrics import kernel_offsets
 
-__all__ = ["floor_sharpen", "dominant_thin", "dilate_mask", "optimize_submission",
+__all__ = ["floor_sharpen", "dominant_thin", "dilate_mask", "soft_band", "optimize_submission",
            "search_threshold", "shaping_thresholds"]
 
 
@@ -181,18 +181,66 @@ def dilate_mask(mask: np.ndarray, radius: int = 1) -> np.ndarray:
                            ).astype(np.float32)
 
 
+def soft_band(mask: np.ndarray, width: int = 0, gamma: float = 1.0) -> np.ndarray:
+    """Distance-decaying band of half-width `width` px around a kept set.
+
+        support  = { x : d(x, mask) <= width }          (IDENTICAL to dilate_mask(width))
+        value(x) = (1 - d(x, mask) / (width + 1)) ** gamma   inside the support, else 0
+
+    The denominator is `width + 1` rather than `width` precisely so that the support matches the
+    hard band's: with `1 - d/width` the outermost ring (d == width) would take the value 0 and the
+    two candidates would differ in geometry as well as in values, which is exactly what the
+    comparison in scripts/eval_proxy_catalogue.py --soft-band must not do.
+
+    WHY A RAMP AND NOT ONLY A HARD BAND.  Every emitted pixel beyond R = 3 px of a scored
+    fault costs alpha = 0.2 per unit of probability, while a truth pixel earns beta-weighted
+    credit through max_x p(x) k(d(x,g)) inside the R-neighbourhood (see the module docstring
+    and the problem page's metric).  A hard band of half-width w therefore buys coverage of
+    truth at distance <= w + R at the *full* price of the whole annulus, including the outer
+    ring that is farther from the trace than it is near it.  A ramp charges the outer ring
+    proportionally less while still crediting truth that only the outer ring can reach:
+
+        truth at distance D from the mask, R <= D <= w + R
+            hard band credit = 1                      (some band pixel is within R)
+            ramp credit      = 1 - (D - R) / w        (nearest usable band pixel sits at D - R)
+
+    Whether that trade pays is a measured question, not an argument: `--soft-band` in
+    scripts/eval_proxy_catalogue.py scores it against the hard band on the same population,
+    through the same metric implementation.
+
+    Properties pinned by tests (tests/test_shaping.py): values are 1 on the mask, strictly
+    between 0 and 1 inside the band, exactly 0 outside it, the support is contained in the
+    hard band of the same width, and width <= 0 is the mask unchanged.
+    """
+    m = np.asarray(mask) > 0.5
+    if int(width) <= 0 or not m.any():
+        return m.astype(np.float32)
+    d = distance_transform_edt(~m)
+    inside = d <= float(width)
+    v = np.where(inside, 1.0 - d / (float(width) + 1.0), 0.0)
+    if float(gamma) != 1.0:
+        v = np.power(v, float(gamma))
+    v[m] = 1.0
+    return np.clip(v, 0.0, 1.0).astype(np.float32)
+
+
 def optimize_submission(p: np.ndarray, R: int = 3, t0: float = 0.3, thin: bool = True,
-                        hard: bool = True, gamma: float = 1.0, dilate: int = 0) -> np.ndarray:
+                        hard: bool = True, gamma: float = 1.0, dilate: int = 0,
+                        soft: bool = False) -> np.ndarray:
     """Full shaping pipeline -> probability field ready to write as a submission.
 
     `dilate` (pixels, default 0 = pure skeleton) widens the kept set after thinning; see
     dilate_mask for why the optimum against the scored universe may not be 0.
+    `soft=True` replaces the hard dilation with the distance ramp of soft_band (same width,
+    same support) - the two are the SAME support and differ only in the emitted values, so
+    scoring them against each other isolates the value of the ramp itself.
     """
     q = floor_sharpen(p, t0=t0, gamma=gamma, hard=hard)
     if thin:
         q = dominant_thin(q, R=R, p=p)
     if dilate:
-        q = dilate_mask(q, radius=int(dilate))
+        q = soft_band(q, width=int(dilate), gamma=gamma) if soft \
+            else dilate_mask(q, radius=int(dilate))
     return np.clip(q, 0.0, 1.0).astype(np.float32)
 
 

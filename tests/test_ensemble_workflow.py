@@ -24,6 +24,7 @@ requires the step to fail loudly.  A silent mismatch is the failure mode that co
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -246,3 +247,50 @@ def test_blend_commit_step_pushes_with_retries_and_a_hard_failure():
     assert "fold_params.json" in run, "per-fold identity must be committed with the run record"
     assert run.count("git push") >= 1
     assert 'pushed="yes"' in run and "FATAL" in run, "an unpushable record must fail the step"
+
+
+# ---------------------------------------------------------------------------------------------
+# The shipped emission width is a POLICY parameter, read from the committed trigger file.
+#
+# `--min-dilate` exists because the pooled in-domain calibration always returns the narrowest band
+# (MEASURED: 0.1903 -> 0.0908 held-out DTI from a skeleton to a 6 px band on the catalogue), while
+# both prize phases score faults that are NOT in the training labels.  A measured width can only
+# reach a run if the workflow reads it, so the read is executed here rather than assumed.
+# ---------------------------------------------------------------------------------------------
+
+def test_blend_reads_min_dilate_from_the_committed_parameter_file(tmp_path):
+    step = _step("blend", "Read the shipped emission width (committed parameter file)")
+    script = _render(step["run"])
+    assert ".github/triggers/ensemble-params" in script
+
+    (tmp_path / ".github" / "triggers").mkdir(parents=True)
+    env_file = tmp_path / "env"
+    env_file.write_text("")
+    out_file = tmp_path / "out"
+    env = dict(os.environ)
+    env.update({"GITHUB_OUTPUT": str(out_file)})
+
+    def run(params_text: str | None) -> str:
+        p = tmp_path / ".github" / "triggers" / "ensemble-params"
+        if params_text is None:
+            p.unlink(missing_ok=True)
+        else:
+            p.write_text(params_text)
+        out_file.write_text("")
+        r = subprocess.run(["bash", "-c", script], cwd=tmp_path, env=env,
+                           capture_output=True, text=True)
+        assert r.returncode == 0, (r.stdout, r.stderr)
+        written = dict(line.split("=", 1) for line in out_file.read_text().splitlines() if "=" in line)
+        return written["min_dilate"]
+
+    assert run(None) == "0", "no parameter file must mean the unchanged behaviour, not a crash"
+    assert run("FOLD_OFFSET=6\nENSEMBLE_SEED=43\n") == "0"
+    assert run("MIN_DILATE=16\n") == "16"
+    # comments must not be parsed as values (the file is heavily commented)
+    assert run("# MIN_DILATE=16 is the decided width\nMIN_DILATE=8\n") == "8"
+
+
+def test_blend_passes_min_dilate_to_the_blender():
+    step = _step("blend", "Blend + shape + write submission")
+    assert "--min-dilate" in step["run"], "the measured width never reaching the blender would ship 0"
+    assert "steps.shape.outputs.min_dilate" in step["run"]

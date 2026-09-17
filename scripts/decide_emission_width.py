@@ -154,7 +154,10 @@ def width_gain_table(sweep: dict) -> dict:
     The repository's pre-registered acceptance rule for the width change is "same sign and
     > 0.01" - evaluated here as: every swept floor gains, and the mean gain exceeds 0.01.
     """
-    rows = [r for r in sweep["results"]["shaping_sweep"] if r["thin"]]
+    # HARD rows only: a ramp candidate has the same support as the hard band of its width but
+    # different values, so it is a different policy - and, critically, its presence in this table
+    # would define "the widest band" by a row that is not a band width at all.
+    rows = [r for r in sweep["results"]["shaping_sweep"] if r["thin"] and not r.get("soft")]
     widths = sorted({int(r["dilate"]) for r in rows})
     if not widths:
         return dict(widest_px=None, per_floor=[], n_floors=0, mean_gain=None, min_gain=None)
@@ -219,8 +222,15 @@ def main() -> int:
                            "the fold pair re-blended without the pre-shaping floor"))
     sw = load(Path(a.sweep))
     swept: list[tuple[float, int, dict]] = []
+    ramp: list[dict] = []
     for row in sw["results"]["shaping_sweep"]:
         if not row["thin"]:
+            continue
+        # HARD candidates only in the width machinery below: a ramp candidate has its own support
+        # and its own emitted values, so f"width {d} px" does not identify it, and mixing the two
+        # would put a policy into the width curve that the width curve cannot describe.
+        if row.get("soft"):
+            ramp.append(row)
             continue
         swept.append((float(row["t0"]), int(row["dilate"]), row))
         if row["dilate"] not in (0, 3, 6) or row["t0"] not in (0.0, 0.0432675):
@@ -244,6 +254,23 @@ def main() -> int:
     rows.append(policy_row("ensemble_soft_map", gp, provided(sw["results"]),
                            "the raw pre-shaping ensemble mean (not a legal submission: values "
                            "outside the footprint are not NaN)"))
+    # Ramp emission (session 11): identical support to the hard band of the same width, values
+    # decaying to 0 at the band edge.  The best ramp per width is a policy in the same ranking as
+    # the hard candidates, so a decision that ignores it would be a decision made on a subset.
+    ramp_best: dict[int, dict] = {}
+    for row in ramp:
+        d = int(row["dilate"])
+        if d not in ramp_best or float(row["dti"]) > float(ramp_best[d]["dti"]):
+            ramp_best[d] = row
+    for d, row in sorted(ramp_best.items()):
+        rows.append(policy_row(
+            f"sweep_ramp_t0_{float(row['t0']):g}_width{d}px_gamma{float(row.get('gamma', 1.0)):g}",
+            gp, row,
+            f"ramp values (gamma {float(row.get('gamma', 1.0)):g}) on the width-{d} px support, "
+            f"floor {float(row['t0']):g}, thinning on"))
+    if ramp:
+        print(f"ramp emission candidates scored: {len(ramp)}; best per width: "
+              f"{ {d: round(float(r['dti']), 6) for d, r in sorted(ramp_best.items())} }")
 
     # ------------------------------------------------------------------ plausible |G|
     # Two anchors, both stated as assumptions.  1) Density scaling: the proxy catalogue has a

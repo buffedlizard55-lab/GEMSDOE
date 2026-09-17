@@ -49,7 +49,8 @@ import rasterio
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.metrics import GtContext                                             # noqa: E402
-from src.submission_optim import optimize_submission, shaping_thresholds      # noqa: E402
+from src.submission_optim import (floor_sharpen, optimize_submission,        # noqa: E402
+                                 shaping_thresholds)
 
 CODE_NEAR, CODE_ONLY = 1, 2
 DEFAULTS = dict(R=3, alpha=0.2, beta=0.8, eps=1e-7)
@@ -161,8 +162,26 @@ def main() -> int:
                          "fault; combined = proxy + labelled faults")
     ap.add_argument("--sweep", action="store_true",
                     help="also search floor x thinning x emission width on THIS population")
-    ap.add_argument("--shaping-grid", type=int, default=5)
+    ap.add_argument("--shaping-grid", type=int, default=5,
+                    help="number of log-spaced floor candidates (ignored when --shaping-values "
+                         "is given)")
+    ap.add_argument("--shaping-values", default=None,
+                    help="EXPLICIT comma-separated floor candidates, e.g. '0,0.02,0.05,0.1,0.2'. "
+                         "Why this exists: shaping_thresholds() is log-spaced, so its spacing is "
+                         "set by the RANGE (1e-4..0.9), not by where the field's mass actually "
+                         "crosses a floor. The field's own mass profile is printed and recorded "
+                         "now (field_mass_profile), so the choice of grid is auditable.")
     ap.add_argument("--dilate-grid", default="0,1,2,3,4,6")
+    ap.add_argument("--soft-band", action="store_true",
+                    help="also score RAMP emission candidates: the same support as the hard band, "
+                         "with values decaying linearly from 1 on the skeleton to 0 at the band "
+                         "edge (src.submission_optim.soft_band). Every emitted pixel beyond R "
+                         "costs 0.2 per unit and a hard band charges the far ring full price.")
+    ap.add_argument("--band-gammas", default="1,2",
+                    help="exponents for the ramp values, applied in addition to gamma=1")
+    ap.add_argument("--band-floors", default=None,
+                    help="floors at which the ramp candidates are scored (default: the reference "
+                         "floor, i.e. the shipped policy's own floor)")
     ap.add_argument("--thin-off", action="store_true", help="include thin=False rows in the sweep")
     ap.add_argument("--reference-t0", type=float, default=None,
                     help="the floor the SHIPPED policy uses: added to the sweep grid (the log-spaced "
@@ -299,33 +318,99 @@ def main() -> int:
                   "grid alignment is broken; the number must not be used", file=sys.stderr)
 
     # ---- policy sweep: does any shaping beat the current one ON THIS POPULATION? ----------------
+    #
+    # TWO AXES, MEASURED SEPARATELY (2026-09-17, session 11).
+    #
+    # axis 1 - the SUPPORT: floor t0 x thinning x band width (the original sweep).
+    # axis 2 - the VALUES on that support: hard (1.0) vs the distance ramp of
+    #          src.submission_optim.soft_band, which has the SAME support as the hard band of the
+    #          same width and differs only in what is written into it.  Scoring both against the
+    #          same truth isolates the ramp from any re-ranking of the field.
+    #
+    # The floor axis also carries the measurement that decides whether it is worth widening the
+    # grid at all: `field_mass_profile` below records, per floor, how many pixels the field has
+    # ABOVE that floor BEFORE thinning.  Session 10 found the first ensemble's floor dimension was
+    # effectively binary (nothing emitted between 0.043 and 0.9), which no amount of grid
+    # resolution can fix - so the fact is now printed instead of being inferred from identical rows.
     sweep_table: list[dict] = []
     if a.sweep:
         dilates = tuple(sorted({int(v) for v in str(a.dilate_grid).split(",") if v.strip()}))
-        floors = [float(v) for v in shaping_thresholds(a.shaping_grid)]
+        if a.shaping_values:
+            floors = [float(v) for v in str(a.shaping_values).split(",") if v.strip()]
+            print(f"  floor grid: explicit --shaping-values ({len(floors)} candidates)")
+        else:
+            floors = [float(v) for v in shaping_thresholds(a.shaping_grid)]
         if reference_t0 is not None and not any(abs(f - reference_t0) < 1e-9 for f in floors):
             floors.append(float(reference_t0))
-        for t0 in sorted(floors):
+        floors = sorted(set(floors))
+
+        # how much of the field survives each floor, before any thinning: 0 above means the floor
+        # is indistinguishable from every lower floor and the grid is not the constraint.
+        profile = []
+        for t0 in floors:
+            above = int(np.count_nonzero(floor_sharpen(pred, t0=float(t0), hard=True)))
+            profile.append({"t0": float(t0), "support_px_above_floor": above,
+                            "mass_above_floor": round(float(np.nansum(
+                                np.where(np.nan_to_num(pred) > t0, np.nan_to_num(pred), 0.0))), 3)})
+        res["field_mass_profile"] = {
+            "rows": profile,
+            "distinct_supports": len({p["support_px_above_floor"] for p in profile}),
+            "reading": ("support_px_above_floor is the floor's effect on the emitted set BEFORE "
+                        "thinning; identical values across floors mean the floor axis is binary on "
+                        "this field and a finer floor grid cannot change any emission"),
+        }
+
+        def _emit(row: dict, label: str) -> None:
+            q = optimize_submission(pred, R=a.R, t0=float(row["t0"]), thin=bool(row["thin"]),
+                                    hard=True, gamma=float(row.get("gamma", 1.0)),
+                                    dilate=int(row["dilate"]), soft=bool(row.get("soft", False)))
+            q = np.where(support, q, np.nan).astype(np.float32)      # legal submission
+            row.update(score(q, ctx, a.R, a.alpha, a.beta, a.eps))
+            row["mean_kept_px"] = int(np.count_nonzero(q))
+            sweep_table.append(row)
+            print(f"  {label:<42} -> proxy DTI {row['dti']:.4f}  kept {row['mean_kept_px']} px")
+
+        for t0 in floors:
             for thin in ((False, True) if a.thin_off else (True,)):
                 for d in (dilates if thin else (0,)):
-                    q = optimize_submission(pred, R=a.R, t0=float(t0), thin=bool(thin),
-                                            hard=True, gamma=1.0, dilate=int(d))
-                    q = np.where(support, q, np.nan).astype(np.float32)   # legal submission
-                    row = {"t0": float(t0), "thin": bool(thin), "dilate": int(d)}
-                    row.update(score(q, ctx, a.R, a.alpha, a.beta, a.eps))
-                    row["mean_kept_px"] = int(np.count_nonzero(q))
-                    sweep_table.append(row)
-                    print(f"  t0={t0:<8.5g} thin={int(thin)} dilate={d}px -> proxy DTI "
-                          f"{row['dti']:.4f}  kept {row['mean_kept_px']} px")
-        sweep_table.sort(key=lambda r: -r["dti"])
+                    _emit({"t0": float(t0), "thin": bool(thin), "dilate": int(d),
+                           "soft": False, "gamma": 1.0},
+                          f"t0={t0:<8.5g} thin={int(thin)} band={d}px hard")
+
+        if a.soft_band:
+            # Same support as the hard band of the same width - only the written values differ.
+            band_floors = [float(v) for v in str(a.band_floors).split(",") if v.strip()] \
+                if a.band_floors else ([float(reference_t0)] if reference_t0 is not None else [0.0])
+            gammas = [float(v) for v in str(a.band_gammas).split(",") if v.strip()]
+            for t0 in sorted({f for f in band_floors} | ({float(reference_t0)}
+                                                         if reference_t0 is not None else set())):
+                for g in gammas:
+                    for d in [x for x in dilates if x > 0]:
+                        _emit({"t0": float(t0), "thin": True, "dilate": int(d),
+                               "soft": True, "gamma": float(g)},
+                              f"t0={t0:<8.5g} thin=1 band={d}px ramp gamma={g:g}")
+
+        sweep_table.sort(key=lambda r: (-r["dti"], r["t0"], r["dilate"], r.get("gamma", 1.0)))
         res["shaping_sweep"] = sweep_table
         res["sweep_best"] = sweep_table[0] if sweep_table else None
+        hard_rows = [r for r in sweep_table if not r.get("soft")]
         by_width = {}
-        for r in sweep_table:
+        for r in hard_rows:
             if r["thin"]:
                 by_width.setdefault(r["dilate"], []).append(r["dti"])
         res["best_per_emission_width"] = {str(k): round(max(v), 6) for k, v in sorted(by_width.items())}
-        current = next((r for r in sweep_table
+        ramp_rows = [r for r in sweep_table if r.get("soft")]
+        res["best_per_emission"] = {
+            "hard": (max((r["dti"] for r in hard_rows), default=None)),
+            "ramp": (max((r["dti"] for r in ramp_rows), default=None)),
+            "ramp_n_candidates": len(ramp_rows),
+            "note": ("hard = probability 1 inside the band; ramp = the same support with values "
+                     "decaying linearly to 0 at the band edge (src/submission_optim.soft_band). "
+                     "A tie means the values written into the support do not matter here."),
+        }
+        # The shipped-policy reference row is a HARD, un-widened row: the ramp rows describe other
+        # supports' worth of emission and must not be mistaken for it.
+        current = next((r for r in hard_rows
                         if reference_t0 is not None and abs(r["t0"] - reference_t0) < 1e-9
                         and r["thin"] and r["dilate"] == 0), None)
         res["sweep_verdict"] = {
@@ -352,7 +437,11 @@ def main() -> int:
         # win there; project every candidate onto a range of possible scored-truth sizes instead of
         # guessing which one we are in.
         sizes = [float(v) for v in str(a.sens_sizes).split(",") if v.strip()]
-        sens_rows, sens = sensitivity_table(sweep_table, n_truth, sizes,
+        # Projection over the HARD candidates only: the printed policy label is (floor, thin,
+        # band width), which does not identify a ramp candidate, and the ramp comparison is made
+        # at equal support by best_per_emission above.  Including ramp rows here would let the
+        # projection table print a policy that cannot be reconstructed from its own label.
+        sens_rows, sens = sensitivity_table(hard_rows, n_truth, sizes,
                                             alpha=a.alpha, beta=a.beta)
         res["sensitivity"] = sens
         print("\n  projected onto a HIDDEN scored truth of a different size "

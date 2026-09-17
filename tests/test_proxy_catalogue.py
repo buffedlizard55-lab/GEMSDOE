@@ -524,3 +524,91 @@ def test_committed_emission_decision_states_its_conditions():
         "an unmet condition (second-ensemble reproduction) must be recorded, not hidden"
     assert d["crossovers"]["blanket_vs_shipped"]["crossover_px"] > 0
     assert d["verdict"]["conclusion"]
+
+
+# ---------------------------------------------------------------------------------------------
+# Session 11: the two axes of the shaping search, and the measurement that decides how many floors
+# are worth scoring at all.
+#
+# Session 10 found the ensemble-1 sweep's floor dimension was effectively binary: log-spaced floors
+# [0, 1e-4, 2.08e-3, 4.33e-2, 0.9] produced the SAME emitted mask, because the field emits nothing
+# between 0.043 and 0.9.  A finer grid cannot fix that, and no reader could tell from the evidence
+# whether the floors were identical or the search was broken.  So the sweep now records, per floor,
+# how many pixels the field has above it BEFORE thinning - and it scores a second axis (the values
+# written into the band, hard vs ramp) whose candidates are provably on the same support.
+# ---------------------------------------------------------------------------------------------
+
+def _prob_and_proxy(tmp_path, grid, ridge_cols=(19, 20, 21), truth_col=61):
+    """A faint-shouldered ridge 1 px off the truth, plus a coded truth raster."""
+    size = grid["size"]
+    prob = np.zeros((size, size), dtype="float32")
+    prob[10:80, ridge_cols[0]:ridge_cols[-1] + 1] = 0.4
+    prob[10:80, ridge_cols[1]] = 0.9
+    p_path = tmp_path / "prob_band.tif"
+    with rasterio.open(p_path, "w", driver="GTiff", height=size, width=size, count=1,
+                       dtype="float32", crs="EPSG:32611", transform=grid["transform"]) as dst:
+        dst.write(prob, 1)
+    coded = np.zeros((size, size), dtype="uint8")
+    coded[10:80, truth_col] = 2
+    c_path = tmp_path / "coded_band.tif"
+    with rasterio.open(c_path, "w", driver="GTiff", height=size, width=size, count=1,
+                       dtype="uint8", crs="EPSG:32611", transform=grid["transform"]) as dst:
+        dst.write(coded, 1)
+    return p_path, c_path
+
+
+def test_field_mass_profile_makes_the_floor_grid_auditable(grid, tmp_path, monkeypatch):
+    ev = _load("eval_proxy_catalogue")
+    p_path, c_path = _prob_and_proxy(tmp_path, grid)
+    out = tmp_path / "sweep_profile.json"
+    monkeypatch.setattr(sys, "argv", [
+        "eval_proxy_catalogue.py", "--pred", str(p_path), "--proxy", str(c_path),
+        "--out", str(out), "--sweep", "--shaping-values", "0,0.3,0.95", "--dilate-grid", "0,2"])
+    assert ev.main() == 0
+    rep = json.loads(out.read_text())
+    prof = rep["results"]["field_mass_profile"]
+    assert [r["t0"] for r in prof["rows"]] == [0.0, 0.3, 0.95]
+    # floors 0.0 and 0.3 see the same mask (the shoulder is 0.4, above both); 0.95 sees only the
+    # ridge - so the 0.0/0.3 pair is indistinguishable and the grid above 0.4 is what matters
+    assert prof["rows"][0]["support_px_above_floor"] == prof["rows"][1]["support_px_above_floor"]
+    assert prof["rows"][2]["support_px_above_floor"] < prof["rows"][0]["support_px_above_floor"]
+    assert prof["distinct_supports"] == 2
+    assert "finer floor grid" in prof["reading"]
+    # an explicit grid is honoured, and the reference floor is still appended when given
+    assert sorted({r["t0"] for r in rep["results"]["shaping_sweep"]}) == [0.0, 0.3, 0.95]
+
+
+def test_ramp_candidates_are_scored_on_the_same_support_as_the_hard_band(grid, tmp_path, monkeypatch):
+    ev = _load("eval_proxy_catalogue")
+    p_path, c_path = _prob_and_proxy(tmp_path, grid)
+    out = tmp_path / "sweep_ramp.json"
+    monkeypatch.setattr(sys, "argv", [
+        "eval_proxy_catalogue.py", "--pred", str(p_path), "--proxy", str(c_path),
+        "--out", str(out), "--sweep", "--shaping-values", "0.3", "--dilate-grid", "0,1,2",
+        "--soft-band", "--band-gammas", "1,2", "--reference-t0", "0.3"])
+    assert ev.main() == 0
+    rep = json.loads(out.read_text())
+    res = rep["results"]
+    rows = res["shaping_sweep"]
+    hard = [r for r in rows if not r.get("soft")]
+    ramp = [r for r in rows if r.get("soft")]
+    assert hard and ramp, "both axes must be scored"
+    # every ramp candidate has a hard candidate with the SAME (floor, width) - i.e. same support
+        # by construction, so the DTI difference is the value of the ramp alone
+    for r in ramp:
+        twin = next((h for h in hard if h["t0"] == r["t0"] and h["dilate"] == r["dilate"]), None)
+        assert twin is not None, f"ramp candidate without a hard twin: {r}"
+        assert r["mean_kept_px"] == twin["mean_kept_px"], "supports differ - not a values-only A/B"
+    assert {r["gamma"] for r in ramp} == {1.0, 2.0}
+    assert res["best_per_emission"]["ramp_n_candidates"] == len(ramp)
+    assert res["best_per_emission"]["hard"] is not None
+    assert res["sweep_best"]["dti"] == max(r["dti"] for r in rows)
+    # the projection table describes policies by (floor, thin, band width), which does not identify a
+    # ramp candidate: ramp rows must not leak into it
+    assert len(res["sensitivity"]["rows"]) == len(hard)
+    assert {r["dilate"] for r in res["sensitivity"]["rows"]} == {h["dilate"] for h in hard}
+    # width-0 rows are not ramp candidates: a ramp needs a width
+    assert all(r["dilate"] > 0 for r in ramp)
+    # the shipped-policy reference is a hard, un-widened row and stays identifiable as such
+    assert res["sweep_verdict"]["current_policy_dti"] == next(
+        h["dti"] for h in hard if h["t0"] == 0.3 and h["dilate"] == 0)
