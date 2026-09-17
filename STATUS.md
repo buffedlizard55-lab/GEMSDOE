@@ -1,4 +1,120 @@
-# Project status — 2026-09-17 (sessions 11–12)
+# Project status — 2026-09-17 (sessions 11–13)
+
+## Session 13 — the emission policy is measured, reproduced, and shipped
+
+The pre-registered rule (session 10/11) has three conditions: beat the shipped policy by > 0.01 on
+the new-fault-like population, win at the plausible scored-truth sizes, and **reproduce on a second,
+independently trained ensemble**. Session 12 built the path; this session measured the last
+condition, fixed the two defects the measurement exposed, and shipped the policy it selected.
+
+### 1. The candidate is a JOINT policy, and the rule is evaluated candidate-wise
+
+The extended ensemble-1 sweep (session 11/12) put the best hard candidate at **floor 0.1, thin,
+width 0 px** — proxy DTI 0.1365 against the shipped policy's 0.0410 on the same field — with
+widening *hurting* at that floor (1 px 0.0918 → 20 px 0.0610). Until this session the conditions
+were phrased around "the widest swept band", so the record's own best candidate was not the policy
+the verdict was about. `scripts/decide_emission_width.py` now evaluates all three conditions against
+the best measured candidate and derives the conclusion from them (the three branches — SHIP /
+measured, not yet reproduced / measured, not shipped — are computed, never typed).
+
+### 2. Condition 3 is measured on every field, including the shipping one
+
+Three sweeps are committed, each scored against the candidate “floor 0.1, thin, width 0 px” as a
+CONTRAST with that field's own reference policy (absolute proxy DTI is not comparable across fold
+sets):
+
+| field (sweep file) | policy | its own reference policy | contrast |
+|---|---|---|---|
+| ensemble 1 (run 35042805806) | 0.1365 | 0.0410 | **+0.0954** |
+| ensemble 2 (run 35249562910, folds 6–11, seed 43) | 0.0777 | 0.0320 | **+0.0456** |
+| **the shipping field** (mean of ensembles 1+2, run 35275312337) | 0.0999 | 0.0304 | **+0.0695** |
+
+All three keep the sign and exceed +0.01 → condition 3 passes on the independent ensemble AND on the
+exact field the adopted policy is applied to → the record's conclusion is **SHIP the measured policy**
+(floor 0.1, thin, width 0 px), naming the ship path (`SHAPING_T0`/`SHAPING_DILATE`).
+
+The shipping-field sweep also sharpens the argument for the rule below: that field's *own* argmax is
+a different floor again (0.05 → 0.1260), and floor 0.05 is rejected by ensemble 1 (−0.0266). A
+single-field optimum would have been wrong twice; the worst-case ranking is what keeps the choice
+stable (mean12: `data/evidence/proxy/eval_sweep-mean12.json`).
+
+### 3. Two defects the measurement exposed
+
+* **The verdict was about the wrong policy.** Conditions 1–3 tested the width axis at the shipped
+  floor while the search's winner was a floor change. Fixed as above; `tests/test_emission_decision.py`
+  pins both directions (gain reproduced / reproduction absent / reproduction failing).
+* **A test pinned the state of the evidence, not the rule.** `test_proxy_catalogue.py` asserted that
+  an unmet condition *must* be recorded — so it failed the moment condition 3 passed. Replaced by the
+  implication that matters: the conclusion is one of the three derived branches and cannot claim a
+  SHIP while a condition is unmet.
+* **A repeated `--second-sweep` flag silently dropped the earlier sweeps.** Regenerating the record
+  by hand (`--second-sweep a --second-sweep b`) kept only `b`, because the flag was a single-value
+  option split on commas; the workflow passes one comma-list, so the defect was invisible there. The
+  flag now accumulates both forms, and a test pins that two flags produce two reproduction rows —
+  condition 3 must never pass on less evidence than the command line asked for. The `verdict.top_priority`
+  line was also made derived rather than typed, because the constant-ones comparison it stated had
+  gone stale the moment the floor sweep beat that baseline.
+
+### 4. The shipped candidate is not a maximum of one field
+
+Ensemble 2's own argmax is a *different* floor (0.05 → 0.0953) and the shipping field's is floor
+0.05 as well (0.1260) — but floor 0.05 is rejected by ensemble 1 (−0.0266), which is exactly the
+disagreement condition 3 and the ranking below exist to catch. The record now carries
+`verdict.robustness_across_ensembles`: every hard (floor, width) candidate that exists in **every**
+sweep, ranked by its **worst** contrast against each sweep's own reference policy. Across the three
+committed sweeps the shipped candidate ranks **1 of 132** (worst +0.0456 on ensemble 2; runner-up
+floor 0.1 / width 1 px at +0.0414), and a `warning` is written if it is ever not first.
+`cross_ensemble_ranking()` is unit-tested with a synthetic case where the first field's argmax loses
+on the second.
+
+### 5. The policy ships through the re-blend, and is measured where it is applied
+
+`blend_submission.py` now takes `--shaping-t0/--shaping-dilate/--shaping-source`: a MEASURED joint
+policy replaces the in-domain calibration (which maximises DTI against the faults the model trained
+on and therefore always prefers the narrow, high-floor skeleton). Half a policy is a parse error.
+The re-blend (run 35275312372, commit `c4f194e`) wrote `data/evidence/runs/ens12-adopted-floor0.1-w0/`
+over ensembles 1+2 — 11 live folds, `MIN_FOLDS` pinned to that exact count, so a short download
+fails the run instead of shipping a thinner ensemble. Verified after the fact, from the committed
+bytes rather than from the log:
+
+| check | value |
+|---|---|
+| `blend_report.shaping.source` / `.adopted` | `adopted_measured_policy` / `{t0: 0.1, thin: true, dilate: 0, evidence: data/evidence/emission_decision.json}` |
+| in-domain control (same run) | `t0 = 0.469674`, un-thinned, 0.2065 held-out — reported, not shipped |
+| submission | sha256 `a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009`, 569,531 B, 3292×3730 float32, EPSG:32611 |
+| written support | **172,974 px** — identical to the mean12 sweep's measured emission for (floor 0.1, width 0), i.e. the raster is that policy applied to the 11-fold mean |
+| TIFF tags | `shaping_t0=0.1`, `shaping_thin=True`, `shaping_dilate=0`, `shaping_source=adopted_measured_policy`, `shaping_evidence=data/evidence/emission_decision.json` |
+| format validation | passed (CRS, 100 m res, single band, float32, values ⊂ [0,1], size/transform match the sample); NaN outside the GeoDAWN footprint as the rules require |
+
+That tagged raster is the submission this branch would upload — `reblend.yml` is the only pipeline
+path that applies an adopted policy (see the queue item about the other two paths).
+
+In the same push, `proxy-eval.yml` was fired on the **field that would actually be submitted** — the
+mean of ensembles 1+2, one blend of `folds` + `folds2` via the multi-run support — because a floor is
+a threshold on the *mean* field, and both sweeps so far measured a single ensemble's field. That run
+completed and the answer is yes: on the shipping field floor 0.1 beats the reference policy by
+**+0.0695** (0.0999 vs 0.0304, `eval_sweep-mean12.json`), and the decision step rewrote
+`data/evidence/emission_decision.json` with all three fields in condition 3 (commit `8713331`).
+
+### 6. What is left
+
+1. ~~Mean-of-1+2 sweep~~ **DONE** (run 35275312337, `SWEEP_LABEL=mean12`): the adopted policy beats
+   the reference policy on the exact field it is applied to by +0.0695, and the decision record now
+   carries all three fields in condition 3. Next field-level confirmation: re-sweep the 3-ensemble
+   mean once ensemble 3 has landed.
+2. **Ensemble 3** (run 35263581931, folds 12–17, seed 44): fold 4 failed in training (4 min), fold 0
+   was still training at this checkpoint; the surviving folds join a later blend together with their
+   own sweep, never without one.
+3. **Detection.** 74.0 % of the new-fault-like truth lies more than 12 px from any emitted pixel; the
+   oracle ceiling is 1.0000 at width 0 and 0.1618 at 16 px; the leaderboard top (0.1972) is 7.9× the
+   constant-ones baseline measured here. More independent folds, then the cross-catalogue transfer
+   experiment in `SUGGESTIONS.md`.
+4. **Training selection still maximises in-domain DTI.** The emission policy no longer does; the
+   model still does (early stopping, fold weights). A new-fault-like selection signal is the
+   structural fix.
+5. **Human-only:** DrivenData account + enrolment, first upload, eligibility, Pages source setting,
+   deadline artefacts.
+
 
 ## Sessions 11–12 — the emission-width question, turned into a decision path
 
@@ -76,7 +192,37 @@ is detection improvement, not band tuning.
 | 35249562910 | ensemble 2 (folds 6–11, seed 43) — the pre-registered third condition of the emission decision | 5 folds trained, fold 4 lost in training; blend pending |
 | 35263581931 | ensemble 3 (folds 12–17, seed 44) — variance reduction for the final blend | just fired |
 
-### 6. What is left
+### 6. The extended grid landed (run 35262778745): the winning axis is the FLOOR, not the width
+
+The re-run swept 152 thinned candidates on the pre-shaping ensemble-1 field — floors
+{0, 0.05, 0.1, 0.2, 0.3, 0.362, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9} × widths {0, 1, 2, 3, 4, 6, 8, 10, 12,
+16, 20} px, plus ramp candidates on the same supports (`data/evidence/proxy/eval_sweep.json`,
+`eval_sweep.log`). Three things changed the picture:
+
+| measurement | value |
+|---|---|
+| `field_mass_profile.distinct_supports` | **11** — on the raw field the floor axis is *not* binary (the earlier "binary" reading was a property of the already-hardened submission, where any floor inside the same mask gives the same pixels) |
+| best hard candidate | **floor 0.1, thin, width 0 px → proxy DTI 0.136452** (464,736 px emitted) |
+| the shipped policy, same field and population | 0.041041 (`sweep_verdict.current_policy_dti`) → the best candidate is **+0.1118** |
+| widths at that floor | 0 px 0.1365 → 1 px 0.0918 → 2 px 0.0782 → 6 px 0.0677 → 20 px 0.0610: widening **hurts** once the floor is right |
+| best ramp candidate | 0.0634, still below every matched hard band |
+| widths at the *shipped* floor | 0 px 0.0410 → 20 px 0.0706: widening helps **only** on the narrow, in-domain-optimal support |
+
+So the two candidate changes are alternatives, not additive knobs: the 16–20 px band is the best
+available move *given* the shipped floor, while lowering the floor is worth far more and prefers
+width 0. `scripts/decide_emission_width.py` now ranks the best hard candidate of **every** swept
+floor (it previously admitted floors {0, 0.043} × widths {0, 3, 6} plus the widest band, which
+silently excluded exactly this candidate), records the winning floor's whole width curve, and —
+when a second sweep is supplied — looks the same policy up in it and contrasts it with *that*
+sweep's own reference policy, so a floor candidate is gated by the same reproduction rule as a
+width candidate. Two tests pin both behaviours.
+
+**Caveat, stated where the number lives:** the floor was selected and scored on the same 61,664 px
+of proxy truth, so 0.1365 is selection-optimistic. The pre-registered rule — beat the shipped
+policy by > 0.01 **and** reproduce on a second, independently trained ensemble — is therefore still
+the gate, and condition 3 remains unmet until the ensemble-2 sweep lands.
+
+### 7. What is left
 
 1. **Condition 3** of `data/evidence/emission_decision.json`: sweep ensemble 2 (and 3) and check the
    floor-controlled contrast reproduces above +0.01. If it does, the widening ships through

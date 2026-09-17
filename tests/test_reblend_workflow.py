@@ -36,6 +36,9 @@ def _render(script: str, **vals) -> str:
     import re
     mapping = {
         "needs.params.outputs.min_folds": str(vals.get("min_folds", 4)),
+        "needs.params.outputs.shaping_t0": str(vals.get("shaping_t0", "")),
+        "needs.params.outputs.shaping_dilate": str(vals.get("shaping_dilate", "")),
+        "needs.params.outputs.shaping_source": str(vals.get("shaping_source", "")),
         "needs.params.outputs.dilate_grid": "0,1,2,3,4,6",
         "needs.params.outputs.min_dilate": "0",
         "needs.params.outputs.calibrate": "pooled",
@@ -149,3 +152,79 @@ def test_inventory_covers_every_download_directory(tmp_path):
     assert "usable folds from folds2: 1" in r.stdout
     assert "usable folds: 5" in r.stdout
     assert "minimum-fold" not in r.stdout or True
+
+
+# --------------------------------------------------------------------------- adopted policy
+def _run_params(tmp_path, trigger_text: str) -> subprocess.CompletedProcess:
+    """Execute the workflow's own params step against a planted trigger file."""
+    params = _render(_workflow()["jobs"]["params"]["steps"][-1]["run"])
+    (tmp_path / ".github" / "triggers").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".github" / "triggers" / "reblend-params").write_text(trigger_text)
+    out_file = tmp_path / "out"
+    out_file.write_text("")
+    env = dict(os.environ)
+    env.update({"GITHUB_OUTPUT": str(out_file)})
+    r = subprocess.run(["bash", "-c", params], cwd=tmp_path, env=env, capture_output=True, text=True)
+    r.outputs = dict(line.split("=", 1) for line in out_file.read_text().splitlines() if "=" in line)
+    return r
+
+
+def _adopt_flags(rendered_blend_step: str) -> str:
+    """Execute the blend step's ADOPT construction (up to its diagnostic echo) and return the flags.
+
+    Executing rather than grepping is the point: the flag names are in the script whether or not the
+    guard fires, so a text assertion cannot tell an adopted policy from an ignored one.
+    """
+    start = rendered_blend_step.index('ADOPT=""')
+    marker = 'echo "adopted shaping flags'
+    end = rendered_blend_step.index("\n", rendered_blend_step.index(marker)) + 1
+    r = subprocess.run(["bash", "-c", rendered_blend_step[start:end]],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout.strip()
+
+
+def test_adopted_shaping_policy_reaches_the_blend_command(tmp_path):
+    """A MEASURED policy has to be shippable end to end: trigger file -> params outputs -> blend.
+
+    The failure this guards against is quiet: the trigger file sets SHAPING_T0, the blend job never
+    reads it, the run reports success, and the submission that ships is the in-domain calibration's
+    policy - which on the new-fault-like population scores 0.041 where the measured policy scores
+    0.136 (`data/evidence/emission_decision.json`).
+    """
+    r = _run_params(tmp_path, "RUN_ID=35042805806,35249562910\n"
+                              "SHAPING_T0=0.1\nSHAPING_DILATE=0\n"
+                              "SHAPING_SOURCE=data/evidence/emission_decision.json\n")
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert r.outputs["shaping_t0"] == "0.1"
+    assert r.outputs["shaping_dilate"] == "0"
+    assert r.outputs["shaping_source"] == "data/evidence/emission_decision.json"
+    assert "ADOPTED POLICY: t0=0.1 dilate=0" in r.stdout
+
+    blend = _render(_step("Blend")["run"], shaping_t0="0.1", shaping_dilate="0",
+                    shaping_source="data/evidence/emission_decision.json")
+    flags = _adopt_flags(blend)
+    assert "--shaping-t0 0.1 --shaping-dilate 0" in flags, flags
+    assert "--shaping-source data/evidence/emission_decision.json" in flags, flags
+    # the flags must reach the actual command line, not just the variable
+    assert "$ADOPT \\" in blend, "the blend command no longer consumes $ADOPT"
+
+    # The default path is unchanged: nothing in the trigger file -> no adoption flags at all.
+    r0 = _run_params(tmp_path, "RUN_ID=35042805806\n")
+    assert r0.returncode == 0, (r0.stdout, r0.stderr)
+    assert r0.outputs["shaping_t0"] == "" and r0.outputs["shaping_dilate"] == ""
+    assert "--shaping-t0" not in _adopt_flags(_render(_step("Blend")["run"])), \
+        "the calibrated path must stay the default"
+
+
+def test_half_an_adopted_policy_is_refused_before_the_blend(tmp_path):
+    """The candidate is a JOINT (floor, width) policy; half of one is not a measurement.
+
+    `blend_submission.py` refuses it at parse time; this asserts the workflow refuses it one step
+    earlier, where the log can name the trigger file that is wrong.
+    """
+    for text in ("SHAPING_T0=0.1\n", "SHAPING_DILATE=0\n"):
+        r = _run_params(tmp_path, text)
+        assert r.returncode != 0, (text, r.stdout, r.stderr)
+        assert "must be set together" in (r.stdout + r.stderr)
+        assert "reblend-params" in (r.stdout + r.stderr)

@@ -316,6 +316,21 @@ def main():
                          "at the proxy's own). This option is how a measured width is shipped; it "
                          "changes the search SPACE, never the reported calibration. Default 0 = "
                          "unchanged behaviour until the width decision's condition 3 is met.")
+    ap.add_argument("--shaping-t0", type=float, default=None,
+                    help="ADOPT this floor instead of the in-domain calibrated one.  The pooled "
+                         "held-out calibration (the faults the model trained on) always prefers the "
+                         "narrow/high floor corner, and data/evidence/emission_decision.json records "
+                         "a floor measured on the new-fault-like population instead.  Requires "
+                         "--shaping-dilate so that the shipped policy is exactly a MEASURED policy "
+                         "(a floor from one measurement combined with a width from another is not "
+                         "measured at all).  The in-domain calibration still runs and is reported as "
+                         "the control; it does not choose what is written.")
+    ap.add_argument("--shaping-dilate", type=int, default=None,
+                    help="emission width (px) shipped together with --shaping-t0; the adopted policy "
+                         "is always thinned (thin=True), which is what every swept candidate used.")
+    ap.add_argument("--shaping-source", default=None,
+                    help="evidence file the adopted policy was measured in; recorded verbatim in the "
+                         "blend report so the shipped shaping is traceable to a measurement")
     ap.add_argument("--loo-grid", type=int, default=9,
                     help="threshold count for the leave-one-fold-out search (cheaper than the "
                          "submission grid; the LOO search runs n_folds times)")
@@ -328,6 +343,16 @@ def main():
                          "default for the 6-fold workflow; consider 'dti' only to exclude a known-"
                          "catastrophic fold. Evidence: data/evidence/runs/local-mini-ensemble/.")
     args = ap.parse_args()
+
+    # An adopted policy is a JOINT (floor, thinning, width) measurement.  Shipping a floor from one
+    # measurement and a width from another would produce a policy that nothing measured - the exact
+    # defect --min-dilate was introduced to prevent, one level up.  Refuse at parse time.
+    if (args.shaping_t0 is None) != (args.shaping_dilate is None):
+        ap.error("--shaping-t0 and --shaping-dilate must be given together: the measured candidate "
+                 "is a joint (floor, width) policy, and shipping a floor from one measurement with "
+                 "a width from another is not a measured policy")
+    if args.shaping_source and args.shaping_t0 is None:
+        ap.error("--shaping-source describes an adopted policy, so it needs --shaping-t0/--shaping-dilate")
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     R = int(cfg["metric"]["R_meters"] // cfg["metric"]["resolution_m"])
@@ -392,7 +417,7 @@ def main():
     t0b, thinb, mean_dti, table, dilb = calibrate_shaping(folds, R, thr, alpha=alpha, beta=beta,
                                                           pre=enh, dilate_options=dil,
                                                           min_dilate=int(args.min_dilate))
-    if int(args.min_dilate) > 0:
+    if int(args.min_dilate) > 0 and args.shaping_t0 is None:
         assert int(dilb) >= int(args.min_dilate), (
             f"the pooled search returned dilate={dilb} although --min-dilate "
             f"{args.min_dilate} was requested and the search space was restricted to {dil}; "
@@ -400,6 +425,23 @@ def main():
     print(f"pooled shaping: t0={t0b:.3f} thin={thinb} dilate={dilb}px -> mean held-out DTI "
           f"{mean_dti:.4f} (unshaped {table[0]['mean_dti']:.4f}; "
           f"skeleton r=0 {next((r['mean_dti'] for r in table if r.get('dilate') == 0 and r.get('thin')), float('nan')):.4f})")
+
+    # 2a. the SHIPPED policy: the in-domain calibration above, or an adopted measured policy ------
+    # The in-domain calibration maximises held-out DTI against the faults the model trained on, so
+    # it is a plumbing check, not a decision (the record says so: that same widening that costs
+    # 0.19 -> 0.09 in-domain is worth +0.09 on the new-fault-like population).  When a policy has
+    # been measured on the new-fault-like population, this is how it is shipped.
+    adopted = args.shaping_t0 is not None
+    if adopted:
+        ship_t0, ship_thin, ship_dilate = float(args.shaping_t0), True, int(args.shaping_dilate)
+        print(f"ADOPTED measured policy: t0={ship_t0:g} thin=True dilate={ship_dilate}px "
+              f"(in-domain calibration would have shipped t0={t0b:.3f} thin={thinb} "
+              f"dilate={dilb}px, DTI {mean_dti:.4f})"
+              + (f"  source: {args.shaping_source}" if args.shaping_source else ""))
+    else:
+        ship_t0, ship_thin, ship_dilate = float(t0b), bool(thinb), int(dilb)
+    calibrated_control = dict(t0=float(t0b), thin=bool(thinb), dilate=int(dilb),
+                              mean_heldout_dti=float(mean_dti))
 
     # 2b. optional leave-one-fold-out audit of the aggregation step ----------------
     loo = None
@@ -427,8 +469,8 @@ def main():
                       f"  self-best {r['dti_self_best']:.4f}")
 
     # 3. shape on the full ensemble map --------------------------------------------
-    q = optimize_submission(mean, R=R, t0=t0b, thin=bool(thinb), hard=True, gamma=1.0,
-                            dilate=int(dilb))
+    q = optimize_submission(mean, R=R, t0=ship_t0, thin=ship_thin, hard=True, gamma=1.0,
+                            dilate=ship_dilate)
     q = np.clip(q, 0.0, 1.0).astype(np.float32)
     post_mass = float(q[~allnan].sum())
     if post_mass <= 0.0:
@@ -436,7 +478,7 @@ def main():
         # the map can drive EVERY pixel under the calibrated floor -> an all-zero
         # submission (DTI 0).  Never write that silently; fail the step loudly instead.
         raise SystemExit("BLEND ABORTED: shaping collapsed the map to all zeros "
-                         f"(t0={t0b:.3f}, thin={bool(thinb)}, dilate={int(dilb)}, "
+                         f"(t0={ship_t0:.3f}, thin={ship_thin}, dilate={ship_dilate}, "
                          f"mean mass {pre_mass:.0f}). "
                          "A pre-transform likely changed the distribution outside calibration.")
     q[allnan] = np.nan                                        # spec: outside bounds null/nan
@@ -498,7 +540,11 @@ def main():
         band_description="fault-presence probability (GEMSDOE MC ensemble, shaped)",
         tags=dict(source="GEMSDOE train-ensemble workflow", n_models=str(len(folds)),
                   models=";".join(str(m) for f in folds for m in f["model"]),
-                  shaping_t0=str(t0b), shaping_thin=str(bool(thinb))))
+                  shaping_t0=str(ship_t0), shaping_thin=str(bool(ship_thin)),
+                  shaping_dilate=str(int(ship_dilate)),
+                  shaping_source=("adopted_measured_policy" if adopted
+                                  else "pooled_in_domain_calibration"),
+                  shaping_evidence=str(args.shaping_source or "")))
     print(f"wrote {out}  {written['bytes']} B sha256={written['sha256'][:16]}  "
           f"nonzero={written['nonzero_px']} finite={written['finite_px']}/{written['total_px']} "
           f"mass {pre_mass:.0f} -> {post_mass:.0f}  tiled={written['tiled']} "
@@ -548,11 +594,20 @@ def main():
                     grid=f["grid"]) for f in folds],
         metric=dict(R_pixels=R, alpha=alpha, beta=beta),
         aggregation_calibration=loo,
-        shaping=dict(t0=t0b, thin=bool(thinb), dilate=int(dilb), dilate_grid=list(dil),
+        shaping=dict(t0=ship_t0, thin=bool(ship_thin), dilate=int(ship_dilate), dilate_grid=list(dil),
                      min_dilate=int(args.min_dilate),
                      mean_heldout_dti=float(mean_dti),
                      unshaped_mean_heldout_dti=float(table[0]["mean_dti"]),
-                     calibration_table=table),
+                     calibration_table=table,
+                     # Where the SHIPPED policy came from, and what the in-domain calibration would
+                     # have shipped instead.  Both are needed to audit a policy change: the second
+                     # is the counterfactual, and without it "adopted" is not distinguishable from
+                     # "the calibration happened to agree".
+                     source=("adopted_measured_policy" if adopted
+                             else "pooled_in_domain_calibration"),
+                     adopted=dict(t0=ship_t0, thin=bool(ship_thin), dilate=int(ship_dilate),
+                                  evidence=args.shaping_source) if adopted else None,
+                     in_domain_calibration_control=calibrated_control),
         probability_mass=dict(pre_shaping=pre_mass, post_shaping=post_mass,
                               collapse_factor=(pre_mass / post_mass if post_mass > 0 else None)),
         fold_weights=("equal" if ws is None else [round(float(w), 4) for w in ws]),

@@ -16,5 +16,8 @@
 #   MIN_DILATE=0 here on purpose: the width is a POLICY decision recorded in
 #   data/evidence/emission_decision.json and must be applied to the final blend, not frozen into a
 #   training run committed before the second-ensemble reproduction lands.
-FOLD_OFFSET=12
-ENSEMBLE_SEED=44
+# 2026-09-17 (session 13): ensemble 3 (folds 12-17, seed 44) is in flight, so the values below were
+# advanced past it.  Fold ids are never reused: a fold's held-out crop is its identity, and a rerun
+# of the same ids would overwrite the artifacts the emission decision's condition 3 was measured on.
+FOLD_OFFSET=18
+ENSEMBLE_SEED=45

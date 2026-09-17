@@ -1,10 +1,10 @@
 {
- "generated_utc": "2026-09-17T21:13:32+00:00",
+ "generated_utc": "2026-09-17T20:20:21+00:00",
  "generated_by": "scripts/eval_proxy_catalogue.py",
  "purpose": "score a prediction against faults the training labels do not contain (docs/DISCOVERY_PLAN.md 3b) - the only local measurement aligned with the scored 'new fault' population",
  "inputs": {
-  "pred": "data/evidence/runs/35042805806/submission.tif",
-  "pred_sha256": "a5ae61d572b0cd95eac111cab86954eca2219ad310fc0febddcda7ab92fb7969",
+  "pred": "submission.tif",
+  "pred_sha256": "4c0c601edd8d628214084b65ac1b7fb54c2a3199fc994face19f8dcbea51b5b5",
   "pred_meta": {
    "width": 3292,
    "height": 3730,
@@ -38,7 +38,7 @@
    "nodata": null
   },
   "labels": "data/labels.tif",
-  "truth_mode": "combined",
+  "truth_mode": "only",
   "reference_t0": null,
   "reference_source": null,
   "metric": {
@@ -50,16 +50,16 @@
   }
  },
  "truth": {
-  "mode": "combined",
-  "px": 139426,
-  "km": 13942.6,
+  "mode": "only",
+  "px": 61664,
+  "km": 6166.4,
   "proxy_only_px": 61664,
   "proxy_near_label_px": 20491,
   "catalogue_coverage_of_proxy": 0.2494
  },
  "prediction": {
-  "emission_px": 21492,
-  "mass": 21492.0
+  "emission_px": 94020,
+  "mass": 94020.0
  },
  "baseline_support": {
   "source": "labels (the competition footprint)",
@@ -68,20 +68,20 @@
  },
  "results": {
   "as_provided": {
-   "dti": 0.101492,
-   "TP_w": 11820.367,
-   "FP_w": 12803.14,
-   "FN_w": 127605.633,
-   "mass": 21492.0,
-   "emission_px": 21492
+   "dti": 0.039486,
+   "TP_w": 2672.321,
+   "FP_w": 89058.984,
+   "FN_w": 58991.679,
+   "mass": 94020.0,
+   "emission_px": 94020
   },
   "as_submitted": {
-   "dti": 0.101492,
-   "TP_w": 11820.367,
-   "FP_w": 12803.14,
-   "FN_w": 127605.633,
-   "mass": 21492.0,
-   "emission_px": 21492
+   "dti": 0.039486,
+   "TP_w": 2672.321,
+   "FP_w": 89058.984,
+   "FN_w": 58991.679,
+   "mass": 94020.0,
+   "emission_px": 94020
   },
   "prediction_role": "the raster at --pred as provided: equals the committed submission only when --pred points at one; check inputs.pred_sha256 before quoting this as a submission score",
   "baselines": {
@@ -89,47 +89,47 @@
     "dti": 0.0,
     "TP_w": 0.0,
     "FP_w": 0.0,
-    "FN_w": 139426.0,
+    "FN_w": 61664.0,
     "mass": 0.0,
     "emission_px": 0
    },
    "blanket_ones": {
-    "dti": 0.055588,
-    "TP_w": 139426.0,
-    "FP_w": 11843974.932,
+    "dti": 0.024901,
+    "TP_w": 61664.0,
+    "FP_w": 12073458.832,
     "FN_w": 0.0,
     "mass": 12279160.0,
     "emission_px": 12279160
    },
    "blanket_ones_whole_grid": {
-    "dti": 0.055588,
-    "TP_w": 139426.0,
-    "FP_w": 11843974.932,
+    "dti": 0.024901,
+    "TP_w": 61664.0,
+    "FP_w": 12073458.832,
     "FN_w": 0.0,
     "mass": 12279160.0,
     "emission_px": 12279160
    },
    "catalogue_copy": {
-    "dti": 0.548228,
-    "TP_w": 68680.349,
-    "FP_w": 0.0,
-    "FN_w": 70745.651,
+    "dti": 0.0,
+    "TP_w": 0.0,
+    "FP_w": 60988.0,
+    "FN_w": 61664.0,
     "mass": 60988.0,
     "emission_px": 60988
    },
    "catalogue_plus_submission": {
-    "dti": 0.552898,
-    "TP_w": 70929.876,
-    "FP_w": 12803.14,
-    "FN_w": 68496.124,
-    "mass": 79887.0,
-    "emission_px": 79887
+    "dti": 0.034264,
+    "TP_w": 2672.321,
+    "FP_w": 140635.984,
+    "FN_w": 58991.679,
+    "mass": 145597.0,
+    "emission_px": 145597
    }
   },
   "acceptance": {
-   "catalogue_copy_dti_on_proxy_only": 0.548228,
+   "catalogue_copy_dti_on_proxy_only": 0.0,
    "expected": 0.0,
-   "passed": false,
+   "passed": true,
    "meaning": "a catalogue-copy submission earns nothing here, so this population is not a restatement of the training labels"
   }
  },

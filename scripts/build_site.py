@@ -696,6 +696,16 @@ def _emission_decision(ev: dict) -> str:
             ' class="hl"' if abs(r["truth_px"] - gp) < 1 else "", f'{r["truth_km"]:,.0f} km',
             "".join('<td class="num">%.4f</td>' % r[k] for k in keys)) for r in show)
 
+    blanket = pol.get("baseline_blanket_ones")
+    best = (d.get("verdict") or {}).get("best_measured_candidate") or {}
+    if blanket and best and best.get("measured_dti", 0) > blanket["measured_dti"]:
+        _bl_txt = (f"the best swept candidate ({e(best['policy'])}, "
+                   f"{best['measured_dti']:.4f}) now beats the constant-ones map "
+                   f"({blanket['measured_dti']:.4f}) by "
+                   f"{best['measured_dti'] - blanket['measured_dti']:+.4f}")
+    else:
+        _bl_txt = (f"a constant-ones map scores {blanket['measured_dti']:.4f} here, still above the "
+                   f"best swept candidate" if blanket else "no blanket baseline recorded")
     cond = "".join(
         '<li><b>%s</b> — required %s, measured <b>%s</b> → %s</li>'
         % (e(c["condition"]), e(str(c["required"])), e(str(c["measured"])),
@@ -720,25 +730,41 @@ def _emission_decision(ev: dict) -> str:
            .get("best_per_emission_width") or {})
     c_pairs = sorted(((int(k), float(v)) for k, v in bpw.items()), key=lambda kv: kv[0])
     c_txt = _arrow([("skeleton" if k == 0 else f"{k} px", v) for k, v in c_pairs])
+    # Whether population C wants a wide band is a property of the CURRENT sweep, not of the page:
+    # the first extended grid (2026-09-17) moved the per-width optimum from 6 px to 0 px by finding
+    # a better floor, and a hard-coded "still rising - wide" then contradicted the table under it.
+    c_dir = ""
+    if len(c_pairs) >= 2:
+        rising = c_pairs[-1][1] > c_pairs[0][1]
+        c_dir = (f", still rising — <b>wide</b>" if rising
+                 else ", falling with width once the floor is right — <b>narrow</b>")
 
+    # The anchor table is about the best measured CANDIDATE (a joint floor x width policy), not
+    # about the width axis: session 13 moved the winner from "widen the band" to "lower the floor,
+    # keep width 0", and a panel phrased around the widest band would have described a policy the
+    # search did not pick.  Keys are read with fallbacks so an older record still renders.
+    def _cand_cell(a):
+        return (a.get("candidate_dti", a.get("wide_dti")), a.get("candidate_wins", a.get("wide_wins")))
     anchors = "".join(
         '<tr><td>%s</td><td class="num">%s</td><td class="num">%.4f</td><td class="num">%.4f</td>'
-        '<td>%s</td></tr>' % (e(a["anchor"]), f'{a["truth_px"]:,}', a["shipped_dti"], a["wide_dti"],
-                              '<span class="pill ok">wider wins</span>' if a["wide_wins"]
-                              else '<span class="pill">skeleton wins</span>')
+        '<td>%s</td></tr>' % (e(a["anchor"]), f'{a["truth_px"]:,}', a["shipped_dti"],
+                              _cand_cell(a)[0],
+                              '<span class="pill ok">candidate wins</span>' if _cand_cell(a)[1]
+                              else '<span class="pill">shipped wins</span>')
         for a in (d["verdict"].get("anchor_projection") or []))
 
     return f"""<h2 id="emission">The emission question: three measurements, one decision</h2>
-<p>How wide a band should a submission emit around its skeleton? Three measurements exist and the
-first one disagrees with the other two — which is the interesting part, because they differ exactly
-in whether the model has seen the truth:</p>
+<p>How wide a band should a submission emit around its skeleton — and, once the floor is swept
+rather than assumed, at what floor? Three measurements exist and the first one disagrees with the
+other two — which is the interesting part, because they differ exactly in whether the model has
+seen the truth:</p>
 <table><thead><tr><th>measurement</th><th>truth</th><th>what it says</th></tr></thead><tbody>
 <tr><td><b>A</b> held-out crops</td><td>the catalogue the model trained on</td>
 <td>{a_txt} — <b>narrow</b></td></tr>
 <tr><td><b>B</b> shifted labels</td><td>the same catalogue, translated 3–4 px</td>
 <td>0.0555 → 0.0991 → 0.1190 — <b>wide</b></td></tr>
 <tr><td><b>C</b> proxy population</td><td>6,166 km of mapped faults the labels lack</td>
-<td>{c_txt}, still rising — <b>wide</b></td></tr>
+<td>{c_txt}{c_dir}</td></tr>
 </tbody></table>
 <p>Because <code>DTI = TP_w / (0.2·(TP_w + FP_w) + 0.8·|G|)</code>, the wrong mass a prediction
 carries does <em>not</em> scale with the hidden truth size |G| while the missing mass does. Holding a
@@ -750,12 +776,11 @@ the scored truth", which can at least be bounded.</p>
 <h3>Every policy measured on population C (the new-fault-like one)</h3>
 <table><thead><tr><th>policy</th><th>DTI</th><th>coverage of the truth</th><th>wrong mass FP_w</th>
 </tr></thead><tbody>{rows}</tbody></table>
-{note("bad", "<b>The finding that matters more than the width.</b> A constant-ones map — fill the "
-             "data footprint with 1.0, no skill at all — scores 0.0585 here, beating the shipped "
-             "skeleton's 0.0247 and every swept candidate. Recall is worth four times precision "
-             "under &alpha;=0.2/&beta;=0.8, so a policy that emits less coverage than a constant map "
-             "is not being conservative; it is under-emitting. The crossover below says at what "
-             "truth size that starts to cost.")}
+{note("bad", "<b>The finding that matters more than the width.</b> Recall is worth four times "
+             "precision under &alpha;=0.2/&beta;=0.8, so a policy that emits less coverage than a "
+             "constant-ones map is not being conservative; it is under-emitting. On this evidence "
+             + _bl_txt +
+             ". The crossovers below say at which truth sizes each trade flips.")}
 
 <h3>Where the curves cross</h3>
 <table><thead><tr><th>policy pair</th><th>verdict</th></tr></thead><tbody>{xrows}</tbody></table>

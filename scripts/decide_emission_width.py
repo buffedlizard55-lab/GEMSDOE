@@ -21,8 +21,16 @@ directions:
 
   C. proxy-only population (truth = 6,166 km of USGS SGMC fault trace that the training labels
      do NOT contain; the closest measurable stand-in for the scored "new fault" universe)
-       skeleton 0.0144  <  1 px 0.0205  <  2 px 0.0256  <  3 px 0.0312  <  4 px 0.0340  <  6 px 0.0395
-     -> wider wins, monotonically.
+     The 2026-09-16 grids moved the FLOOR only through `shaping_thresholds()`'s log spacing, whose
+     low end is 0.043 -- so "the floor is binary on this field" was true of the grid, not of the
+     field.  The 2026-09-17 sweep (session 11, run 35262778745) swept explicit floors
+     0 .. 0.9 and found that the winning policy is a FLOOR change with no widening at all:
+
+       floor 0.1, width 0 px  ->  DTI 0.1365   (shipped policy on the same field: 0.0410)
+       floor 0.1, width 1 px  ->  DTI 0.0918   ... widening HURTS once the floor is right,
+       floor 0.6, width 20 px ->  DTI 0.0741   ... and every floor >= 0.2 still prefers a band.
+
+    -> the decision variable is the joint (floor, thinning, width) policy, not the width alone.
 
 The disagreement is not noise, it is the point.  A and C measure the SAME operator against
 populations that differ in exactly the way the competition cares about: in A the model has seen
@@ -52,18 +60,32 @@ that identity is asserted below, since the whole projection rests on it).  Two c
 That makes the decision a *sensitivity* question with a computable answer: which of the plausible
 scored-truth sizes are we actually in?  This script reports the crossovers, projects every
 measured policy onto a range of plausible |G|, and states the verdict against the repository's
-pre-registered rule (a change must beat the current default by > 0.01 on the new-fault-like
-population AND dominate it across plausible truth sizes AND reproduce on a second ensemble).
+pre-registered rule.  The rule is evaluated CANDIDATE-WISE, against the best measured candidate
+(a joint floor x width policy, ranked on the first ensemble's sweep):
+
+  1. it beats the shipped policy on the new-fault-like population by > 0.01;
+  2. every plausible scored-truth anchor favours it (a recorded crossover, not a boast);
+  3. its CONTRAST reproduces on every further independently trained ensemble that was handed in
+     with --second-sweep (absolute proxy DTI is not comparable across fold sets, so the record
+     keeps each sweep's own reference policy and compares contrasts).
+
+Session 13 added (3) as a LIST and added the cross-ensemble robustness ranking printed at the end:
+the candidate is ranked by its WORST contrast across every sweep in the record, because a maximum
+that exists on one field only is a field-specific maximum, not a policy.
 
 THE FINDING THAT MATTERS MORE THAN THE WIDTH
 --------------------------------------------
 The sweep measured a constant-ones submission (fill the data footprint with 1.0) on population C:
-DTI 0.0585, which BEATS the shipped skeleton's 0.0247 and every swept shaping candidate.  A
-constant map has no skill at all; it wins because recall is worth four times precision under this
-metric (alpha = 0.2, beta = 0.8) and because it pays its false-positive mass in a currency the
-denominator discounts.  Any policy that emits less coverage than a constant map is therefore not
-"conservative", it is *under-emitting*, and the crossover says at what truth size that becomes
-true.  This is reported here because it is actionable and it is uncomfortable.
+DTI 0.0585, which beat the shipped skeleton's 0.0247 and, at that point, every swept shaping
+candidate.  A constant map has no skill at all; it won because recall is worth four times
+precision under this metric (alpha = 0.2, beta = 0.8) and because it pays its false-positive mass
+in a currency the denominator discounts -- i.e. the shipped skeleton was not "conservative", it was
+*under-emitting*.  Session 13 then swept explicit floors and found a policy with actual skill that
+beats the constant map on the same population: floor 0.1 with NO widening scores 0.1365 there
+(constant-ones 0.0585, shipped 0.0247), so a low floor is not the same kind of bet as filling the
+footprint -- the candidate has to keep its contrast on further ensembles, which is what
+condition 3 measures.  The uncomfortable ordering is kept here on purpose: it is what made the
+floor axis, rather than the width axis, the thing worth measuring.
 
 NOT A LEADERBOARD PREDICTION.  Population C is state-geological-survey surface mapping, not the
 expert interpretation of GeoDAWN geophysics the prize scores; the numbers are for comparing
@@ -76,10 +98,15 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import json
 from pathlib import Path
 
 ALPHA, BETA = 0.2, 0.8
+# The published leaderboard's best public score, snapshotted 2026-09-16 in
+# data/evidence/independent_verification.json (competition_standing.top_dti).  Only used for the
+# top_priority sentence, and refreshed by editing this pin when that evidence is refreshed.
+LEADERBOARD_TOP = 0.1972
 PX_KM = 0.1            # 100 m pixels
 AOI_AREA_KM2 = 3292 * 3730 * PX_KM ** 2          # 122,791.6 km^2
 GEODAWN_AREA_KM2 = 51857.0                       # USGS GeoDAWN data release, 10.5066/P93LGLVQ
@@ -180,6 +207,68 @@ def width_gain_table(sweep: dict) -> dict:
                 all_floors_positive=bool(gains) and all(g > 0 for g in gains))
 
 
+def policy_reproduction(sweep: dict, t0: float, width: int) -> dict | None:
+    """Look up the SAME hard policy in another ensemble's sweep and contrast it with THAT sweep's
+    own reference policy.
+
+    Absolute proxy DTI is not comparable across ensembles - each fold set produces a different
+    probability field - so a candidate is only "reproduced" if the contrast against the reference
+    policy of the same sweep keeps its sign and size.  This is the floor-change counterpart of
+    ``width_gain_table``: the width table controls the floor and varies the width, this controls
+    nothing and varies the whole policy, which is what a candidate that changes BOTH needs.
+    """
+    rows = [r for r in sweep["results"]["shaping_sweep"] if r["thin"] and not r.get("soft")]
+    target = next((r for r in rows if float(r["t0"]) == float(t0) and int(r["dilate"]) == int(width)),
+                  None)
+    ref = (sweep["results"].get("sweep_verdict") or {}).get("current_policy_dti")
+    if target is None or ref is None:
+        return None
+    return {"t0": float(t0), "width_px": int(width),
+            "measured_dti": round(float(target["dti"]), 6),
+            "reference_policy_dti": round(float(ref), 6),
+            "contrast_vs_reference": round(float(target["dti"]) - float(ref), 6),
+            "reference_is": "sweep_verdict.current_policy_dti of that same sweep"}
+
+
+def cross_ensemble_ranking(sweeps: list[tuple[str, dict]], limit: int = 10) -> dict:
+    """Rank every hard (floor, width) candidate by its WORST contrast taken over every sweep.
+
+    ``best_measured_candidate`` is the argmax of the FIRST ensemble's sweep, which is a maximum of
+    one field.  A policy is only worth shipping if it is not: this ranks the candidates that exist
+    in EVERY sweep by the smallest contrast they earn against each sweep's own reference policy, so
+    the record shows whether the shipped candidate is the robust one or merely the first field's
+    favourite.  (It is also the cheapest check of the pre-registered rule: a candidate whose worst
+    contrast is <= 0.01 cannot pass condition 3 on the sweeps supplied.)
+    """
+    per: list[tuple[str, float, dict]] = []
+    common: set | None = None
+    for name, sw in sweeps:
+        rows = [r for r in sw["results"]["shaping_sweep"]
+                if r["thin"] and not r.get("soft") and float(r.get("gamma", 1.0)) == 1.0]
+        ref = (sw["results"].get("sweep_verdict") or {}).get("current_policy_dti")
+        if ref is None:
+            continue
+        table = {(round(float(r["t0"]), 6), int(r["dilate"])): r for r in rows}
+        per.append((name, float(ref), table))
+        common = set(table) if common is None else (common & set(table))
+    if not per or not common:
+        return dict(n_ensembles=len(per), n_candidates=0, ranked=[],
+                    meaning="no candidate is present in every supplied sweep")
+    ranked = []
+    for t0, w in sorted(common):
+        contrasts = {name: table[(t0, w)]["dti"] - ref for name, ref, table in per}
+        ranked.append({"floor_t0": t0, "width_px": w,
+                       "contrast_by_ensemble": {k: round(v, 6) for k, v in contrasts.items()},
+                       "worst_contrast": round(min(contrasts.values()), 6),
+                       "mean_contrast": round(sum(contrasts.values()) / len(contrasts), 6),
+                       "dti_first_ensemble": round(per[0][2][(t0, w)]["dti"], 6),
+                       "emission_px_first_ensemble": int(per[0][2][(t0, w)].get("emission_px", -1))})
+    ranked.sort(key=lambda r: (-r["worst_contrast"], -r["mean_contrast"]))
+    return {"n_ensembles": len(per), "n_candidates": len(ranked), "ranked": ranked[:limit],
+            "meaning": ("ranked by the worst contrast against each sweep's own reference policy; "
+                        "a candidate that only wins on one field is a field-specific maximum")}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -189,10 +278,14 @@ def main() -> int:
     ap.add_argument("--miss-distance", default="data/evidence/proxy/miss_distance-ensemble1.json",
                     help="scripts/measure_miss_distance.py evidence: the exact metric as a function "
                          "of the emitted band width, plus the localization/detection split")
-    ap.add_argument("--second-sweep", default=None,
+    ap.add_argument("--second-sweep", default=None, action="append",
                     help="sweep of a SECOND, independently trained ensemble (same recipe, different "
-                         "seed/folds). Evaluated as condition 3: the width gain must keep its sign "
-                         "and exceed 0.01 with every floor controlled. Written by the proxy-eval "
+                         "seed/folds), or a COMMA-SEPARATED LIST of them; the flag may be REPEATED and "
+                         "the lists are concatenated (a repeated flag that silently kept only the last "
+                         "list would let condition 3 pass on LESS evidence than the command line asked "
+                         "for). Evaluated as condition 3: "
+                         "the policy this record proposes must keep the sign and size of its contrast "
+                         "against each sweep's own reference policy. Written by the proxy-eval "
                          "workflow as data/evidence/proxy/eval_sweep-<label>.json")
     ap.add_argument("--in-domain",
                     default="data/evidence/runs/35042805806-experiment/blend_report.json")
@@ -200,6 +293,12 @@ def main() -> int:
     a = ap.parse_args()
 
     assert abs((ALPHA + BETA) - 1.0) < 1e-12, "the projection identity requires alpha + beta == 1"
+    # A reproduction is per ENSEMBLE, so the flag takes a list: two independent sweeps that agree
+    # are a stronger claim than one, and the record has to be able to hold both.  The flag is
+    # repeatable as well as comma-joined, and BOTH forms are concatenated - a repeated flag that
+    # quietly kept only the last list would shrink condition 3 without any visible symptom.
+    second_sweeps = [q.strip() for part in (a.second_sweep or [])
+                     for q in part.split(",") if q.strip()]
 
     # ------------------------------------------------------------------ measured policies (C)
     rows: list[dict] = []
@@ -244,6 +343,21 @@ def main() -> int:
     widest = max(d for _, d, _ in swept)
     # Among the widest band, the floor that scores best on this population is the fair wide
     # candidate (picking the highest floor would pick the collapse case, which scores ~0).
+    # The floor axis is a candidate axis in its own right.  The session-12 extended grid showed the
+    # best HARD candidate can be a floor change rather than a width change, and a ranking that
+    # admitted only floors {0, 0.0433} would then decide a width question while silently excluding
+    # what the search actually found.  Every swept floor contributes its single best width.
+    best_per_floor: dict[float, dict] = {}
+    for t, d, r in swept:
+        if t not in best_per_floor or float(r["dti"]) > float(best_per_floor[t]["dti"]):
+            best_per_floor[t] = r
+    existing_names = {r["policy"] for r in rows}
+    for t, r in sorted(best_per_floor.items()):
+        name = f"sweep_best_t0_{t:g}_width{int(r['dilate'])}px"
+        if name in existing_names:
+            continue
+        rows.append(policy_row(name, gp, r, f"best hard candidate at floor {t:g} "
+                                            f"(thinning on): width {int(r['dilate'])} px"))
     wide_t0, _, wide_row = max([(t, d, r) for t, d, r in swept if d == widest],
                                key=lambda x: (x[2]["dti"], -x[0]))
     wide_name = f"sweep_t0_{wide_t0:g}_width{widest}px"
@@ -305,6 +419,10 @@ def main() -> int:
     in_domain_rows = sorted(in_domain, key=lambda r: (r["t0"], r["dilate"]))
 
     # ------------------------------------------------------------------ verdict
+    # The rule is evaluated candidate-wise, so the best measured sweep candidate has to be known
+    # before any verdict text is written.
+    best_cand = max((r for r in rows if r["policy"].startswith("sweep_")),
+                    key=lambda r: r["measured_dti"])
     shipped = next(r for r in rows if r["policy"] == "shipped_skeleton_dilate0")
     wide = next(r for r in rows if r["policy"] == wide_name)
     blanket = next(r for r in rows if r["policy"] == "baseline_blanket_ones")
@@ -320,77 +438,186 @@ def main() -> int:
                                "with the population, which is why neither number alone can decide it"),
         "conditions": [],
         "conclusion": "",
-        "top_priority": ("beating the constant-ones baseline on the new-fault-like population is "
-                         "worth more than the width choice: the shipped skeleton does not beat it at "
-                         "any truth size above the crossover printed above, and the leaderboard's "
-                         "top score (0.1972) is 3.4x the blanket's 0.0585 on this population"),
+        # Computed, not typed: the blanket baseline's own number moved between evidence versions
+        # (0.0585 over the footprint-clipped support, 0.0249 over the whole footprint), and a
+        # hard-coded ratio then contradicted the table beside it.
+        "top_priority": ("detection, not the emission policy, is the binding constraint: the best "
+                         "measured candidate (%.4f, %s) %s the constant-ones baseline (%.4f) on the "
+                         "new-fault-like population it was measured on, while the leaderboard's top "
+                         "score (%.4f) is %.1fx that baseline; the skeleton the candidate replaces "
+                         "scores %.4f there"
+                         % (best_cand["measured_dti"], best_cand["policy"],
+                            "beats" if best_cand["measured_dti"] > blanket["measured_dti"]
+                            else "trails",
+                            blanket["measured_dti"], LEADERBOARD_TOP,
+                            LEADERBOARD_TOP / max(blanket["measured_dti"], 1e-9),
+                            shipped["measured_dti"])),
     }
-    gain = round(wide["measured_dti"] - shipped["measured_dti"], 6)
+    # Sweep policies only: the baselines (blanket, catalogue copy) are ranked in the same table but
+    # they are controls, not candidates the shaping pipeline can produce (best_cand is computed
+    # above, before the verdict text that names it).
+    v["best_measured_candidate"] = {
+        "policy": best_cand["policy"],
+        "measured_dti": best_cand["measured_dti"],
+        "note": best_cand["note"],
+        "contrast_vs_shipped": round(best_cand["measured_dti"] - shipped["measured_dti"], 6),
+        "crosses_shipped": crossover(shipped, best_cand),
+        "reproduced_on_second_ensemble": None,
+        "why_this_is_recorded": ("the pre-registered rule's candidate set has to be stated, not "
+                                 "assumed: the best measured candidate on this population is "
+                                 "ranked here, so a verdict cannot be reached with it excluded"),
+    }
+    m_best = re.match(r"sweep_best_t0_([0-9.]+)_width([0-9]+)px$", best_cand["policy"]) or \
+        re.match(r"sweep_t0_([0-9.]+)_width([0-9]+)px$", best_cand["policy"])
+    if m_best:
+        cand_floor = float(m_best.group(1))
+        # The floor and the width are alternative policies, not additive knobs: at the best floor the
+        # best width may be 0 px.  Recording the whole width curve of the winning floor makes that
+        # visible in the record instead of leaving it to a reader to reconstruct from the sweep file.
+        v["best_measured_candidate"]["widths_at_that_floor"] = {
+            str(int(r["dilate"])): round(float(r["dti"]), 6)
+            for t, d, r in sorted(swept, key=lambda x: x[1]) if t == cand_floor}
+        w_at = v["best_measured_candidate"]["widths_at_that_floor"]
+        v["best_measured_candidate"]["width_optimum_at_that_floor_px"] = (
+            int(max(w_at, key=lambda k: w_at[k])) if w_at else None)
+    # ---------------------------------------------------------------- reproduction (condition 3)
+    # The candidate this record proposes is a JOINT (floor, width) policy, so condition 3 asks about
+    # that policy - not about the width axis at a fixed floor.  Each sweep supplies its own reference
+    # policy, because absolute proxy DTI is not comparable across ensembles (different fold sets
+    # produce different fields); what must survive is the CONTRAST.
+    repros: list[dict] = []
+    for path_str in second_sweeps:
+        path = Path(path_str)
+        if not path.exists():
+            continue
+        rep = policy_reproduction(load(path), float(m_best.group(1)), int(m_best.group(2))) \
+            if m_best else None
+        if rep is not None:
+            rep["sweep_file"] = path_str
+            rep["reproduced"] = bool(rep["measured_dti"] > rep["reference_policy_dti"]
+                                     and rep["contrast_vs_reference"] > 0.01)
+            repros.append(rep)
+    if repros:
+        v["best_measured_candidate"]["reproduced_on_second_ensemble"] = repros[0]
+        v["best_measured_candidate"]["reproduction_across_ensembles"] = repros
+
+    # ---------------------------------------------------------------- cross-ensemble robustness
+    # The candidate was picked as the argmax of ONE field.  Before the verdict is stated, every
+    # candidate that exists in every supplied sweep is ranked by its worst contrast, and the record
+    # carries both the ranking and where the shipped candidate sits in it.  A policy that only wins
+    # on the first ensemble would be reported here, loudly, instead of shipping as a maximum of one
+    # field - which is exactly what a single-ensemble sweep cannot see.
+    all_sweeps = [("eval_sweep.json", sw)]
+    for path_str in second_sweeps:
+        if Path(path_str).exists():
+            all_sweeps.append((path_str, load(Path(path_str))))
+    if len(all_sweeps) > 1:
+        rank = cross_ensemble_ranking(all_sweeps)
+        cand_t0 = float(m_best.group(1)) if m_best else None
+        cand_w = int(m_best.group(2)) if m_best else None
+        cand_key = (round(cand_t0, 6), cand_w) if m_best else None
+        pos = next((i + 1 for i, r in enumerate(rank["ranked"])
+                    if (r["floor_t0"], r["width_px"]) == cand_key), None)
+        rank["shipped_candidate"] = (f"floor {cand_t0:g}, width {cand_w} px "
+                                     f"ranks {pos} of {rank['n_candidates']}"
+                                     if pos else "the shipped candidate is not in the ranking")
+        rank["shipped_candidate_rank"] = pos
+        if pos and pos > 1:
+            best_of = rank["ranked"][0]
+            rank["warning"] = (f"the shipped candidate is NOT the worst-case best: floor "
+                               f"{best_of['floor_t0']}g, width {best_of['width_px']} px has the "
+                               f"higher worst-case contrast ({best_of['worst_contrast']:+.4f} vs "
+                               f"{rank['ranked'][pos - 1]['worst_contrast']:+.4f})")
+        v["robustness_across_ensembles"] = rank
+
+    # ---------------------------------------------------------------- conditions, candidate-wise
+    gain = round(best_cand["measured_dti"] - shipped["measured_dti"], 6)
     v["conditions"].append({
-        "condition": "beats the shipped default on the new-fault-like population by > 0.01",
+        "condition": "the best measured candidate beats the shipped policy on the new-fault-like "
+                     "population by > 0.01",
         "required": "> 0.01 measured proxy DTI", "measured": gain, "passes": bool(gain > 0.01)})
-    cw = v["wide_vs_shipped"]["crossover_px"]
+    cw = crossover(shipped, best_cand)["crossover_px"]
+    anchor_rows = [(x["name"], project(shipped, x["truth_px"]), project(best_cand, x["truth_px"]))
+                   for x in plausible["anchors"]]
+    wins = sum(1 for _, s_, w in anchor_rows if w > s_)
+    v["anchor_projection"] = [
+        {"anchor": n, "truth_px": int(next(x["truth_px"] for x in plausible["anchors"]
+                                           if x["name"] == n)),
+         "shipped_dti": round(s_, 4), "candidate_dti": round(w, 4), "candidate_wins": bool(w > s_)}
+        for n, s_, w in anchor_rows]
     if cw is None or cw <= 0:
-        v["conditions"].append({"condition": "dominates the shipped default across plausible "
+        v["conditions"].append({"condition": "dominates the shipped policy across plausible "
                                              "scored-truth sizes", "required": True,
                                 "measured": "no crossing: it wins everywhere", "passes": True})
-        v["conclusion"] = ("no width change needed: the wider candidate is not worse anywhere, so "
-                           "the shipped skeleton can stay until something better is measured")
     else:
-        anchor_rows = [(x["name"], project(shipped, x["truth_px"]), project(wide, x["truth_px"]))
-                       for x in plausible["anchors"]]
-        wins = sum(1 for _, s_, w in anchor_rows if w > s_)
-        v["anchor_projection"] = [
-            {"anchor": n, "truth_px": int(next(x["truth_px"] for x in plausible["anchors"]
-                                               if x["name"] == n)),
-             "shipped_dti": round(s_, 4), "wide_dti": round(w, 4), "wide_wins": bool(w > s_)}
-            for n, s_, w in anchor_rows]
         v["conditions"].append({
             "condition": "wins at the plausible scored-truth sizes (not only in the large-|G| limit)",
-            "required": "every anchor favours the wider band",
+            "required": "every anchor favours the candidate",
             "measured": f"{wins}/{len(anchor_rows)} anchors favour it; crossover {cw:,.0f} px "
                         f"({cw * PX_KM:,.0f} km)",
             "passes": bool(wins == len(anchor_rows))})
-        first_gain = width_gain_table(sw)
-        second_gain = None
-        if a.second_sweep and Path(a.second_sweep).exists():
-            second_gain = width_gain_table(load(Path(a.second_sweep)))
-        reproduced = bool(second_gain and second_gain["n_floors"] and
-                          second_gain["all_floors_positive"] and
-                          (second_gain["mean_gain"] or 0.0) > 0.01)
-        v["conditions"].append({
-            "condition": "reproduced on a second, independently trained ensemble",
-            "required": "same sign and > 0.01 on the second ensemble",
-            "measured": (
-                f"second ensemble ({a.second_sweep}): widest {second_gain['widest_px']} px vs 0 px "
-                f"at {second_gain['n_floors']} common floors -> mean gain "
-                f"{second_gain['mean_gain']:+.4f}, min {second_gain['min_gain']:+.4f}, "
-                f"all floors {'positive' if second_gain['all_floors_positive'] else 'NOT all positive'}"
-                if second_gain and second_gain["n_floors"] else
-                "NOT MEASURED: needs a second, independently trained ensemble sweep "
-                "(see SUGGESTIONS.md 7.1)"),
-            "passes": reproduced})
-        v["width_gain_first_ensemble"] = first_gain
-        if second_gain is not None:
-            v["width_gain_second_ensemble"] = second_gain
-        if reproduced:
-            v["conclusion"] = (
-                f"WIDEN - all three pre-registered conditions are met. The {widest}-px band beats the "
-                f"shipped skeleton on the new-fault-like population by {gain:+.4f} (condition 1), at "
-                f"{wins}/{len(anchor_rows)} plausible scored-truth anchors (condition 2), and the "
-                f"floor-controlled gain reproduces on a second, independently trained ensemble "
-                f"({second_gain['mean_gain']:+.4f} mean over {second_gain['n_floors']} floors, "
-                f"condition 3). The shipped default is therefore changed to emit the measured band: "
-                f"see the workflow's --min-dilate option and SUGGESTIONS.md")
-        else:
-            v["conclusion"] = (
-                f"widen, but not yet: the {widest}-px band beats the shipped skeleton on the "
-                f"new-fault-like population by {gain:+.4f} (condition 1) and at "
-                f"{wins}/{len(anchor_rows)} plausible scored-truth anchors (condition 2), while a "
-                f"scored truth below {cw:,.0f} px ({cw * PX_KM:,.0f} km) would still favour the "
-                f"narrower skeleton. Condition 3 - reproduction on a second ensemble - is unmet and "
-                f"is the blocking item, so the shipped default is unchanged and this file is the "
-                f"record of why")
+    reproduced = bool(repros) and all(r["reproduced"] for r in repros)
+    v["conditions"].append({
+        "condition": "reproduced on a second (and every further) independently trained ensemble",
+        "required": "same sign and > 0.01 contrast against each sweep's own reference policy",
+        "measured": (
+            "; ".join(f"{r['sweep_file']}: DTI {r['measured_dti']:.4f} vs its own reference "
+                      f"{r['reference_policy_dti']:.4f} -> {r['contrast_vs_reference']:+.4f} "
+                      f"({'reproduced' if r['reproduced'] else 'NOT reproduced'})" for r in repros)
+            if repros else
+            "NOT MEASURED: needs a second, independently trained ensemble sweep "
+            "(see SUGGESTIONS.md)"),
+        "passes": reproduced})
+
+    # The width axis stays measured and recorded - it is how the record shows that "lower the floor"
+    # and "widen the band" are alternatives rather than two knobs of one policy.
+    v["width_axis"] = {"first_ensemble": width_gain_table(sw)}
+    for path_str in second_sweeps:
+        if Path(path_str).exists():
+            v["width_axis"].setdefault("by_ensemble", {})[path_str] = \
+                width_gain_table(load(Path(path_str)))
+    v["width_gain_first_ensemble"] = v["width_axis"]["first_ensemble"]
+    if "by_ensemble" in v["width_axis"]:
+        first_key = next(iter(v["width_axis"]["by_ensemble"]))
+        v["width_gain_second_ensemble"] = v["width_axis"]["by_ensemble"][first_key]
+
+    # ---------------------------------------------------------------- conclusion (derived, never typed)
+    cand_txt = (f"{best_cand['policy']} (floor {float(m_best.group(1)):g}, thin, "
+                f"width {int(m_best.group(2))} px)") if m_best else best_cand["policy"]
+    repro_txt = ", ".join(f"{r['sweep_file']}: {r['contrast_vs_reference']:+.4f}"
+                           for r in repros)
+    cond1 = bool(gain > 0.01)
+    cond2 = bool(wins == len(anchor_rows))
+    cond3 = reproduced
+    failed = [n for n, ok in (("1", cond1), ("2", cond2), ("3", cond3)) if not ok]
+    if not failed:
+        v["conclusion"] = (
+            f"SHIP the measured policy: {cand_txt} beats the shipped policy on the new-fault-like "
+            f"population by {gain:+.4f} (condition 1), at {wins}/{len(anchor_rows)} plausible "
+            f"scored-truth anchors with a crossover of {cw:,.0f} px ({cw * PX_KM:,.0f} km) "
+            f"(condition 2), and the contrast reproduces on {len(repros)} independent ensemble(s) "
+            f"({repro_txt}) (condition 3). Ship it through the re-blend workflow's "
+            f"SHAPING_T0/SHAPING_DILATE, which is the only path that writes an adopted policy.")
+    elif not repros:
+        v["conclusion"] = (
+            f"measured, not yet reproduced: {cand_txt} beats the shipped policy on the "
+            f"new-fault-like population by {gain:+.4f} (condition 1) and at {wins}/"
+            f"{len(anchor_rows)} plausible scored-truth anchors (condition 2), while a scored truth "
+            f"below {(cw or 0):,.0f} px ({(cw or 0) * PX_KM:,.0f} km) would still favour the shipped "
+            f"policy. Condition 3 - reproduction on a second, independently trained ensemble - is "
+            f"unmet, so the shipped default is unchanged and this file is the record of why")
+    else:
+        bad = [r for r in repros if not r["reproduced"]]
+        v["conclusion"] = (
+            f"measured, not shipped: {cand_txt} was ranked first on this population, but "
+            f"condition(s) {'/'.join(failed)} fail - "
+            + (f"contrast vs the shipped policy {gain:+.4f} (condition 1); " if not cond1 else "")
+            + (f"{wins}/{len(anchor_rows)} plausible scored-truth anchors favour it "
+               f"(condition 2); " if not cond2 else "")
+            + (f"{len(bad)} of {len(repros)} independent ensemble(s) do not reproduce the contrast "
+               f"({'; '.join(r['sweep_file'] for r in bad)}, condition 3). "
+               if not cond3 else "")
+            + "No policy change is shipped, and this file is the record of why")
 
     # ------------------------------------------------------------------ measured width curve
     # The sweep searches floor x width on the ensemble probability map; this is the independent,
@@ -416,13 +643,16 @@ def main() -> int:
         "purpose": ("reconcile the three disagreeing emission-width measurements and decide the "
                     "shipped shaping policy on the record, using the metric's own scaling in |G|"),
         "inputs": {"proxy_eval": a.proxy_eval, "reblend_eval": a.reblend_eval, "sweep": a.sweep,
-                   "second_sweep": a.second_sweep, "miss_distance": a.miss_distance,
+                   "second_sweep": ",".join(second_sweeps) or None,
+                   "second_sweeps": second_sweeps,
+                   "miss_distance": a.miss_distance,
                    "in_domain": a.in_domain,
                    "metric": {"alpha": ALPHA, "beta": BETA, "R_pixels": 3, "R_meters": 300}},
         "proxy_truth_px": gp,
         "policies": rows,
         "width_vs_scored_truth_size": md,
         "crossovers": {"wide_vs_shipped": v["wide_vs_shipped"],
+                       "candidate_vs_shipped": crossover(shipped, best_cand),
                        "widest_swept_px": widest,
                        "blanket_vs_shipped": v["blanket_vs_shipped"],
                        "blanket_vs_wide": v["blanket_vs_wide"]},
@@ -459,11 +689,30 @@ def main() -> int:
         # as a dict crashed this print AFTER the JSON was written (found 2026-09-17: the step
         # failed while its evidence landed, so a red step looked like a completed reconciliation).
         print("  %-22s %s" % (k, c["reason"] if isinstance(c, dict) else c))
-    print("\nprojected DTI at the plausible anchors:")
+    print("\nprojected DTI at the plausible anchors (best measured candidate vs the shipped policy):")
     for x in v.get("anchor_projection", []):
-        print("  %-40s shipped %.4f  wide-6px %.4f  %s"
-              % (x["anchor"], x["shipped_dti"], x["wide_dti"],
-                 "WIDE WINS" if x["wide_wins"] else "shipped wins"))
+        print("  %-40s shipped %.4f  candidate %.4f  %s"
+              % (x["anchor"], x["shipped_dti"], x["candidate_dti"],
+                 "CANDIDATE WINS" if x["candidate_wins"] else "shipped wins"))
+    bc = v["best_measured_candidate"]
+    print("\nbest measured candidate on this population: %s" % bc["policy"])
+    print("  DTI %.4f (%+.4f vs the shipped policy); %s"
+          % (bc["measured_dti"], bc["contrast_vs_shipped"], bc["note"]))
+    for r2 in bc.get("reproduction_across_ensembles", []):
+        print("  reproduction on %s: DTI %.4f vs its own reference %.4f -> %+.4f  %s"
+              % (r2["sweep_file"], r2["measured_dti"], r2["reference_policy_dti"],
+                 r2["contrast_vs_reference"], "REPRODUCED" if r2["reproduced"] else "NOT reproduced"))
+    rob = v.get("robustness_across_ensembles")
+    if rob and rob.get("ranked"):
+        print("\ncross-ensemble robustness (worst contrast against each sweep's own reference):")
+        for i, r in enumerate(rob["ranked"][:6], 1):
+            print("  %2d. floor %-8s width %2d px  worst %+.4f  mean %+.4f  per-ensemble %s"
+                  % (i, r["floor_t0"], r["width_px"], r["worst_contrast"], r["mean_contrast"],
+                     ", ".join(f"{k.split('/')[-1]}: {v2:+.4f}"
+                               for k, v2 in r["contrast_by_ensemble"].items())))
+        print("  %s" % rob.get("shipped_candidate"))
+        if rob.get("warning"):
+            print("  WARNING: %s" % rob["warning"])
     print("\nconclusion: %s" % v["conclusion"])
     print("top priority: %s" % v["top_priority"])
     print(f"\nwrote {op}")

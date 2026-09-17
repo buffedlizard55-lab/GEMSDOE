@@ -1,21 +1,25 @@
 # Proxy-eval sweep parameters (read by .github/workflows/proxy-eval.yml, job `params`).
 #
-# 2026-09-17 (session 11) - FIRST ENSEMBLE, EXTENDED INSTRUMENT.
+# 2026-09-17 (session 13) - THE FIELD THAT SHIPS.
 #
-# Why this run: the committed ensemble-1 sweep (data/evidence/proxy/eval_sweep.json,
-# 2026-09-16) stopped at 6 px of emission width, and the width curve measured since
-# (data/evidence/proxy/miss_distance-ensemble1.json) does not peak until 16 px - a grid that
-# stops at 6 cannot see the optimum it is supposed to be searching for.  The same run also
-# carries the two new axes added in session 11:
-#   * SHAPING_VALUES  - an EXPLICIT floor grid.  The log-spaced default jumped 4.3e-2 -> 0.9 on
-#                       this field, so four of its five rows were the same mask; the sweep now
-#                       also records field_mass_profile (pixels above each floor BEFORE thinning),
-#                       which says whether the floor axis can matter at all.
-#   * SOFT_BAND=1     - ramp emission candidates on the SAME support as the hard band, so the
-#                       value of the values written into a band is measured separately from its
-#                       geometry (src/submission_optim.soft_band).
-RUN_ID=35042805806
-SWEEP_LABEL=
+# Why this run: the emission decision now says SHIP the measured policy (floor 0.1, thin, width 0
+# px), from condition 3 being met on the ensemble-2 sweep.  But the submission is not any single
+# ensemble's field: it is the mean of the live fold sets, and the floor is a threshold on that
+# mean.  The two sweeps so far measured each ensemble SEPARATELY, so neither is the field the
+# policy will be applied to.  This run re-blends ensembles 1 and 2 into ONE mean (the multi-run
+# support added in 052f821: RUN_ID=a,b,c downloads folds/folds2/folds3 and blends all of them with
+# --save-ensemble) and sweeps that field with the identical grid.
+#
+# What it can change: if floor 0.1 stops beating the shipped policy by > 0.01 on this field, or the
+# per-floor optimum moves, the decision record will say so and the adoption is re-opened.  What it
+# cannot do is flatter the candidate: the sweep's acceptance control (a catalogue-copy submission
+# must score 0 on the proxy-only truth) is checked before any candidate is scored.
+#
+# Ensemble 3 (run 35263581931) is deliberately NOT in this list yet: its fold 0 is still training
+# and a fold set that changes under the measurement is not a measurement.  It can join a later
+# blend together with its own sweep.
+RUN_ID=35042805806,35249562910
+SWEEP_LABEL=mean12
 DILATE_GRID=0,1,2,3,4,6,8,10,12,16,20
 SHAPING_VALUES=0,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9
 SOFT_BAND=1

@@ -1,5 +1,60 @@
 # Suggestions and Improvements — Implemented for Top Leaderboard
 
+## Session 13 (2026-09-17) — the emission policy is measured, reproduced, and SHIPPED
+
+| Improvement | Why it matters | Status / evidence |
+|---|---|---|
+| Ship a policy that was MEASURED, not calibrated | The in-domain calibration maximises DTI against the faults the model trained on; the prize scores faults the labels lack, and the two populations disagree on sign (0.1903 → 0.0908 in-domain vs +0.11 on the new-fault-like population) | ✅ `blend_submission.py --shaping-t0/--shaping-dilate/--shaping-source` (joint policy or parse error), `reblend.yml` SHAPING_T0/DILATE/SOURCE, `tests/test_adopted_policy.py` verifies the written pixels are the adopted policy applied to the saved ensemble mean |
+| Measure on the field that ships | A floor is a threshold on the MEAN field, not on any single ensemble's field; both sweeps so far measured one ensemble each | ✅ `proxy-eval.yml` takes `RUN_ID=a,b,c` and blends every downloaded fold into ONE mean before sweeping; 5 tests pin the quiet failures (delimiter-free `cut -f2`, an empty second download passing as a successful sweep) |
+| Candidate-wise decision rule | The record asserted a verdict about the widest band while its own best measured candidate was a floor change | ✅ conditions 1–3 are evaluated against the best measured candidate; condition 3 takes a LIST of independently trained sweeps and compares each contrast against that sweep's own reference policy |
+| Cross-ensemble robustness ranking | The candidate is the argmax of one field until proven otherwise — and two of the three fields do have a different argmax (floor 0.05, rejected by ensemble 1 at −0.0266) | ✅ every hard candidate present in every sweep is ranked by its WORST contrast; across the three committed sweeps the shipped candidate ranks 1 of 132 (worst +0.0456 on ensemble 2, runner-up +0.0414), and a `warning` is recorded if it ever is not first |
+| Condition 3 MEASURED and passing | The pre-registered gate between a measurement and a shipped change | ✅ three fields: ensemble 1 +0.0954, ensemble 2 (run 35249562910, seed 43) **+0.0456**, and the SHIPPING field (mean of 1+2, run 35275312337) **+0.0695** (0.0999 vs 0.0304); `data/evidence/emission_decision.json` conclusion = **SHIP**, all three conditions recorded as passing |
+| The shipped policy | floor 0.1, thin, width 0 px — a floor change, not a wider band; widening HURTS at that floor on both fields | ✅ `SHAPING_T0=0.1` / `SHAPING_DILATE=0` in `.github/triggers/reblend-params`, blended over ensembles 1+2 (11 live folds, `MIN_FOLDS=11`) → `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`, sha256 `a3dcd6d5…`, written support **172,974 px** = the mean12 sweep's measured emission for that exact policy, TIFF tags `shaping_t0=0.1 / shaping_thin=True / shaping_dilate=0 / shaping_source=adopted_measured_policy`, format validation passed |
+
+### Session 13 queue, in order
+
+1. ~~Confirm the policy on the shipping field~~ **DONE** (run 35275312337, `SWEEP_LABEL=mean12`): on
+   the exact mean field the adopted policy is applied to, floor 0.1 beats the reference policy by
+   **+0.0695** (0.0999 vs 0.0304) and the record now carries all three sweeps in condition 3, with the
+   shipped candidate still rank 1 of 132 by worst-case contrast (`eval_sweep-mean12.json`, committed
+   by the same run at `8713331`). The next field-level confirmation is the 3-ensemble mean once
+   ensemble 3 has landed.
+2. **Ensemble 3** (run 35263581931, folds 12–17, seed 44): fold 4 failed in training and fold 0 is
+   still running (started 19:13Z, >3 h at the last check). Fire recipe when it lands — never ship an
+   unmeasured field: (a) `RUN_ID=35042805806,35249562910,35263581931` + `SWEEP_LABEL=ens123` in
+   `.github/triggers/proxy-eval-params`, then touch `.github/triggers/proxy-eval`; the run blends
+   every fold into ONE mean and sweeps that exact field, and its decide step hands every committed
+   sweep to condition 3, so the record gains a THIRD independent field. (b) only if that record still
+   says SHIP, set the same `RUN_ID` list in `.github/triggers/reblend-params` (plus
+   `SHAPING_T0=0.1`/`SHAPING_DILATE=0`/`SHAPING_SOURCE=data/evidence/emission_decision.json` and
+   `MIN_FOLDS` pinned to the fold count) and touch `.github/triggers/reblend`. A 17-fold mean over
+   three seeds is the improvement; the policy is applied after the blend either way.
+3. **Two paths can still ship the OLD policy.** `.github/workflows/reblend.yml` is the only path that
+   applies the adopted policy; `configs/config.yaml` (`submission_shaping.t0: null`) and a plain
+   `src/inference.py` run fall back to the IN-DOMAIN calibrated floor (0.469674), which the proxy
+   population measures at 0.0247 against the adopted policy's 0.1365. Either make every submission
+   path read `data/evidence/emission_decision.json` or make a non-adopted shaping abort loudly; today
+   it is silent, and the difference is larger than every other knob in this file.
+4. **Detection is the binding constraint, now quantified.** 74 % of the new-fault-like truth lies
+   more than 12 px from any emitted pixel (`miss_distance-ensemble1.json`); the oracle ceiling is
+   1.0000 at width 0 and 0.1618 at 16 px, and the leaderboard's top score (0.1972) is 7.9× the
+   constant-ones baseline measured here. The two experiments below are the remaining upside.
+5. **Cross-catalogue transfer measurement.** Emitting an external fault catalogue (allowed by the
+   rules) would raise recall on unmapped faults directly, but the proxy population CANNOT measure it:
+   the proxy *is* the catalogue (a catalogue copy scores 0.0 there by the acceptance test). The
+   honest design is to emit catalogue A and score against an independent catalogue B (e.g. the USGS
+   Quaternary fault and fold database), reporting the transfer as a prior on what A captures of the
+   hidden expert set. Nothing in the repository measures that yet; it is the highest-upside
+   unmeasured idea left.
+6. **Spatial block-holdout** — resolves the in-domain/proxy sign conflict by construction instead of
+   choosing between populations.
+7. **Training selection still maximises in-domain DTI** (early stopping, fold weights). The emission
+   policy no longer does; the model still does. A selection signal on a new-fault-like population is
+   the structural fix.
+8. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
+   check (§1.3), Pages source setting, generative-AI + code assets at the deadline.
+
+
 **Review update 2026-09-17:** official competition pages were fetched again; see
 [`REVIEW_2026-09-17.md`](REVIEW_2026-09-17.md) for the line-by-line source table and limitations.
 
@@ -15,8 +70,13 @@
 ### Session 12 queue, in order
 
 1. **Condition 3** of the pre-registered decision: sweep ensemble 2 (run 35249562910) and ensemble 3
-   (35263581931) on the proxy population; ship widening only if the floor-controlled contrast
-   reproduces above +0.01. The path is `reblend.yml` (`RUN_ID=a,b[,c]`) → `MIN_DILATE` at blend time.
+   (35263581931) on the proxy population. The extended ensemble-1 sweep (152 candidates) puts the
+   best hard candidate at **floor 0.1, width 0 px (proxy DTI 0.1365 vs the shipped policy's 0.0410
+   on the same field)**, with widening *hurting* at that floor — so the candidate to reproduce is a
+   floor change, not a band, and the decision record now ranks the best candidate of every swept
+   floor and applies the same second-ensemble reproduction rule to it. Ship through `reblend.yml`
+   (`RUN_ID=a,b[,c]`) with the calibrated floor/width only after the reproduction passes; until then
+   the shipped default is unchanged.
 2. **Detection is the thing to fix, and it is now quantified.** The oracle table says a perfect
    localizer that emits the truth scores 1.0 while every band is capped below it, and the model
    captures 44 % of the 16 px cap. More independent folds, then the two experiments below.
@@ -391,6 +451,6 @@ five forward in its own queue above.
 6. **Merge coordination:** after the sibling branch merges (verify/links/site pipeline + Tests
    workflow), re-run verify-sources once on main so every page renders from one evidence set; then
    confirm the Tests workflow passes on main with this session's 8 new tests.
-7. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
+8. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
    check (§1.3), Pages source setting (legacy-vs-Actions race still open), generative-AI + code
    assets at the deadline.
