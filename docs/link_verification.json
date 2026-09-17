@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-16T23:21:26+00:00",
+  "generated_utc": "2026-09-17T00:44:08+00:00",
   "generated_by": "scripts/verify_links.py on a GitHub-hosted runner (live HTTP)",
   "catalog": "docs/data_catalog.csv",
   "n_rows": 89,
@@ -442,11 +442,11 @@
     {
       "url": "https://link.springer.com/article/10.1007/s12145-026-02224-5",
       "status": 200,
-      "final_url": "https://link.springer.com/article/10.1007/s12145-026-02224-5",
+      "final_url": "https://link.springer.com/article/10.1007/s12145-026-02224-5?error=cookies_not_supported&code=4ca97636-df1f-46ce-bb3a-a6e5f9614b9c",
       "content_type": "text/html",
-      "content_length": 3038,
-      "title": "Client Challenge",
-      "redirected": false,
+      "content_length": null,
+      "title": "A U-Net-based human-in-the-loop semi-supervised iterative approach to vectorizing linear features on archived geological maps | Earth Science Informatics | Springer Nature Link",
+      "redirected": true,
       "redirected_offsite": false,
       "result": "OK_200"
     },
@@ -769,7 +769,7 @@
       "status": 200,
       "final_url": "https://www.herox.com/GEMSPrize/resource/2274",
       "content_type": "text/html",
-      "content_length": 93302,
+      "content_length": 93313,
       "title": "GEMS Prize Official Rules",
       "redirected": false,
       "redirected_offsite": false,
@@ -784,11 +784,11 @@
     {
       "url": "https://www.nature.com/articles/s41598-025-90823-5",
       "status": 200,
-      "final_url": "https://www.nature.com/articles/s41598-025-90823-5",
+      "final_url": "https://www.nature.com/articles/s41598-025-90823-5?error=cookies_not_supported&code=c821aae4-a4bf-41f0-b7f9-bac023504094",
       "content_type": "text/html",
-      "content_length": 3038,
-      "title": "Client Challenge",
-      "redirected": false,
+      "content_length": null,
+      "title": "The intelligent fault identification method based on multi-source information fusion and deep learning | Scientific Reports",
+      "redirected": true,
       "redirected_offsite": false,
       "result": "OK_200"
     },
