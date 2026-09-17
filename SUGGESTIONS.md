@@ -3,6 +3,38 @@
 **Review update 2026-09-17:** official competition pages were fetched again; see
 [`REVIEW_2026-09-17.md`](REVIEW_2026-09-17.md) for the line-by-line source table and limitations.
 
+## Session 10 (2026-09-17) — implemented + measured
+
+| Improvement | Why it matters | Status / evidence |
+|---|---|---|
+| Localization-vs-detection decomposition | The width sweeps said *that* widening helps; they could not say whether the remaining error is reachable by width at all | ✅ `scripts/measure_miss_distance.py`, `data/evidence/proxy/miss_distance-ensemble1.json`, `tests/test_miss_distance.py` |
+| Exact metric vs band width, same emitted set | Isolates the marginal value of width from any re-ranking of the probability field | ✅ width 0 → 16 px: 0.0247 → **0.0713** (+0.0466); 74.0 % of the truth is unreachable by width |
+| Width projected onto the unknown scored-truth size | The decision stops resting on which anchor population one prefers | ✅ `width_vs_scored_truth_size` in `emission_decision.json`; crossover \|G\| = 20,000 px (2,000 km) |
+| `--min-dilate` on the blend | Ship a measured band without overruling the in-domain calibration | ✅ `scripts/blend_submission.py`, `tests/test_ensemble.py` |
+| Dilate grid reaches the measured optimum | The first sweep stopped at 12 px; the measured optimum is 16 | ✅ `.github/workflows/proxy-eval.yml` default `0,1,2,3,4,6,8,10,12,16,20` |
+| One failed fold must not discard five | Run 35249562910 lost fold 4 in training; the binary rule discarded ~15 CPU-hours of successful folds | ✅ `MIN_FOLDS` gate + `foldlogs-<fold>` diagnostics artifact + `reblend.yml` parameterised recovery; 4 workflow tests execute the gate's real shell |
+
+### Session 10 queue, in order
+
+1. **Detection is now the binding constraint — sweep the threshold, not just the width.** 74.0 % of
+   the new-fault-like truth lies more than 12 px (1.2 km) from any emitted pixel, so the next
+   experiment is a joint (probability threshold × band width) sweep on the ensemble probability
+   field: a lower threshold buys recall far more cheaply than a wider band, and the metric's β = 0.8
+   already prices false positives. *Acceptance:* proxy DTI at the joint optimum > 0.0713 without
+   the held-out-crop DTI falling below the same-policy baseline (re-measure both under one shaping
+   grid; the current local_score 0.13871 is a different policy).
+2. **Condition 3 of the pre-registered emission decision** — read
+   `data/evidence/proxy/eval_sweep-ensemble2.json` when run 35249562910 lands (`.github/triggers/proxy-eval-params`,
+   `RUN_ID=35249562910`, `SWEEP_LABEL=ensemble2`); switch the shipped band to 16 px only if the
+   floor-controlled contrast beats +0.01 at every common floor.
+3. **Pseudo-labels from the proxy trace (self-training)** — the SGMC trace is external data that may
+   legally inform the model, but only the *emission* may consume it, never the width, and the score
+   must be re-measured on a held-out part of the trace so the gain cannot be the label leaking.
+4. **Spatial block-holdout** — resolves the in-domain/proxy sign conflict by construction instead of
+   choosing between the two populations.
+5. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
+   check (§1.3), Pages source setting, generative-AI + code assets at the deadline.
+
 ## Session 8 implementation queue closed
 
 | Improvement | Why it matters | Status / evidence |
