@@ -1,13 +1,14 @@
 {
- "generated_utc": "2026-09-17T21:10:09+00:00",
+ "generated_utc": "2026-09-17T21:42:42+00:00",
  "generated_by": "scripts/decide_emission_width.py",
  "purpose": "reconcile the three disagreeing emission-width measurements and decide the shipped shaping policy on the record, using the metric's own scaling in |G|",
  "inputs": {
   "proxy_eval": "data/evidence/proxy/eval_submission.json",
   "reblend_eval": "data/evidence/proxy/eval_reblend_submission.json",
   "sweep": "data/evidence/proxy/eval_sweep.json",
-  "second_sweep": "data/evidence/proxy/eval_sweep-ensemble2.json",
+  "second_sweep": "data/evidence/proxy/eval_sweep-mean12.json,data/evidence/proxy/eval_sweep-ensemble2.json",
   "second_sweeps": [
+   "data/evidence/proxy/eval_sweep-mean12.json",
    "data/evidence/proxy/eval_sweep-ensemble2.json"
   ],
   "miss_distance": "data/evidence/proxy/miss_distance-ensemble1.json",
@@ -1193,11 +1194,11 @@
    {
     "condition": "reproduced on a second (and every further) independently trained ensemble",
     "required": "same sign and > 0.01 contrast against each sweep's own reference policy",
-    "measured": "data/evidence/proxy/eval_sweep-ensemble2.json: DTI 0.0777 vs its own reference 0.0320 -> +0.0456 (reproduced)",
+    "measured": "data/evidence/proxy/eval_sweep-mean12.json: DTI 0.0999 vs its own reference 0.0304 -> +0.0695 (reproduced); data/evidence/proxy/eval_sweep-ensemble2.json: DTI 0.0777 vs its own reference 0.0320 -> +0.0456 (reproduced)",
     "passes": true
    }
   ],
-  "conclusion": "SHIP the measured policy: sweep_best_t0_0.1_width0px (floor 0.1, thin, width 0 px) beats the shipped policy on the new-fault-like population by +0.1118 (condition 1), at 3/3 plausible scored-truth anchors with a crossover of 2,718 px (272 km) (condition 2), and the contrast reproduces on 1 independent ensemble(s) (data/evidence/proxy/eval_sweep-ensemble2.json: +0.0456) (condition 3). Ship it through the re-blend workflow's SHAPING_T0/SHAPING_DILATE, which is the only path that writes an adopted policy",
+  "conclusion": "SHIP the measured policy: sweep_best_t0_0.1_width0px (floor 0.1, thin, width 0 px) beats the shipped policy on the new-fault-like population by +0.1118 (condition 1), at 3/3 plausible scored-truth anchors with a crossover of 2,718 px (272 km) (condition 2), and the contrast reproduces on 2 independent ensemble(s) (data/evidence/proxy/eval_sweep-mean12.json: +0.0695, data/evidence/proxy/eval_sweep-ensemble2.json: +0.0456) (condition 3). Ship it through the re-blend workflow's SHAPING_T0/SHAPING_DILATE, which is the only path that writes an adopted policy",
   "top_priority": "beating the constant-ones baseline on the new-fault-like population is worth more than the width choice: the shipped skeleton (0.0247) sits below the blanket baseline (0.0249) measured in this same record, and the leaderboard's top score (0.1972) is 7.9x it",
   "best_measured_candidate": {
    "policy": "sweep_best_t0_0.1_width0px",
@@ -1215,11 +1216,11 @@
    "reproduced_on_second_ensemble": {
     "t0": 0.1,
     "width_px": 0,
-    "measured_dti": 0.077671,
-    "reference_policy_dti": 0.032022,
-    "contrast_vs_reference": 0.045649,
+    "measured_dti": 0.099859,
+    "reference_policy_dti": 0.03038,
+    "contrast_vs_reference": 0.069479,
     "reference_is": "sweep_verdict.current_policy_dti of that same sweep",
-    "sweep_file": "data/evidence/proxy/eval_sweep-ensemble2.json",
+    "sweep_file": "data/evidence/proxy/eval_sweep-mean12.json",
     "reproduced": true
    },
    "why_this_is_recorded": "the pre-registered rule's candidate set has to be stated, not assumed: the best measured candidate on this population is ranked here, so a verdict cannot be reached with it excluded",
@@ -1241,6 +1242,16 @@
     {
      "t0": 0.1,
      "width_px": 0,
+     "measured_dti": 0.099859,
+     "reference_policy_dti": 0.03038,
+     "contrast_vs_reference": 0.069479,
+     "reference_is": "sweep_verdict.current_policy_dti of that same sweep",
+     "sweep_file": "data/evidence/proxy/eval_sweep-mean12.json",
+     "reproduced": true
+    },
+    {
+     "t0": 0.1,
+     "width_px": 0,
      "measured_dti": 0.077671,
      "reference_policy_dti": 0.032022,
      "contrast_vs_reference": 0.045649,
@@ -1251,7 +1262,7 @@
    ]
   },
   "robustness_across_ensembles": {
-   "n_ensembles": 2,
+   "n_ensembles": 3,
    "n_candidates": 132,
    "ranked": [
     {
@@ -1259,10 +1270,11 @@
      "width_px": 0,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.095411,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.069479,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.045649
      },
      "worst_contrast": 0.045649,
-     "mean_contrast": 0.07053,
+     "mean_contrast": 0.07018,
      "dti_first_ensemble": 0.136452,
      "emission_px_first_ensemble": 464736
     },
@@ -1271,10 +1283,11 @@
      "width_px": 1,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.050781,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.057411,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.0414
      },
      "worst_contrast": 0.0414,
-     "mean_contrast": 0.04609,
+     "mean_contrast": 0.049864,
      "dti_first_ensemble": 0.091822,
      "emission_px_first_ensemble": 1352231
     },
@@ -1283,10 +1296,11 @@
      "width_px": 2,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.037147,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.051967,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.038362
      },
      "worst_contrast": 0.037147,
-     "mean_contrast": 0.037754,
+     "mean_contrast": 0.042492,
      "dti_first_ensemble": 0.078188,
      "emission_px_first_ensemble": 2116216
     },
@@ -1295,10 +1309,11 @@
      "width_px": 20,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.033029,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.044101,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.038882
      },
      "worst_contrast": 0.033029,
-     "mean_contrast": 0.035955,
+     "mean_contrast": 0.038671,
      "dti_first_ensemble": 0.07407,
      "emission_px_first_ensemble": 949174
     },
@@ -1307,10 +1322,11 @@
      "width_px": 12,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.034426,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.037486,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.032505
      },
      "worst_contrast": 0.032505,
-     "mean_contrast": 0.033466,
+     "mean_contrast": 0.034806,
      "dti_first_ensemble": 0.075467,
      "emission_px_first_ensemble": 2934343
     },
@@ -1319,10 +1335,11 @@
      "width_px": 3,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.045997,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.040436,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.032409
      },
      "worst_contrast": 0.032409,
-     "mean_contrast": 0.039203,
+     "mean_contrast": 0.039614,
      "dti_first_ensemble": 0.087038,
      "emission_px_first_ensemble": 831109
     },
@@ -1331,10 +1348,11 @@
      "width_px": 4,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.044278,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.040226,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.032213
      },
      "worst_contrast": 0.032213,
-     "mean_contrast": 0.038246,
+     "mean_contrast": 0.038906,
      "dti_first_ensemble": 0.085319,
      "emission_px_first_ensemble": 1098530
     },
@@ -1343,10 +1361,11 @@
      "width_px": 10,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.035704,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.03768,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.032159
      },
      "worst_contrast": 0.032159,
-     "mean_contrast": 0.033931,
+     "mean_contrast": 0.035181,
      "dti_first_ensemble": 0.076745,
      "emission_px_first_ensemble": 2642169
     },
@@ -1355,10 +1374,11 @@
      "width_px": 16,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.032009,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.037238,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.032806
      },
      "worst_contrast": 0.032009,
-     "mean_contrast": 0.032407,
+     "mean_contrast": 0.034018,
      "dti_first_ensemble": 0.07305,
      "emission_px_first_ensemble": 3451455
     },
@@ -1367,10 +1387,11 @@
      "width_px": 6,
      "contrast_by_ensemble": {
       "eval_sweep.json": 0.032402,
+      "data/evidence/proxy/eval_sweep-mean12.json": 0.036911,
       "data/evidence/proxy/eval_sweep-ensemble2.json": 0.031576
      },
      "worst_contrast": 0.031576,
-     "mean_contrast": 0.031989,
+     "mean_contrast": 0.03363,
      "dti_first_ensemble": 0.073443,
      "emission_px_first_ensemble": 1062115
     }
@@ -1486,6 +1507,88 @@
     "all_floors_positive": false
    },
    "by_ensemble": {
+    "data/evidence/proxy/eval_sweep-mean12.json": {
+     "widest_px": 20,
+     "per_floor": [
+      {
+       "t0": 0.0,
+       "dti_width0": 0.014236,
+       "dti_widest": 0.053946,
+       "gain": 0.03971
+      },
+      {
+       "t0": 0.05,
+       "dti_width0": 0.126017,
+       "dti_widest": 0.059305,
+       "gain": -0.066712
+      },
+      {
+       "t0": 0.1,
+       "dti_width0": 0.099859,
+       "dti_widest": 0.06703,
+       "gain": -0.032829
+      },
+      {
+       "t0": 0.2,
+       "dti_width0": 0.059416,
+       "dti_widest": 0.06703,
+       "gain": 0.007614
+      },
+      {
+       "t0": 0.3,
+       "dti_width0": 0.040004,
+       "dti_widest": 0.06725,
+       "gain": 0.027246
+      },
+      {
+       "t0": 0.362091,
+       "dti_width0": 0.03038,
+       "dti_widest": 0.069224,
+       "gain": 0.038844
+      },
+      {
+       "t0": 0.4,
+       "dti_width0": 0.02603,
+       "dti_widest": 0.070509,
+       "gain": 0.044479
+      },
+      {
+       "t0": 0.5,
+       "dti_width0": 0.017986,
+       "dti_widest": 0.073151,
+       "gain": 0.055165
+      },
+      {
+       "t0": 0.6,
+       "dti_width0": 0.012712,
+       "dti_widest": 0.074481,
+       "gain": 0.061769
+      },
+      {
+       "t0": 0.7,
+       "dti_width0": 0.007573,
+       "dti_widest": 0.071316,
+       "gain": 0.063743
+      },
+      {
+       "t0": 0.8,
+       "dti_width0": 0.004519,
+       "dti_widest": 0.062328,
+       "gain": 0.057809
+      },
+      {
+       "t0": 0.9,
+       "dti_width0": 0.000825,
+       "dti_widest": 0.027808,
+       "gain": 0.026983
+      }
+     ],
+     "n_floors": 12,
+     "mean_gain": 0.026985,
+     "min_gain": -0.066712,
+     "max_gain": 0.063743,
+     "all_floors_positive": false
+    },
     "data/evidence/proxy/eval_sweep-ensemble2.json": {
      "widest_px": 20,
      "per_floor": [
@@ -1657,81 +1760,81 @@
    "per_floor": [
     {
      "t0": 0.0,
-     "dti_width0": 0.014184,
-     "dti_widest": 0.05389,
-     "gain": 0.039706
+     "dti_width0": 0.014236,
+     "dti_widest": 0.053946,
+     "gain": 0.03971
     },
     {
      "t0": 0.05,
-     "dti_width0": 0.095341,
-     "dti_widest": 0.061248,
-     "gain": -0.034093
+     "dti_width0": 0.126017,
+     "dti_widest": 0.059305,
+     "gain": -0.066712
     },
     {
      "t0": 0.1,
-     "dti_width0": 0.077671,
-     "dti_widest": 0.06335,
-     "gain": -0.014321
+     "dti_width0": 0.099859,
+     "dti_widest": 0.06703,
+     "gain": -0.032829
     },
     {
      "t0": 0.2,
-     "dti_width0": 0.054959,
-     "dti_widest": 0.064533,
-     "gain": 0.009574
+     "dti_width0": 0.059416,
+     "dti_widest": 0.06703,
+     "gain": 0.007614
     },
     {
      "t0": 0.3,
-     "dti_width0": 0.039592,
-     "dti_widest": 0.065193,
-     "gain": 0.025601
+     "dti_width0": 0.040004,
+     "dti_widest": 0.06725,
+     "gain": 0.027246
     },
     {
      "t0": 0.362091,
-     "dti_width0": 0.032022,
-     "dti_widest": 0.066729,
-     "gain": 0.034707
+     "dti_width0": 0.03038,
+     "dti_widest": 0.069224,
+     "gain": 0.038844
     },
     {
      "t0": 0.4,
-     "dti_width0": 0.028889,
-     "dti_widest": 0.06772,
-     "gain": 0.038831
+     "dti_width0": 0.02603,
+     "dti_widest": 0.070509,
+     "gain": 0.044479
     },
     {
      "t0": 0.5,
-     "dti_width0": 0.021122,
-     "dti_widest": 0.069975,
-     "gain": 0.048853
+     "dti_width0": 0.017986,
+     "dti_widest": 0.073151,
+     "gain": 0.055165
     },
     {
      "t0": 0.6,
-     "dti_width0": 0.015702,
-     "dti_widest": 0.070904,
-     "gain": 0.055202
+     "dti_width0": 0.012712,
+     "dti_widest": 0.074481,
+     "gain": 0.061769
     },
     {
      "t0": 0.7,
-     "dti_width0": 0.010457,
-     "dti_widest": 0.07178,
-     "gain": 0.061323
+     "dti_width0": 0.007573,
+     "dti_widest": 0.071316,
+     "gain": 0.063743
     },
     {
      "t0": 0.8,
-     "dti_width0": 0.006444,
-     "dti_widest": 0.070671,
-     "gain": 0.064227
+     "dti_width0": 0.004519,
+     "dti_widest": 0.062328,
+     "gain": 0.057809
     },
     {
      "t0": 0.9,
-     "dti_width0": 0.00273,
-     "dti_widest": 0.054123,
-     "gain": 0.051393
+     "dti_width0": 0.000825,
+     "dti_widest": 0.027808,
+     "gain": 0.026983
     }
    ],
    "n_floors": 12,
-   "mean_gain": 0.03175,
-   "min_gain": -0.034093,
-   "max_gain": 0.064227,
+   "mean_gain": 0.026985,
+   "min_gain": -0.066712,
+   "max_gain": 0.063743,
    "all_floors_positive": false
   }
  },
