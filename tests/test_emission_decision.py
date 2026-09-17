@@ -204,3 +204,51 @@ def test_width_gain_table_ignores_ramp_rows_entirely():
                                                dti=0.5, TP_w=1.0, FP_w=1.0, FN_w=1.0,
                                                mass=1.0, emission_px=1))
     assert width_gain_table(sw) == clean
+
+
+def test_the_best_hard_candidate_of_every_floor_is_in_the_ranking(tmp_path):
+    """The candidate set must not decide the verdict.
+
+    The policy ranking used to admit sweep rows only at floors {0, 0.043} and widths {0, 3, 6}
+    (plus the widest band).  The session-12 extended grid then found its best HARD candidate at
+    floor 0.1 with width 0 - a floor change - which that subset silently excluded.  The first
+    ensemble's own sweep is the regression case: its `best_dti` (0.136452) must appear in the
+    ranking, and the winner's whole width curve must be recorded with it.
+    """
+    r = subprocess.run([sys.executable, str(SCRIPT), "--out", str(tmp_path / "real.json")],
+                       cwd=ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    out = json.loads((tmp_path / "real.json").read_text())
+    sweep = json.loads((ROOT / "data/evidence/proxy/eval_sweep.json").read_text())
+    sweep_best = sweep["results"]["sweep_verdict"]["best_dti"]
+    ranked = {p["policy"]: p["measured_dti"] for p in out["policies"]}
+    assert max(ranked.values()) == pytest.approx(sweep_best, abs=1e-6), ranked
+    bc = out["verdict"]["best_measured_candidate"]
+    assert ranked[bc["policy"]] == pytest.approx(bc["measured_dti"])
+    assert bc["contrast_vs_shipped"] > 0.01
+    # the winning floor's whole width curve, so "lower the floor" and "widen the band" cannot be
+    # mistaken for additive knobs when the best width at that floor is 0 px
+    if bc.get("widths_at_that_floor"):
+        w = {int(k): v for k, v in bc["widths_at_that_floor"].items()}
+        assert bc["width_optimum_at_that_floor_px"] == max(w, key=lambda k: w[k])
+
+
+def test_best_candidate_reproduction_is_measured_on_the_second_ensemble(tmp_path):
+    """A floor candidate is reproduced the same way a width is: same policy, second sweep, and the
+    contrast taken against THAT sweep's own reference policy (absolute DTI is not comparable)."""
+    paths = _evidence(tmp_path)
+    sw = json.loads(paths["--sweep"].read_text())
+    sw["results"]["sweep_verdict"]["current_policy_dti"] = 0.02
+    paths["--sweep"].write_text(json.dumps(sw))
+    second = _sweep([0.0, 0.0, 0.0])
+    second["results"]["sweep_verdict"]["current_policy_dti"] = 0.01
+    second_path = tmp_path / "second_sweep.json"
+    second_path.write_text(json.dumps(second))
+    paths["--second-sweep"] = second_path
+
+    r, out = _run(tmp_path, paths)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    rep = out["verdict"]["best_measured_candidate"]["reproduced_on_second_ensemble"]
+    assert rep is not None, out["verdict"]["best_measured_candidate"]
+    assert rep["reference_is"] == "sweep_verdict.current_policy_dti of that same sweep"
+    assert rep["contrast_vs_reference"] == pytest.approx(rep["measured_dti"] - 0.01, abs=1e-9)

@@ -15,8 +15,13 @@
 ### Session 12 queue, in order
 
 1. **Condition 3** of the pre-registered decision: sweep ensemble 2 (run 35249562910) and ensemble 3
-   (35263581931) on the proxy population; ship widening only if the floor-controlled contrast
-   reproduces above +0.01. The path is `reblend.yml` (`RUN_ID=a,b[,c]`) → `MIN_DILATE` at blend time.
+   (35263581931) on the proxy population. The extended ensemble-1 sweep (152 candidates) puts the
+   best hard candidate at **floor 0.1, width 0 px (proxy DTI 0.1365 vs the shipped policy's 0.0410
+   on the same field)**, with widening *hurting* at that floor — so the candidate to reproduce is a
+   floor change, not a band, and the decision record now ranks the best candidate of every swept
+   floor and applies the same second-ensemble reproduction rule to it. Ship through `reblend.yml`
+   (`RUN_ID=a,b[,c]`) with the calibrated floor/width only after the reproduction passes; until then
+   the shipped default is unchanged.
 2. **Detection is the thing to fix, and it is now quantified.** The oracle table says a perfect
    localizer that emits the truth scores 1.0 while every band is capped below it, and the model
    captures 44 % of the 16 px cap. More independent folds, then the two experiments below.

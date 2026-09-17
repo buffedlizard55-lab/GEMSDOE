@@ -76,7 +76,37 @@ is detection improvement, not band tuning.
 | 35249562910 | ensemble 2 (folds 6–11, seed 43) — the pre-registered third condition of the emission decision | 5 folds trained, fold 4 lost in training; blend pending |
 | 35263581931 | ensemble 3 (folds 12–17, seed 44) — variance reduction for the final blend | just fired |
 
-### 6. What is left
+### 6. The extended grid landed (run 35262778745): the winning axis is the FLOOR, not the width
+
+The re-run swept 152 thinned candidates on the pre-shaping ensemble-1 field — floors
+{0, 0.05, 0.1, 0.2, 0.3, 0.362, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9} × widths {0, 1, 2, 3, 4, 6, 8, 10, 12,
+16, 20} px, plus ramp candidates on the same supports (`data/evidence/proxy/eval_sweep.json`,
+`eval_sweep.log`). Three things changed the picture:
+
+| measurement | value |
+|---|---|
+| `field_mass_profile.distinct_supports` | **11** — on the raw field the floor axis is *not* binary (the earlier "binary" reading was a property of the already-hardened submission, where any floor inside the same mask gives the same pixels) |
+| best hard candidate | **floor 0.1, thin, width 0 px → proxy DTI 0.136452** (464,736 px emitted) |
+| the shipped policy, same field and population | 0.041041 (`sweep_verdict.current_policy_dti`) → the best candidate is **+0.1118** |
+| widths at that floor | 0 px 0.1365 → 1 px 0.0918 → 2 px 0.0782 → 6 px 0.0677 → 20 px 0.0610: widening **hurts** once the floor is right |
+| best ramp candidate | 0.0634, still below every matched hard band |
+| widths at the *shipped* floor | 0 px 0.0410 → 20 px 0.0706: widening helps **only** on the narrow, in-domain-optimal support |
+
+So the two candidate changes are alternatives, not additive knobs: the 16–20 px band is the best
+available move *given* the shipped floor, while lowering the floor is worth far more and prefers
+width 0. `scripts/decide_emission_width.py` now ranks the best hard candidate of **every** swept
+floor (it previously admitted floors {0, 0.043} × widths {0, 3, 6} plus the widest band, which
+silently excluded exactly this candidate), records the winning floor's whole width curve, and —
+when a second sweep is supplied — looks the same policy up in it and contrasts it with *that*
+sweep's own reference policy, so a floor candidate is gated by the same reproduction rule as a
+width candidate. Two tests pin both behaviours.
+
+**Caveat, stated where the number lives:** the floor was selected and scored on the same 61,664 px
+of proxy truth, so 0.1365 is selection-optimistic. The pre-registered rule — beat the shipped
+policy by > 0.01 **and** reproduce on a second, independently trained ensemble — is therefore still
+the gate, and condition 3 remains unmet until the ensemble-2 sweep lands.
+
+### 7. What is left
 
 1. **Condition 3** of `data/evidence/emission_decision.json`: sweep ensemble 2 (and 3) and check the
    floor-controlled contrast reproduces above +0.01. If it does, the widening ships through

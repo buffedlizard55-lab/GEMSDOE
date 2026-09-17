@@ -76,6 +76,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import json
 from pathlib import Path
 
@@ -180,6 +181,29 @@ def width_gain_table(sweep: dict) -> dict:
                 all_floors_positive=bool(gains) and all(g > 0 for g in gains))
 
 
+def policy_reproduction(sweep: dict, t0: float, width: int) -> dict | None:
+    """Look up the SAME hard policy in another ensemble's sweep and contrast it with THAT sweep's
+    own reference policy.
+
+    Absolute proxy DTI is not comparable across ensembles - each fold set produces a different
+    probability field - so a candidate is only "reproduced" if the contrast against the reference
+    policy of the same sweep keeps its sign and size.  This is the floor-change counterpart of
+    ``width_gain_table``: the width table controls the floor and varies the width, this controls
+    nothing and varies the whole policy, which is what a candidate that changes BOTH needs.
+    """
+    rows = [r for r in sweep["results"]["shaping_sweep"] if r["thin"] and not r.get("soft")]
+    target = next((r for r in rows if float(r["t0"]) == float(t0) and int(r["dilate"]) == int(width)),
+                  None)
+    ref = (sweep["results"].get("sweep_verdict") or {}).get("current_policy_dti")
+    if target is None or ref is None:
+        return None
+    return {"t0": float(t0), "width_px": int(width),
+            "measured_dti": round(float(target["dti"]), 6),
+            "reference_policy_dti": round(float(ref), 6),
+            "contrast_vs_reference": round(float(target["dti"]) - float(ref), 6),
+            "reference_is": "sweep_verdict.current_policy_dti of that same sweep"}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -244,6 +268,21 @@ def main() -> int:
     widest = max(d for _, d, _ in swept)
     # Among the widest band, the floor that scores best on this population is the fair wide
     # candidate (picking the highest floor would pick the collapse case, which scores ~0).
+    # The floor axis is a candidate axis in its own right.  The session-12 extended grid showed the
+    # best HARD candidate can be a floor change rather than a width change, and a ranking that
+    # admitted only floors {0, 0.0433} would then decide a width question while silently excluding
+    # what the search actually found.  Every swept floor contributes its single best width.
+    best_per_floor: dict[float, dict] = {}
+    for t, d, r in swept:
+        if t not in best_per_floor or float(r["dti"]) > float(best_per_floor[t]["dti"]):
+            best_per_floor[t] = r
+    existing_names = {r["policy"] for r in rows}
+    for t, r in sorted(best_per_floor.items()):
+        name = f"sweep_best_t0_{t:g}_width{int(r['dilate'])}px"
+        if name in existing_names:
+            continue
+        rows.append(policy_row(name, gp, r, f"best hard candidate at floor {t:g} "
+                                            f"(thinning on): width {int(r['dilate'])} px"))
     wide_t0, _, wide_row = max([(t, d, r) for t, d, r in swept if d == widest],
                                key=lambda x: (x[2]["dti"], -x[0]))
     wide_name = f"sweep_t0_{wide_t0:g}_width{widest}px"
@@ -325,6 +364,39 @@ def main() -> int:
                          "any truth size above the crossover printed above, and the leaderboard's "
                          "top score (0.1972) is 3.4x the blanket's 0.0585 on this population"),
     }
+    # Sweep policies only: the baselines (blanket, catalogue copy) are ranked in the same table but
+    # they are controls, not candidates the shaping pipeline can produce.
+    best_cand = max((r for r in rows if r["policy"].startswith("sweep_")),
+                    key=lambda r: r["measured_dti"])
+    v["best_measured_candidate"] = {
+        "policy": best_cand["policy"],
+        "measured_dti": best_cand["measured_dti"],
+        "note": best_cand["note"],
+        "contrast_vs_shipped": round(best_cand["measured_dti"] - shipped["measured_dti"], 6),
+        "crosses_shipped": crossover(shipped, best_cand),
+        "reproduced_on_second_ensemble": None,
+        "why_this_is_recorded": ("the pre-registered rule's candidate set has to be stated, not "
+                                 "assumed: the best measured candidate on this population is "
+                                 "ranked here, so a verdict cannot be reached with it excluded"),
+    }
+    m_best = re.match(r"sweep_best_t0_([0-9.]+)_width([0-9]+)px$", best_cand["policy"]) or \
+        re.match(r"sweep_t0_([0-9.]+)_width([0-9]+)px$", best_cand["policy"])
+    if m_best:
+        cand_floor = float(m_best.group(1))
+        # The floor and the width are alternative policies, not additive knobs: at the best floor the
+        # best width may be 0 px.  Recording the whole width curve of the winning floor makes that
+        # visible in the record instead of leaving it to a reader to reconstruct from the sweep file.
+        v["best_measured_candidate"]["widths_at_that_floor"] = {
+            str(int(r["dilate"])): round(float(r["dti"]), 6)
+            for t, d, r in sorted(swept, key=lambda x: x[1]) if t == cand_floor}
+        w_at = v["best_measured_candidate"]["widths_at_that_floor"]
+        v["best_measured_candidate"]["width_optimum_at_that_floor_px"] = (
+            int(max(w_at, key=lambda k: w_at[k])) if w_at else None)
+    if a.second_sweep and Path(a.second_sweep).exists():
+        m2 = m_best
+        if m2:
+            v["best_measured_candidate"]["reproduced_on_second_ensemble"] = policy_reproduction(
+                load(Path(a.second_sweep)), float(m2.group(1)), int(m2.group(2)))
     gain = round(wide["measured_dti"] - shipped["measured_dti"], 6)
     v["conditions"].append({
         "condition": "beats the shipped default on the new-fault-like population by > 0.01",
@@ -464,6 +536,14 @@ def main() -> int:
         print("  %-40s shipped %.4f  wide-6px %.4f  %s"
               % (x["anchor"], x["shipped_dti"], x["wide_dti"],
                  "WIDE WINS" if x["wide_wins"] else "shipped wins"))
+    bc = v["best_measured_candidate"]
+    print("\nbest measured candidate on this population: %s" % bc["policy"])
+    print("  DTI %.4f (%+.4f vs the shipped policy); %s"
+          % (bc["measured_dti"], bc["contrast_vs_shipped"], bc["note"]))
+    if bc["reproduced_on_second_ensemble"]:
+        r2 = bc["reproduced_on_second_ensemble"]
+        print("  second ensemble: DTI %.4f vs its own reference %.4f -> %+.4f"
+              % (r2["measured_dti"], r2["reference_policy_dti"], r2["contrast_vs_reference"]))
     print("\nconclusion: %s" % v["conclusion"])
     print("top priority: %s" % v["top_priority"])
     print(f"\nwrote {op}")
