@@ -153,6 +153,10 @@ def main():
               "features are identical to training-time, i.e. same GeoTIFF)")
     Xn = apply_norm_stats(X, stats, mode=cfg["data"].get("norm_mode", "clip_zscore"))
     valid = np.isfinite(X).any(axis=-1)                     # footprint of real data
+    H_grid, W_grid = X.shape[:2]
+    # Free the un-normalised stack (see the same change in src/train.py): at the full
+    # 19-band GeoDAWN grid it is ~933 MB that inference never reads again.
+    del X
 
     manifest = {}
     mpath = out_dir / "manifest.json"

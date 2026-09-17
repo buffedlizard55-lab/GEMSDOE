@@ -282,15 +282,18 @@ faults back is therefore not the goal; finding the <em>unmapped</em> ones is.</p
 {lvline}
 
 <h2>Where this stands</h2>
-<p>The pipeline runs end-to-end on the real competition rasters — train → inference → blend → format
-validation → scoring — on CPU runners, and locally in-sandbox against a committed real-data fixture.
-The regression suite is executed by CI; its exact count is kept in the run log rather than hard-coded
-in this page. The 2026-09-16 audit found and fixed a defect that had silently destroyed the
-ensemble's submission; a rebuild from the surviving fold artifacts produces the newest submission
-below. What remains for a competitive score is (1) optimising against the <em>scored</em> universe
-rather than the catalogue and (2) GPU training at full capacity; see
-<a href="results.html">Results</a> for the honest current numbers, including runs that scored
-<em>below</em> the trivial baseline and one that reported success while writing nothing.</p>
+<p><b>2026-09-17 (session 9): the data-placement blocker is resolved.</b> The three official rasters
+are committed to the branch as sha256-pinned git parts (<code>data/bridge/</code>) and reassembled into
+<code>data/</code> with every hash re-verified; <code>scripts/prepare_data.py</code> passes on the real
+bytes. The pipeline runs end-to-end on them — train → inference → blend → format validation → scoring —
+both on CPU runners and <em>inside the 3.9 GB dev sandbox itself</em> (two measured memory fixes were
+required; see <code>STATUS.md</code> session 9). The regression suite is executed by CI; its exact
+count is kept in the run log rather than hard-coded in this page. The 2026-09-16 audit found and
+fixed a defect that had silently destroyed the ensemble's submission; a rebuild from the surviving
+fold artifacts produces the newest submission below. What remains for a competitive score is
+(1) optimising against the <em>scored</em> universe rather than the catalogue and (2) GPU training at
+full capacity; see <a href="results.html">Results</a> for the honest current numbers, including runs
+that scored <em>below</em> the trivial baseline and one that reported success while writing nothing.</p>
 """, "A fault-detection entry for the DOE GEMS Prize, built so every claim can be checked.")
 
 
@@ -300,7 +303,41 @@ def build_data(ev: dict) -> str:
     tr = ev.get("transfer")
     dem = ev.get("dem")
     inv = ev.get("inventory")
+    placement = ev.get("placement")
+    local_smoke = ev.get("local_smoke")
     out = []
+
+    if placement:
+        rows = "".join(
+            f'<tr><td><code>{e(f["path"])}</code></td><td>{fmt_bytes(f["bytes"])}</td>'
+            f'<td class="mono small">{e(f["sha256"])}</td>'
+            f'<td><code>{e(f["canonical_for"])}</code></td></tr>'
+            for f in placement.get("placed_files", []))
+        run_id = ""
+        wf = placement.get("transport", {}).get("workflow", "")
+        for tok in wf.split():
+            if tok.isdigit():
+                run_id = tok
+        out.append(f"""<h2>Placement status: the official rasters are in <code>data/</code></h2>
+<p>Generated from <code>data/evidence/data_placement.json</code> ({e(placement.get("generated_utc"))}).
+The development sandbox cannot reach Dropbox, DrivenData, S3 or the Actions artifact host, so the bytes
+travel as sha256-pinned git parts (<code>data/bridge/</code>, &le; 90 MiB each because GitHub rejects
+blobs &ge; 100 MB). A runner downloaded them from the data-tab mirrors and verified each sha256 against
+<code>data/evidence/inventory.json</code>{(" (workflow run " + run_id + ")") if run_id else ""};
+the sandbox re-verified every part and the concatenated whole before writing the canonical names.
+<strong>{e(placement.get("prepare_data_result", "").split(" - ")[0])}</strong>.</p>
+<table class="bands"><thead><tr><th>Placed file</th><th>Size</th><th>sha256 (verified at every hop)</th><th>Mirror name</th></tr></thead>
+<tbody>{rows}</tbody></table>
+<p class="small">Reproduce on any checkout: <code>git pull &amp;&amp; python scripts/assemble_data_bridge.py
+&amp;&amp; python scripts/prepare_data.py</code>. Tamper-refusal, unpinned-bytes refusal and verify-only
+mode are regression-tested in <code>tests/test_data_bridge.py</code>.</p>""")
+        if local_smoke:
+            r_ = local_smoke.get("results", {})
+            out.append(f"""<p>The full pipeline has since run <em>inside the sandbox itself</em> on these
+bytes &mdash; train &rarr; inference &rarr; validation <strong>{e(r_.get("validation", "").split(" (")[0])}</strong> &rarr; score
+(held-out DTI {r_.get("heldout_dti_shaped", 0):.4f}); see
+<code>data/evidence/runs/local-sandbox-smoke/run_summary.json</code>. Runner-scale run of the same day:
+<code>data/evidence/runs/35169168957/</code>.</p>""")
 
     out.append(f"""<h2>What the competition ships</h2>
 <p>Files come from the <a href="{DATA_TAB}">data tab</a> (login required) and are mirrored as public
@@ -1337,8 +1374,15 @@ and the role it plays here.</p>""")
 def build_reproduce(ev: dict) -> str:
     return page("Reproduce", "reproduce.html", f"""
 <h2>Get the data</h2>
-<p>The competition files require a DrivenData login. With an account:</p>
-<pre><code>bash scripts/download_competition_data.sh   # Dropbox mirrors from the data tab
+<p><b>Preferred (2026-09-17): reassemble from the committed git bridge</b> — no login, no network:</p>
+<pre><code>git pull                                   # data/bridge/ holds sha256-pinned parts
+python scripts/assemble_data_bridge.py     # re-verifies every part, places canonical names
+python scripts/prepare_data.py             # validates CRS, resolution, bounds, bands</code></pre>
+<p>Every part's sha256 is pinned to the independent inventory
+(<code>data/evidence/inventory.json</code>); the assembler refuses to write anything on a mismatch
+(regression-tested in <code>tests/test_data_bridge.py</code>).</p>
+<p>Alternatively, the competition files require a DrivenData login. With an account:</p>
+<pre><code>bash scripts/download_competition_data.sh   # bridge first, else Dropbox mirrors from the data tab
 python scripts/prepare_data.py              # validates CRS, resolution, bounds, bands</code></pre>
 <p><code>prepare_data.py</code> exits non-zero on any mismatch, so a bad download is caught before
 hours of training.</p>
@@ -1373,8 +1417,12 @@ python scripts/decide_emission_width.py   # the emission-policy decision record 
 python scripts/build_site.py              # rebuilds this site from the JSON above</code></pre>
 
 <h2>Automation</h2>
-<p>Two GitHub Actions workflows do the work that needs open network access:</p>
+<p>GitHub Actions workflows do the work that needs open network access:</p>
 <ul>
+<li><b>Place competition data (git bridge)</b> — downloads the three official rasters from the
+data-tab Dropbox mirrors, verifies each sha256 against the pinned inventory, runs the pre-flight
+validation and commits them as &le; 90 MiB parts so the egress-restricted sandbox can receive them over
+git (<code>data/bridge/</code>).</li>
 <li><b>Fetch competition data</b> — downloads the files, measures them, OCRs the DEM PDF, resolves
 tiles against the USGS bucket, verifies every link, builds the dev fixture, and commits the evidence
 JSON back to the branch.</li>
@@ -1488,6 +1536,8 @@ footer p{margin:5px 0}
 def main() -> int:
     ev = {
         "inventory": load(ROOT / "data/evidence/inventory.json"),
+        "placement": load(ROOT / "data/evidence/data_placement.json"),
+        "local_smoke": load(ROOT / "data/evidence/runs/local-sandbox-smoke/run_summary.json"),
         "rasters": load(ROOT / "data/evidence/rasters.json"),
         "labels": load(ROOT / "data/evidence/labels_summary.json"),
         "transfer": load(ROOT / "data/evidence/transfer_analysis.json"),

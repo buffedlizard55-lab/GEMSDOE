@@ -16,6 +16,12 @@
 # Usage:
 #   bash scripts/download_competition_data.sh            # Dropbox mirrors
 #   bash scripts/download_competition_data.sh --manual   # print DrivenData instructions
+#
+# METHOD C (2026-09-17, preferred — no network at all): the official rasters are
+# committed to this branch as sha256-pinned parts. On any checkout (including the
+# egress-restricted sandbox):
+#     python scripts/assemble_data_bridge.py     # re-verify + place canonical names
+#     python scripts/prepare_data.py             # pre-flight validation
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -41,6 +47,17 @@ fetch () { # url outfile
   curl -fL --retry 3 --retry-delay 5 -o "data/$2" "$1"
   ls -l "data/$2"
 }
+
+# --- Method C: the git bridge (committed, sha256-pinned; needs no network) ----
+if [[ -f data/bridge/manifest.json ]]; then
+  echo "data/bridge/ present - assembling the official rasters from the committed parts"
+  python scripts/assemble_data_bridge.py
+  echo "Validating..."
+  python scripts/prepare_data.py
+  echo "Done. Files in data/:"
+  ls -lh data/
+  exit 0
+fi
 
 # --- Competition files (Dropbox mirrors, durable rlkey form, dl=1) -----------
 fetch "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" gems-geodawn-numerical-features.tif

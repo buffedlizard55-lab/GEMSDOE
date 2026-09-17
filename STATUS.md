@@ -1,4 +1,59 @@
-# Project status — 2026-09-17 (session 8 review)
+# Project status — 2026-09-17 (session 9)
+
+## Session 9 — the data-placement blocker is resolved; the pipeline runs on the official bytes, in the sandbox and on runners
+
+The stated blocker — *run `bash scripts/download_competition_data.sh` on any unrestricted machine into
+`data/`, then `python scripts/prepare_data.py`* — is done, autonomously, with every byte accounted for:
+
+1. **Git data bridge.** The sandbox allowlist (github.com/api.github.com/codeload.github.com/pypi.org only)
+   blocks Dropbox, DrivenData, S3 *and* the Azure host that serves Actions artifacts, so no existing
+   channel could carry the binary rasters into `data/`. New transport
+   (`.github/workflows/place-competition-data.yml`, run 35168924460): a runner downloads the three
+   official rasters from the data-tab Dropbox mirrors, **verifies each sha256 against the pinned
+   inventory** (`data/evidence/inventory.json`, fails loudly on drift), runs `scripts/prepare_data.py`
+   on the real bytes, and commits them to the branch as ~90 MiB parts in `data/bridge/` (GitHub rejects
+   blobs ≥ 100 MB) with a manifest. Receiving side: `python scripts/assemble_data_bridge.py` re-verifies
+   every part, concatenates, re-verifies the whole-file sha256, and places the canonical names.
+   Round-trip, tamper-refusal, unpinned-refusal and verify-only are regression-tested
+   (`tests/test_data_bridge.py`). Evidence: `data/evidence/data_placement.json`.
+2. **`data/` now holds the official files**, sha-verified:
+   `training_features.tif` (418,912,844 B), `labels.tif` (425,830 B), `sample_submission.tif`
+   (1,599,597 B). `python scripts/prepare_data.py` **PASSES** in the sandbox: 3292×3730, 19 bands with
+   `description`/`data_category` tags, EPSG:32611, 100 m, aligned bounds, labels 0/1, template float32
+   [0,1] with NaN outside the footprint.
+3. **Full pipeline re-run on the real data with the hardened code.** Runner run 35169168957 (smoke
+   profile, data assembled *from the bridge*, not Dropbox): train → inference → validation **PASSED** →
+   local score. Held-out DTI 0.0790 (prior smoke run 34876843912: 0.0588). Submission
+   sha256 `ee183e26…` (470,840 B). Evidence: `data/evidence/runs/35169168957/`.
+4. **The same pipeline now runs inside the 3.9 GB sandbox itself** — train → inference → validate →
+   score on the placed bytes (`data/evidence/runs/local-sandbox-smoke/`): identical patch split as the
+   runner at the same seed (311/234/233/78 — split determinism holds across machines), held-out DTI
+   0.0997, validation **PASSED**, submission sha256 `b9f2bc4d…`. This required two measured memory
+   fixes (below); the sandbox OOM-killed the first attempt at 3.8 GB anon-RSS.
+5. **Memory fixes (measured OOM → fix → measured pass).** `src/train.py` frees the un-normalised stack
+   once `Xn` exists (−933 MB); `src/dataset.py:make_patches` zeroes the padded stack in place instead
+   of `.copy()`-ing a third full-stack allocation (−972 MB; the held-out windows are extracted before
+   the zeroing, so semantics are unchanged); `src/inference.py` computes the validity footprint before
+   freeing `X`. Peak RSS on the full 19-band grid: 3.8 GB (killed) → 3.18 GB (passes). This also
+   lowers runner peaks.
+6. **Training workflows are now Dropbox-independent.** `train-and-submit.yml`, the ensemble fold jobs
+   and the blend job assemble `data/` from the committed, sha256-pinned bridge when it is present and
+   only fall back to the mirrors otherwise — future runs no longer depend on live Dropbox links.
+7. **CI regression for workflow YAML.** The first bridge firing (run 35168727415) failed in 0 s with
+   zero jobs: an unquoted `: ` inside a step name. `tests/test_workflow_yaml.py` now parses every
+   workflow and flags that pattern, so the failure class is caught by the Tests workflow instead of
+   only when a trigger is pushed.
+8. **Second 6-fold ensemble (seed 43, folds 6–11) fired** as the queued experiment for the
+   emission-width decision (`data/evidence/emission_decision.json` condition 3: "second ensemble").
+   It trains in parallel on public-repo runners (~2.5 h) and commits its evidence to
+   `data/evidence/runs/<run_id>/` autonomously; next session analyses it against the widen decision.
+
+Still true from session 8: both prize phases score the **new** fault dataset (disjoint from
+`labels.tif`); read `docs/DISCOVERY_PLAN.md` before optimising local scores. The remaining blockers to
+a leaderboard result are unchanged and listed in §5 below: a DrivenData account (to submit at all),
+GPU capacity for the full config, and the eligibility check.
+
+---
 
 ## Session 8 — reliability and provenance fixes
 
@@ -180,7 +235,8 @@ Nevada. Our config keeps 35 % empty windows (`neg_fraction: 0.35`) — a concret
   `productionresultssa8.blob.core.windows.net`. A *runner* can download them (that is what the new
   re-blend workflow does).
 * `github.com` git transport works, so small artifacts (reports, `submission.tif` ≈ 1 MB) travel back
-  as ordinary commits. Large rasters cannot and are not committed.
+  as ordinary commits. Large rasters **can** now travel too, as ≤ 90 MiB sha256-pinned parts
+  (`data/bridge/`, session 9) — GitHub rejects single blobs ≥ 100 MB, not large totals.
 * The full test suite now runs **in-sandbox with torch installed** (CPU wheel from PyPI):
   **37/37 pass** (`pytest tests -q`). Previous sessions could not install torch here at all.
 

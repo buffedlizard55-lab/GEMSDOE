@@ -1,0 +1,9 @@
+# Ensemble parameters read by .github/workflows/train-ensemble.yml (push-triggered runs).
+# The bot token cannot use workflow_dispatch, so the second ensemble is parameterised here.
+#
+# 2026-09-17 (session 9): fire the SECOND 6-fold ensemble - folds 6-11 (FOLD_OFFSET=6),
+# seed 43 - as the queued experiment for the emission-width decision
+# (data/evidence/emission_decision.json condition 3: "second ensemble"). Evidence will be
+# committed to data/evidence/runs/<run_id>/ by the blend job.
+FOLD_OFFSET=6
+ENSEMBLE_SEED=43

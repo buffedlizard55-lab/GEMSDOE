@@ -19,6 +19,14 @@
 > longer true (it was acquired via the Actions data bridge), and the feature stack has
 > **19 bands, not the ~10** listed below. Prefer the site and `STATUS.md` where they disagree.
 >
+> **2026-09-17 (session 9): the data-placement blocker is resolved.** The three official rasters are
+> committed as sha256-pinned git parts (`data/bridge/`) and reassembled into `data/` with every hash
+> re-verified (`python scripts/assemble_data_bridge.py`); `scripts/prepare_data.py` **passes** on the
+> real bytes. The full train → inference → validate → score pipeline has run on them both on a runner
+> (`data/evidence/runs/35169168957/`) and **inside the 3.9 GB dev sandbox**
+> (`data/evidence/runs/local-sandbox-smoke/`) after two measured memory fixes. Training workflows now
+> assemble `data/` from the bridge instead of re-fetching Dropbox. See [`STATUS.md`](STATUS.md) §9.
+>
 > **2026-09-16:** the 6-fold ensemble run that a previous session reported as successful had in fact
 > produced **no submission** (it crashed on a TIFF block-size rule; the crash was masked by a missing
 > `pipefail` and a 110-byte stub was committed as `submission.tif`). Fixed, regression-tested, and
@@ -84,13 +92,16 @@
 - New: differentiable transcription of the competition metric as the training loss (`src/losses.py`), metric-derived submission shaping (`src/submission_optim.py`), memory-safe full-raster scorer, leak-free patching, persisted normalisation stats, manifest-driven inference.
 
 ### Current Limitations in this Sandbox
-- **No DrivenData authentication:** Cannot download `training_features.tif`, `labels.tif`, `sample_submission.tif`, `1m_DEM_links.csv` from https://www.drivendata.org/competitions/306/competition-doe-gems/data/ without login. Code is built to work once user places data in `data/`.
-- **No GPU / limited CPU:** Training large segmentation models (U-Net, SegFormer) ideally needs GPU (CUDA or Apple MPS). Environment here is CPU-only Python 3.11.2, no torch installed initially.
+- **DrivenData authentication — still needed for SUBMITTING, no longer for data.** The official
+  rasters are in `data/` via the sha256-pinned git bridge (`data/bridge/` →
+  `python scripts/assemble_data_bridge.py`). What still needs an account + enrollment: uploading
+  submissions and reading the leaderboard (3 submissions/week, rules §3.2).
+- **No GPU / limited CPU:** Training large segmentation models (U-Net, SegFormer) ideally needs GPU (CUDA or Apple MPS). Sandbox is CPU-only (2 vCPU, 3.9 GB RAM); the full 19-band pipeline fits after the session-9 memory fixes, but the leaderboard config needs a GPU.
 - **No large external data pre-downloaded:** GeoDAWN grids are GB-scale, 1m DEM tiles are many GB. We provide download scripts but cannot bulk-download here.
 - **Private test labels unavailable:** Expected; we must use cross-validation and visual inspection.
 
 ### What We Need for Full Competitive Run
-1. **DrivenData account + competition enrollment** to download official data.
+1. **DrivenData account + competition enrollment** to upload submissions and observe the leaderboard (data is no longer blocked).
 2. **Compute:** GPU machine (e.g., 1x A100, 24GB+ VRAM) or multi-GPU for ensemble training. Reference solution recommends CUDA 12.6 or 13.0.
 3. **Storage:** ~50GB for GeoDAWN + DEM + INGENIOUS + processed patches.
 4. **Optional:** Access to USGS AWS Open Data for 3DEP lidar: https://registry.opendata.aws/usgs-lidar/

@@ -48,9 +48,28 @@ jobs:
       fail-fast: false
       matrix:
         fold: ${{ fromJson(github.event.inputs.folds || '[0,1,2,3,4,5]') }}
+    # Second-ensemble support (2026-09-17): the bot token cannot workflow_dispatch, so runs are
+    # parameterised by a COMMITTED file instead. .github/triggers/ensemble-params may set
+    #   FOLD_OFFSET=<int>   added to matrix.fold to give the actual mc_id (fold identity)
+    #   ENSEMBLE_SEED=<int> training.seed override (split RNG + init)
+    # defaults below reproduce the original run exactly (offset 0, seed 42).
+    env:
+      FOLD_OFFSET: "0"
+      ENSEMBLE_SEED: "42"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read ensemble parameters (committed trigger file overrides the defaults)
+        run: |
+          set -euo pipefail
+          PARAMS=".github/triggers/ensemble-params"
+          if [ -f "$PARAMS" ]; then
+            echo "parameters from $PARAMS:"; grep -E '^[A-Z_]+=' "$PARAMS" || true
+            grep -E '^(FOLD_OFFSET|ENSEMBLE_SEED)=[0-9]+$' "$PARAMS" >> "$GITHUB_ENV"
+          else
+            echo "no $PARAMS - using job defaults (FOLD_OFFSET=0, ENSEMBLE_SEED=42)"
+          fi
 
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
@@ -106,7 +125,7 @@ jobs:
       - name: Stage fold outputs
         run: |
           mkdir -p fold
-          cp -f outputs/prob_raw.tif outputs/manifest.json outputs/heldout_mc${{ matrix.fold }}.npz fold/
+          cp -f outputs/prob_raw.tif outputs/manifest.json outputs/heldout_mc$(( FOLD_OFFSET + ${{ matrix.fold }} )).npz fold/
           cp -f outputs/model_mc*.pt fold/ 2>/dev/null || true
           cp -f outputs/norm_stats.json fold/ 2>/dev/null || true
           cp -f train.log inference.log fold/ 2>/dev/null || true
