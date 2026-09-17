@@ -1,0 +1,9 @@
+{
+ "mc_id": 15,
+ "fold_offset": 12,
+ "ensemble_seed": 44,
+ "matrix_fold": 3,
+ "run_id": "35263581931",
+ "commit": "5298591145c958aa4958fe0413bcc17438b494a7",
+ "config": "configs/config_ci_ensemble.yaml"
+}
