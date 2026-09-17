@@ -1,24 +1,27 @@
 # Re-blend parameters (read by .github/workflows/reblend.yml, job `params`).
 #
-# 2026-09-17 (session 13) - SHIP THE MEASURED POLICY.
+# 2026-09-17 (session 13, second fire) - SHIP THE MEASURED POLICY OVER THREE ENSEMBLES.
 #
-# data/evidence/emission_decision.json now passes all three pre-registered conditions for the joint
-# policy floor 0.1 / thin / width 0 px:
-#   cond 1  +0.1118 on the new-fault-like population (shipped policy on the same field: 0.0247)
-#   cond 2  3/3 plausible scored-truth anchors, crossover 2,718 px (272 km)
-#   cond 3  reproduced on the independent ensemble 2 (+0.0456 against that sweep's own reference)
-# and the cross-ensemble ranking in the same record puts it first of 132 candidates by worst-case
-# contrast.  SHAPING_T0/SHAPING_DILATE make the blend write THAT policy instead of the in-domain
-# calibration (which maximises DTI against the faults the model trained on and therefore prefers a
-# narrow, high-floor skeleton).  SHAPING_SOURCE is copied into the report and the submission's TIFF
-# tags so the shipped raster is traceable to the measurement it came from.
+# The policy is UNCHANGED (floor 0.1 / thin / width 0): the refreshed record still passes all three
+# pre-registered conditions, and on the 3-ensemble field the candidate scores 0.0850 against that
+# field's own reference policy's 0.0269 (+0.0581), so condition 3 now reproduces on FOUR
+# independently measured fields (ensemble 1 +0.0954, the 1+2 mean +0.0695, ensemble 2 +0.0456, the
+# 1+2+3 mean +0.0581).  The cross-ensemble ranking puts it first of 132 by worst-case contrast
+# (+0.0456) across all four, with no warning.
 #
-# RUN_ID: ensembles 1 and 2 - the two fields the policy was measured on, 11 live folds in total
-# (ensemble 1: fold 0-5; ensemble 2: fold 0,1,2,3,5).  MIN_FOLDS is set to that exact count, so a
-# silently short download fails the run instead of shipping a thinner ensemble.
-RUN_ID=35042805806,35249562910
-EVIDENCE_DIR=data/evidence/runs/ens12-adopted-floor0.1-w0
-MIN_FOLDS=11
+# What changed is the ENSEMBLE, not the policy: ensembles 1, 2 and 3 together carry 16 live folds
+# (6 + 5 + 5; a training fold died in each of ensembles 2 and 3), so the shipped submission becomes
+# one nanmean over sixteen models instead of eleven.  That is variance reduction on the field the
+# metric reads, and it is the reason to re-blend at all.
+#
+# The field was measured BEFORE this re-blend: the sweep above ran on exactly these three fold sets
+# (data/evidence/proxy/eval_sweep-ens123.json).  An unmeasured field is never shipped.
+#
+# MIN_FOLDS=16 is pinned to the exact count, so a short download fails the run instead of silently
+# shipping a thinner ensemble.
+RUN_ID=35042805806,35249562910,35263581931
+EVIDENCE_DIR=data/evidence/runs/ens123-adopted-floor0.1-w0
+MIN_FOLDS=16
 CALIBRATE=loo
 SHAPING_T0=0.1
 SHAPING_DILATE=0
