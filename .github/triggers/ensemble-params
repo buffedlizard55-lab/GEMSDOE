@@ -1,9 +1,11 @@
 # Ensemble parameters read by .github/workflows/train-ensemble.yml (push-triggered runs).
-# The bot token cannot use workflow_dispatch, so the second ensemble is parameterised here.
+# The bot token cannot use workflow_dispatch, so runs are parameterised by this file.
 #
-# 2026-09-17 (session 9): fire the SECOND 6-fold ensemble - folds 6-11 (FOLD_OFFSET=6),
-# seed 43 - as the queued experiment for the emission-width decision
-# (data/evidence/emission_decision.json condition 3: "second ensemble"). Evidence will be
-# committed to data/evidence/runs/<run_id>/ by the blend job.
-FOLD_OFFSET=6
-ENSEMBLE_SEED=43
+# DEFAULTS reproduce the original run 35042805806 exactly (offset 0, seed 42).
+#
+# 2026-09-17 (session 9): fired the SECOND 6-fold ensemble with FOLD_OFFSET=6 / ENSEMBLE_SEED=43
+# (run 35170395055, the queued emission-width decision experiment). The folds read the values at
+# job start, so this reset does not affect that in-flight run; its provenance is recorded in each
+# fold manifest (mc_id 6-11, seed 43) and in this file's git history. RESET to defaults after firing.
+FOLD_OFFSET=0
+ENSEMBLE_SEED=42
