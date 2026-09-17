@@ -14,6 +14,8 @@
 | Dilate grid reaches the measured optimum | The first sweep stopped at 12 px; the measured optimum is 16 | ✅ `.github/workflows/proxy-eval.yml` default `0,1,2,3,4,6,8,10,12,16,20` |
 | One failed fold must not discard five | Run 35249562910 lost fold 4 in training; the binary rule discarded ~15 CPU-hours of successful folds | ✅ `MIN_FOLDS` gate + `foldlogs-<fold>` diagnostics artifact + `reblend.yml` parameterised recovery; 4 workflow tests execute the gate's real shell |
 
+| Proxy sweep scored the shipped policy | Its log-spaced floor grid jumped 4.3e-2 → 0.9, so the floor the blend actually shipped (0.469674) was never a row and the acceptance rule compared against the t0=0 skeleton (0.0144) instead of the shipped policy (0.0247) | ✅ `--reference-t0` / `--reference-report` in `scripts/eval_proxy_catalogue.py`, `SHAPING_GRID` default 4 → 11, `--reference-report blend_report.json` in `proxy-eval.yml`; 2 tests execute both paths, and reinserting the old behaviour fails exactly them |
+
 ### Session 10 queue, in order
 
 1. **Detection is now the binding constraint — sweep the threshold, not just the width.** 74.0 % of

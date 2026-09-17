@@ -164,6 +164,13 @@ def main() -> int:
     ap.add_argument("--shaping-grid", type=int, default=5)
     ap.add_argument("--dilate-grid", default="0,1,2,3,4,6")
     ap.add_argument("--thin-off", action="store_true", help="include thin=False rows in the sweep")
+    ap.add_argument("--reference-t0", type=float, default=None,
+                    help="the floor the SHIPPED policy uses: added to the sweep grid (the log-spaced "
+                         "grid can jump straight past the operating region) and used as the "
+                         "reference the acceptance rule compares against")
+    ap.add_argument("--reference-report", default=None,
+                    help="blend_report.json to read the shipped floor from, when --reference-t0 is "
+                         "not given")
     ap.add_argument("--R", type=int, default=DEFAULTS["R"])
     ap.add_argument("--alpha", type=float, default=DEFAULTS["alpha"])
     ap.add_argument("--beta", type=float, default=DEFAULTS["beta"])
@@ -171,6 +178,22 @@ def main() -> int:
     ap.add_argument("--sens-sizes", default="500,1000,2500,5000,10000,20000,50000,100000,250000",
                     help="assumed sizes (px) of the HIDDEN scored truth, for the projection table")
     a = ap.parse_args()
+
+    # The shipped floor, when it can be determined.  WHY THIS EXISTS (measured, session 10): the
+    # committed proxy sweep of ensemble 1 evaluated floors [0, 1e-4, 2.08e-3, 4.33e-2, 0.9] because
+    # shaping_thresholds() is log-spaced - on that field the first four rows are the SAME mask (the
+    # model emits nothing between 0.043 and 0.9), so the floor dimension was effectively binary and
+    # the shipped floor (0.469674) was never scored.  The sweep's acceptance rule then compared
+    # candidates against the t0=0 skeleton (0.0144) rather than against the shipped policy (0.0247
+    # on the same population).  Both are fixed by scoring the shipped floor explicitly.
+    reference_t0, reference_src = a.reference_t0, ("--reference-t0" if a.reference_t0 is not None else None)
+    if reference_t0 is None and a.reference_report:
+        rep_in = json.loads(Path(a.reference_report).read_text())
+        t0_in = rep_in.get("shaping", {}).get("t0")
+        if t0_in is None:
+            raise SystemExit(f"{a.reference_report} has no shaping.t0 (unshaped run) - "
+                             "pass --reference-t0 explicitly")
+        reference_t0, reference_src = float(t0_in), f"{a.reference_report}:shaping.t0"
 
     pred, pmeta = read_grid(Path(a.pred))
     coded, cmeta = read_grid(Path(a.proxy))
@@ -279,7 +302,10 @@ def main() -> int:
     sweep_table: list[dict] = []
     if a.sweep:
         dilates = tuple(sorted({int(v) for v in str(a.dilate_grid).split(",") if v.strip()}))
-        for t0 in shaping_thresholds(a.shaping_grid):
+        floors = [float(v) for v in shaping_thresholds(a.shaping_grid)]
+        if reference_t0 is not None and not any(abs(f - reference_t0) < 1e-9 for f in floors):
+            floors.append(float(reference_t0))
+        for t0 in sorted(floors):
             for thin in ((False, True) if a.thin_off else (True,)):
                 for d in (dilates if thin else (0,)):
                     q = optimize_submission(pred, R=a.R, t0=float(t0), thin=bool(thin),
@@ -299,13 +325,27 @@ def main() -> int:
             if r["thin"]:
                 by_width.setdefault(r["dilate"], []).append(r["dti"])
         res["best_per_emission_width"] = {str(k): round(max(v), 6) for k, v in sorted(by_width.items())}
+        current = next((r for r in sweep_table
+                        if reference_t0 is not None and abs(r["t0"] - reference_t0) < 1e-9
+                        and r["thin"] and r["dilate"] == 0), None)
         res["sweep_verdict"] = {
             "skeleton_dti": res["best_per_emission_width"].get("0"),
             "best_dti": res["sweep_best"]["dti"] if res["sweep_best"] else None,
-            "acceptance_rule": ("change the default shaping only if a candidate beats the current "
-                                "default by > 0.01 proxy DTI here AND is reproduced on a second "
-                                "ensemble; this population is the closest measurable stand-in for "
-                                "the scored one, not the scored one"),
+            # The t0=0 row is NOT the shipped policy - it emits a different mask (measured: 14,285
+            # px at 0.0144 vs the shipped 21,492 px at 0.0247 on the same population).  When the
+            # shipped floor is known, say so and compare like with like.
+            "reference_t0": reference_t0,
+            "reference_source": reference_src,
+            "current_policy_dti": current["dti"] if current else None,
+            "beats_current_policy_by": (round(res["sweep_best"]["dti"] - current["dti"], 6)
+                                        if (current is not None and res["sweep_best"]) else None),
+            "acceptance_rule": ("change the default shaping only if a candidate beats the SHIPPED "
+                                "policy (the reference floor with no widening%s) by > 0.01 proxy DTI "
+                                "here AND is reproduced on a second ensemble; this population is the "
+                                "closest measurable stand-in for the scored one, not the scored one"
+                                % ("" if reference_t0 is not None else " - none was given, so the "
+                                   "t0=0 skeleton is the only available reference and is NOT the "
+                                   "shipped policy")),
         }
         # The proxy truth is 6,166 km of state-map fault trace - plausibly much larger than the
         # scored set.  Since FP_w and beta*|G| scale differently, a policy that wins here need not
@@ -324,6 +364,10 @@ def main() -> int:
                                                           p["best_dilate"]),
                      p["best_dti"], p["skeleton_dti"], p["gain_over_skeleton"],
                      "  <-- wider band passes" if p["passes_acceptance"] else ""))
+        if current is not None:
+            print("    shipped policy (floor %.6g, no widening): proxy DTI %.6f; best candidate "
+                  "%+.6f vs it" % (reference_t0, current["dti"],
+                                   res["sweep_verdict"]["beats_current_policy_by"]))
         v = sens["verdict"]
         print("    wider band passes at: %s" % (v["sizes_where_a_wider_band_passes"] or "no size"))
         print("    skeleton still best at: %s" % (v["sizes_where_the_skeleton_wins"] or "no size"))
@@ -339,6 +383,7 @@ def main() -> int:
             "pred": a.pred, "pred_sha256": sha256(Path(a.pred)), "pred_meta": pmeta,
             "proxy": a.proxy, "proxy_sha256": sha256(Path(a.proxy)), "proxy_meta": cmeta,
             "labels": a.labels, "truth_mode": a.truth,
+            "reference_t0": reference_t0, "reference_source": reference_src,
             "metric": {"R_pixels": a.R, "R_meters": a.R * 100, "alpha": a.alpha, "beta": a.beta,
                        "eps": a.eps},
         },

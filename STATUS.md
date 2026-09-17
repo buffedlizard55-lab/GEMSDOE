@@ -58,7 +58,33 @@ threw away the other five folds' ~15 CPU-hours. Changed, and pinned by tests:
 `tests/test_ensemble_workflow.py` executes the workflows' own shell for exactly these paths (6 usable
 → 6, 5 + logs-only → 5 with a loud warning, 3 → refused, 0 → refused).
 
-### 3. Still open
+### 3. Review finding: the proxy sweep never scored the shipped floor
+
+Reading the committed ensemble-1 sweep (`data/evidence/proxy/eval_sweep.json`) against the committed
+submission score (`eval_submission.json`) exposed a gap in the *instrument*, not in the result:
+`shaping_thresholds()` is log-spaced, so with the sweep's `SHAPING_GRID=4` the floors evaluated were
+[0, 1e-4, 2.08e-3, 4.33e-2, 0.9]. On the real ensemble field the first four rows are the same mask
+(14,285 px) — the field emits nothing between 0.043 and 0.9 — so the floor dimension was effectively
+binary, and the floor the blend actually shipped (0.469674, 21,492 px, DTI 0.0247 on this population)
+was never a row. The sweep's acceptance rule therefore compared candidates against the t0=0 skeleton
+(0.0144) rather than against the shipped policy (0.0247), i.e. against a policy nobody ships.
+
+Fixed in the instrument:
+
+* `scripts/eval_proxy_catalogue.py` gains `--reference-t0` and `--reference-report` (reads
+  `shaping.t0` from the blend report the sweep job already produces). The shipped floor is added to
+  the grid when absent and becomes the reference row; `sweep_verdict` now records
+  `reference_t0`, `reference_source`, `current_policy_dti` and `beats_current_policy_by`, and the
+  acceptance rule compares against the shipped policy — explicitly saying so when no reference was
+  given rather than silently substituting the t0=0 skeleton;
+* `.github/workflows/proxy-eval.yml` defaults `SHAPING_GRID` to 11 (the same 11-point grid
+  `configs/config_ci_ensemble.yaml` calibrates with) and passes `--reference-report blend_report.json`.
+
+Two new tests execute both paths (reference floor present in the grid at every width, comparison
+against that row, `--reference-report` provenance, loud failure on an unshaped report); reinserting
+the old behaviour fails exactly those two. Suite: **129 passed / 1 skipped**.
+
+### 4. Still open
 
 Condition 3 of the emission decision — the second ensemble's own floor-controlled sweep — needs run
 35249562910's artifacts; the run was still in flight at the end of this session. Until it lands the

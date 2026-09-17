@@ -79,7 +79,11 @@ on:
 #   RUN_ID=<actions run id whose fold-* artifacts to sweep>   (default 35042805806 = ensemble 1)
 #   SWEEP_LABEL=<suffix>       -> data/evidence/proxy/eval_sweep-<label>.json (default: no suffix)
 #   DILATE_GRID=0,1,2,3,...    (default 0,1,2,3,4,6,8,10,12 - the proxy curve was still rising at 6)
-#   SHAPING_GRID=<int>         (default 4 floor candidates)
+#   SHAPING_GRID=<int>         (default 11 floor candidates - 4 was too coarse: the log grid
+#                               then jumped 4.3e-2 -> 0.9 and never scored the 0.469674 the blend
+#                               actually shipped; the sweep also passes --reference-report so the
+#                               shipped floor is always a row and the acceptance rule compares
+#                               against the shipped policy, not the t0=0 skeleton)
 #   SUBMISSION=<path>          (default data/evidence/runs/<RUN_ID>/submission.tif)
 # ---------------------------------------------------------------------------
 
@@ -114,7 +118,7 @@ jobs:
           RUN_ID="${{ github.event.inputs.run_id || '35042805806' }}"
           LABEL="${{ github.event.inputs.sweep_label || '' }}"
           DIL="${{ github.event.inputs.dilate_grid || '0,1,2,3,4,6,8,10,12,16,20' }}"
-          GRID="${{ github.event.inputs.shaping_grid || '4' }}"
+          GRID="${{ github.event.inputs.shaping_grid || '11' }}"
           SUB=""
           F=".github/triggers/proxy-eval-params"
           if [ -f "$F" ]; then
@@ -290,6 +294,7 @@ jobs:
             --out "data/evidence/proxy/eval_sweep$SUF.json" --sweep \
             --shaping-grid "${{ needs.params.outputs.shaping_grid }}" \
             --dilate-grid "${{ needs.params.outputs.dilate_grid }}" \
+            --reference-report blend_report.json \
             2>&1 | tee "data/evidence/proxy/eval_sweep$SUF.log"
 
       - name: Score the submission this run produced, on both truth sets
