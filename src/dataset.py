@@ -229,8 +229,12 @@ def make_patches(
         else np.zeros((0, patch_size, patch_size), np.float32)
 
     # ---- 2. zero the test region globally, THEN extract overlapping train windows --
-    Xtr_src = Xp.copy()
-    ytr_src = yp.copy()
+    # In-place on the padded arrays: the held-out copies were already extracted above, and
+    # a .copy() here used to be a THIRD full-stack allocation (X + Xp + Xtr_src ~ 2.9 GB at
+    # the 19-band GeoDAWN grid), which OOM-killed the 3.9 GB dev sandbox on 2026-09-17
+    # (measured anon-rss 3.8 GB). Semantics unchanged: Xtr_src is the padded stack with the
+    # test region zeroed, exactly what the .copy() produced.
+    Xtr_src, ytr_src = Xp, yp
     Xtr_src[test_mask] = 0.0
     ytr_src[test_mask] = 0.0
 

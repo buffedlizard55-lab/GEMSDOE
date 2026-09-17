@@ -215,14 +215,19 @@ def main():
         nstats = fit_norm_stats(X, tuple(cfg["data"].get("clip_percentile", (1.0, 99.0))))
         save_norm_stats(stats_path, nstats)
     Xn = apply_norm_stats(X, nstats, mode=cfg["data"].get("norm_mode", "clip_zscore"))
+    # The un-normalised stack is not used past this point. Freeing it halves peak RSS
+    # (933 MB per copy at the full 19-band GeoDAWN grid): measured 2026-09-17, the
+    # 3.9 GB dev sandbox OOMs during patch extraction while both copies are alive.
+    H_grid, W_grid, C_grid = X.shape
+    del X
 
     R_px = int(cfg["metric"]["R_meters"] // cfg["metric"]["resolution_m"])
     use_fpw = bool(cfg["training"].get("use_global_fp_weight", True))
 
     manifest = dict(
         created=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        config=cfg, band_names=names, n_bands=int(X.shape[-1]),
-        feature_grid=list(X.shape[:2]), label_grid=list(y.shape),
+        config=cfg, band_names=names, n_bands=int(C_grid),
+        feature_grid=[H_grid, W_grid], label_grid=list(y.shape),
         norm_stats_file=str(stats_path), R_pixels=R_px,
         cuda=torch.cuda.is_available(), torch=torch.__version__,
         feature_file=str(cfg["data"].get("feature_path")), models=[],
@@ -359,6 +364,10 @@ def main():
                                        budget_hit=aborted_by_budget,
                                        test_windows=res["summary"]["test_windows"]))
         print(f"saved {ck} (best DTI {best['dti']:.4f} @ epoch {best['epoch']})")
+
+    # The normalised stack is not needed past the last split; freeing ~933 MB lowers the
+    # training-loop peak on small machines (the patch/window arrays carry all the signal).
+    del Xn
 
     # ---- pooled shaping calibration ------------------------------------------------
     # choose ONE (t0, thin) maximising the MEAN held-out DTI across all MC splits: a single

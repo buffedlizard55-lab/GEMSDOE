@@ -1,1 +1,5 @@
 2026-09-15T23:54:13Z
+
+# 2026-09-17 (session 9): fire the SECOND 6-fold ensemble (folds 6-11, seed 43) via
+# .github/triggers/ensemble-params - the queued experiment for the emission-width decision
+# (emission_decision.json condition 3). Evidence will land in data/evidence/runs/<run_id>/.

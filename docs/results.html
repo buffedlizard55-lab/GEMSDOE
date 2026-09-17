@@ -34,6 +34,15 @@ is measured, but it is <b>not yet competitive</b>: the first full-scale run was 
 smoke test that scored <em>below</em> the trivial blanket-coverage baseline, which is recorded here as
 a negative result rather than dressed up. And every DTI on this page is computed against the
 <em>known</em> catalogue, which is not the scored universe (see <a href="metric.html">Metric</a>).</div>
+<h3>Run <code>?</code></h3>
+<table class="kv"><tbody>
+<tr><th>Profile</th><td>—</td></tr>
+<tr><th>Runner</th><td>—</td></tr>
+<tr><th>Commit</th><td class="mono small"></td></tr>
+<tr><th>Submission</th><td>—,
+  sha256 <span class="mono small">…</span></td></tr>
+</tbody></table>
+<table><thead><tr><th>Epoch</th><th>Loss</th><th>DTI raw</th><th>DTI shaped</th><th>TP_w</th><th>FP_w</th></tr></thead><tbody><tr><td>1</td><td class="num">0.6157</td><td class="num">0.0258</td><td class="num">0.0876</td><td class="num">722</td><td class="num">68,246</td></tr><tr><td>2</td><td class="num">0.5774</td><td class="num">0.0300</td><td class="num">0.0997</td><td class="num">841</td><td class="num">68,828</td></tr></tbody></table>
 <h3>Run <code>local-mini-ensemble</code></h3>
 <table class="kv"><tbody>
 <tr><th>Profile</th><td>sandbox calibration (NOT a GitHub run): 2 folds x 20 epochs on data/fixture, resnet34, pretrained=false</td></tr>
@@ -58,6 +67,16 @@ a negative result rather than dressed up. And every DTI on this page is computed
 </tbody></table>
 <table><thead><tr><th>Fold</th><th>Model(s)</th><th>Best held-out shaped DTI</th></tr></thead><tbody><tr><td>outputs_e0</td><td>model_mc0_unetplusplus_resnet34.pt</td><td class="num">0.1497</td></tr><tr><td>outputs_e1</td><td>model_mc1_deeplabv3plus_resnet34.pt</td><td class="num">0.0488</td></tr><tr><td>outputs_e2</td><td>model_mc2_unet_resnet34.pt</td><td class="num">0.1919</td></tr><tr><td>outputs_e3</td><td>model_mc3_unetplusplus_resnet34.pt</td><td class="num">0.2610</td></tr><tr><td>outputs_e4</td><td>model_mc4_deeplabv3plus_resnet34.pt</td><td class="num">0.0266</td></tr><tr><td>outputs_e5</td><td>model_mc5_unet_resnet34.pt</td><td class="num">0.1625</td></tr></tbody></table>
 <details><summary>Full shaping calibration table (highlighted row = chosen)</summary><table><thead><tr><th>t0 floor</th><th>thin</th><th>mean held-out DTI</th></tr></thead><tbody><tr><td class="num">unshaped</td><td>—</td><td class="num">0.0883</td></tr><tr><td class="num">0.02</td><td>no</td><td class="num">0.1011</td></tr><tr><td class="num">0.02</td><td>yes</td><td class="num">0.0344</td></tr><tr><td class="num">0.11</td><td>no</td><td class="num">0.0967</td></tr><tr><td class="num">0.11</td><td>yes</td><td class="num">0.0255</td></tr><tr><td class="num">0.20</td><td>no</td><td class="num">0.0968</td></tr><tr><td class="num">0.20</td><td>yes</td><td class="num">0.0331</td></tr><tr><td class="num">0.28</td><td>no</td><td class="num">0.0971</td></tr><tr><td class="num">0.28</td><td>yes</td><td class="num">0.0533</td></tr><tr><td class="num">0.37</td><td>no</td><td class="num">0.0976</td></tr><tr><td class="num">0.37</td><td>yes</td><td class="num">0.0717</td></tr><tr><td class="num">0.46</td><td>no</td><td class="num">0.1031</td></tr><tr class="hl"><td class="num">0.46</td><td>yes</td><td class="num">0.1286</td></tr><tr><td class="num">0.55</td><td>no</td><td class="num">0.0977</td></tr><tr><td class="num">0.55</td><td>yes</td><td class="num">0.1023</td></tr><tr><td class="num">0.64</td><td>no</td><td class="num">0.0414</td></tr><tr><td class="num">0.64</td><td>yes</td><td class="num">0.0453</td></tr><tr><td class="num">0.72</td><td>no</td><td class="num">0.0391</td></tr><tr><td class="num">0.72</td><td>yes</td><td class="num">0.0395</td></tr><tr><td class="num">0.81</td><td>no</td><td class="num">0.0334</td></tr><tr><td class="num">0.81</td><td>yes</td><td class="num">0.0238</td></tr><tr><td class="num">0.90</td><td>no</td><td class="num">0.0293</td></tr><tr><td class="num">0.90</td><td>yes</td><td class="num">0.0206</td></tr></tbody></table></details>
+<h3>Run <code>35169168957</code></h3>
+<table class="kv"><tbody>
+<tr><th>Profile</th><td>smoke</td></tr>
+<tr><th>Runner</th><td>ubuntu-latest (CPU-only)</td></tr>
+<tr><th>Commit</th><td class="mono small">ca08ea3673c8</td></tr>
+<tr><th>Submission</th><td>459.8 KB,
+  sha256 <span class="mono small">ee183e260ee5478a…</span></td></tr>
+</tbody></table>
+<table><thead><tr><th>Epoch</th><th>Loss</th><th>DTI raw</th><th>DTI shaped</th><th>TP_w</th><th>FP_w</th></tr></thead><tbody><tr><td>1</td><td class="num">0.6214</td><td class="num">0.0272</td><td class="num">0.0760</td><td class="num">777</td><td class="num">71,262</td></tr><tr><td>2</td><td class="num">0.5769</td><td class="num">0.0298</td><td class="num">0.0790</td><td class="num">868</td><td class="num">73,838</td></tr></tbody></table>
+<p><b>Full-raster score vs public labels:</b> <code>DTI=0.05852  TP_w=60228.3  FP_w=4841745.2  FN_w=759.7  |G|=60988  (R=3px)</code></p>
 <h3>Run <code>?</code></h3>
 <table class="kv"><tbody>
 <tr><th>Profile</th><td>—</td></tr>
@@ -177,7 +196,7 @@ means it is proposing candidates (what Phase 2 rewards if experts confirm them).
 </ol>
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-17 00:52 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-17 01:27 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://www.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>

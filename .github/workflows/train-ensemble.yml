@@ -48,9 +48,28 @@ jobs:
       fail-fast: false
       matrix:
         fold: ${{ fromJson(github.event.inputs.folds || '[0,1,2,3,4,5]') }}
+    # Second-ensemble support (2026-09-17): the bot token cannot workflow_dispatch, so runs are
+    # parameterised by a COMMITTED file instead. .github/triggers/ensemble-params may set
+    #   FOLD_OFFSET=<int>   added to matrix.fold to give the actual mc_id (fold identity)
+    #   ENSEMBLE_SEED=<int> training.seed override (split RNG + init)
+    # defaults below reproduce the original run exactly (offset 0, seed 42).
+    env:
+      FOLD_OFFSET: "0"
+      ENSEMBLE_SEED: "42"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read ensemble parameters (committed trigger file overrides the defaults)
+        run: |
+          set -euo pipefail
+          PARAMS=".github/triggers/ensemble-params"
+          if [ -f "$PARAMS" ]; then
+            echo "parameters from $PARAMS:"; grep -E '^[A-Z_]+=' "$PARAMS" || true
+            grep -E '^(FOLD_OFFSET|ENSEMBLE_SEED)=[0-9]+$' "$PARAMS" >> "$GITHUB_ENV"
+          else
+            echo "no $PARAMS - using job defaults (FOLD_OFFSET=0, ENSEMBLE_SEED=42)"
+          fi
 
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
@@ -65,16 +84,22 @@ jobs:
           python -m pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu
           python -m pip install --quiet -r requirements.txt
 
-      - name: Download competition data (data-tab Dropbox mirrors)
+      - name: Place competition data (sha256-pinned git bridge; Dropbox fallback)
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p data
-          dl () {
-            curl -fL --retry 3 --retry-delay 5 -o "data/$2" "$1" && echo "OK $2 $(stat -c%s data/$2) bytes" || echo "FAILED $2"
-          }
-          dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" training_features.tif
-          dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
-          dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
+          if [ -f data/bridge/manifest.json ]; then
+            echo "data/bridge is in the tree - assembling locally (no network fetch, sha256-verified)"
+            python scripts/assemble_data_bridge.py
+          else
+            echo "bridge absent - downloading the data-tab Dropbox mirrors"
+            dl () {
+              curl -fL --retry 3 --retry-delay 5 -o "data/$2" "$1" && echo "OK $2 $(stat -c%s data/$2) bytes" || { echo "FAILED $2"; exit 1; }
+            }
+            dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" training_features.tif
+            dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
+            dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
+          fi
           ls -lh data/
           sha256sum data/*.tif | tee data/checksums.txt
 
@@ -100,7 +125,7 @@ jobs:
       - name: Stage fold outputs
         run: |
           mkdir -p fold
-          cp -f outputs/prob_raw.tif outputs/manifest.json outputs/heldout_mc${{ matrix.fold }}.npz fold/
+          cp -f outputs/prob_raw.tif outputs/manifest.json outputs/heldout_mc$(( FOLD_OFFSET + ${{ matrix.fold }} )).npz fold/
           cp -f outputs/model_mc*.pt fold/ 2>/dev/null || true
           cp -f outputs/norm_stats.json fold/ 2>/dev/null || true
           cp -f train.log inference.log fold/ 2>/dev/null || true
@@ -144,14 +169,20 @@ jobs:
           pattern: fold-*
           path: folds
 
-      - name: Download labels + sample grid (for validation and the informational score)
+      - name: Place labels + sample grid (sha256-pinned git bridge; Dropbox fallback)
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p data
-          dl () { curl -fL --retry 3 -o "data/$2" "$1" && echo "OK $2 $(stat -c%s data/$2)"; }
-          dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
-          dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
-          dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" training_features.tif
+          if [ -f data/bridge/manifest.json ]; then
+            echo "data/bridge is in the tree - assembling locally (no network fetch, sha256-verified)"
+            python scripts/assemble_data_bridge.py
+          else
+            echo "bridge absent - downloading the data-tab Dropbox mirrors"
+            dl () { curl -fL --retry 3 -o "data/$2" "$1" && echo "OK $2 $(stat -c%s data/$2)"; }
+            dl "https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&dl=1" labels.tif
+            dl "https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&dl=1" sample_submission.tif
+            dl "https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&dl=1" training_features.tif
+          fi
 
       - name: Blend + shape + write submission
         run: |
