@@ -513,17 +513,37 @@ def test_emission_decision_reconciles_the_measurements():
 
 
 def test_committed_emission_decision_states_its_conditions():
+    """The committed record must state its conditions - and its verdict must FOLLOW from them.
+
+    This test used to require an unmet condition ("an unmet condition must be recorded, not
+    hidden"), which pinned the state of the evidence rather than the rule: once the ensemble-2
+    sweep satisfied condition 3 the same assertion failed *because the pipeline worked*.  What
+    actually has to hold is the implication: the conclusion is one of the three derived branches
+    and it cannot claim more than the conditions passed.
+    """
     p = ROOT / "data/evidence/emission_decision.json"
     if not p.exists():
         pytest.skip("emission decision not computed in this checkout")
     d = json.loads(p.read_text())
-    conds = {c["condition"]: c for c in d["verdict"]["conditions"]}
-    assert len(conds) >= 3
-    assert any("0.01" in k for k in conds), "the pre-registered gain condition must be present"
-    assert any(c["passes"] is False for c in d["verdict"]["conditions"]), \
-        "an unmet condition (second-ensemble reproduction) must be recorded, not hidden"
+    v = d["verdict"]
+    conditions = v["conditions"]
+    assert len(conditions) >= 3
+    assert all(isinstance(c["passes"], bool) for c in conditions)
+    assert any("0.01" in c["condition"] for c in conditions), \
+        "the pre-registered gain condition must be present"
     assert d["crossovers"]["blanket_vs_shipped"]["crossover_px"] > 0
-    assert d["verdict"]["conclusion"]
+    cond3 = next(c for c in conditions if "second" in c["condition"])
+    measured = "NOT MEASURED" not in cond3["measured"]
+    if all(c["passes"] for c in conditions):
+        assert v["conclusion"].startswith("SHIP the measured policy")
+        assert measured, "a SHIP verdict needs a measured reproduction, not an assumed one"
+    elif not measured:
+        assert v["conclusion"].startswith("measured, not yet reproduced")
+    else:
+        assert v["conclusion"].startswith("measured, not shipped")
+    # whatever the branch, a SHIP cannot be claimed while a condition is unmet
+    if not all(c["passes"] for c in conditions):
+        assert not v["conclusion"].startswith("SHIP")
 
 
 # ---------------------------------------------------------------------------------------------

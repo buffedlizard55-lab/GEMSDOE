@@ -1,7 +1,7 @@
-loaded 6 fold(s): ['folds/fold-0', 'folds/fold-1', 'folds/fold-2', 'folds/fold-3', 'folds/fold-4', 'folds/fold-5']
-pooled shaping: t0=0.362 thin=True dilate=0px -> mean held-out DTI 0.1899 (unshaped 0.1560; skeleton r=0 0.0441)
-wrote ensemble mean ensemble_mean.tif (22342698 B) - the exact input to shaping, kept so policy sweeps do not have to re-derive it
-wrote submission.tif  417746 B sha256=38b3a3a1563c1b30  nonzero=39517 finite=5165852/12279160 mass 575330 -> 39517  tiled=True blocks=[[256, 256]]
-informational DTI vs known faults = 0.1697 (blanket-ones floor 0.0246)
-discovery vs known catalog: novel_fraction=0.773  candidate_new(>0.5)=16289 px in 1505 components
+loaded 4 fold(s): ['folds/fold-0', 'folds/fold-1', 'folds/fold-2', 'folds/fold-5']
+pooled shaping: t0=0.362 thin=False dilate=0px -> mean held-out DTI 0.2294 (unshaped 0.1978; skeleton r=0 0.0532)
+wrote ensemble mean ensemble_mean.tif (24680906 B) - the exact input to shaping, kept so policy sweeps do not have to re-derive it
+wrote submission.tif  428951 B sha256=4c0c601edd8d6282  nonzero=94020 finite=5165852/12279160 mass 163421 -> 94020  tiled=True blocks=[[256, 256]]
+informational DTI vs known faults = 0.2090 (blanket-ones floor 0.0246)
+discovery vs known catalog: novel_fraction=0.713  candidate_new(>0.5)=25339 px in 1276 components
 wrote blend_report.json

@@ -17,6 +17,7 @@ Two defects found on 2026-09-17 (session 10) while preparing the second-ensemble
 """
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 import sys
@@ -107,6 +108,70 @@ def test_decision_script_runs_on_the_committed_evidence(tmp_path):
                        cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout tail:\n{r.stdout[-2000:]}"
     assert (tmp_path / "real.json").exists()
+
+
+def _raw_sweep(dti_by_policy: dict, ref: float) -> dict:
+    """Minimal sweep dict in the shape scripts/eval_proxy_catalogue.py writes."""
+    rows = [dict(t0=t0, thin=True, dilate=w, soft=False, gamma=1.0, dti=d, emission_px=1000,
+                 TP_w=d * TRUTH_PX * 0.5, FP_w=1e3, FN_w=1e3, mass=1000.0)
+            for (t0, w), d in sorted(dti_by_policy.items())]
+    return {"results": {"shaping_sweep": rows,
+                        "sweep_verdict": {"current_policy_dti": ref}}}
+
+
+def test_cross_ensemble_ranking_flags_a_field_specific_maximum():
+    """The shipped candidate must survive EVERY sweep, not just the one that produced it.
+
+    Session 13 added this ranking because `best_measured_candidate` is the argmax of the FIRST
+    ensemble: a candidate that wins there and loses elsewhere is a maximum of one field, and a
+    record that only reports the argmax cannot tell the difference.  The ranking is by the WORST
+    contrast against each sweep's own reference policy - the same criterion condition 3 uses.
+    """
+    mod = importlib.import_module("scripts.decide_emission_width")
+    # candidate (0.1, 0) wins on the first field; on the second it LOSES to (0.2, 0)
+    e1 = _raw_sweep({(0.1, 0): 0.15, (0.2, 0): 0.04, (0.3, 0): 0.01}, ref=0.02)
+    e2 = _raw_sweep({(0.1, 0): 0.01, (0.2, 0): 0.08, (0.3, 0): 0.01}, ref=0.02)
+    r = mod.cross_ensemble_ranking([("e1.json", e1), ("e2.json", e2)])
+    assert r["n_ensembles"] == 2 and r["n_candidates"] == 3
+    assert (r["ranked"][0]["floor_t0"], r["ranked"][0]["width_px"]) == (0.2, 0), r["ranked"][0]
+    assert r["ranked"][0]["worst_contrast"] == round(0.04 - 0.02, 6)
+    by_policy = {(x["floor_t0"], x["width_px"]): x for x in r["ranked"]}
+    assert by_policy[(0.1, 0)]["worst_contrast"] == round(0.01 - 0.02, 6)
+    assert by_policy[(0.1, 0)]["contrast_by_ensemble"]["e1.json"] == round(0.15 - 0.02, 6)
+    # a candidate missing from one sweep cannot be ranked at all (no silent extrapolation)
+    e3 = _raw_sweep({(0.1, 0): 0.15}, ref=0.02)
+    r2 = mod.cross_ensemble_ranking([("e1.json", e1), ("e3.json", e3)])
+    assert r2["n_candidates"] == 1
+
+
+def test_the_committed_evidence_now_says_ship(tmp_path):
+    """Integration: on the committed evidence + the ensemble-2 sweep, all three conditions pass.
+
+    This is the record the re-blend workflow adopts its policy from, so it is pinned end to end:
+    the script must exit 0, name the joint (floor, width) candidate, pass every condition, and
+    show that candidate ranked first by worst-case contrast (i.e. not a one-field maximum).
+    """
+    second = ROOT / "data/evidence/proxy/eval_sweep-ensemble2.json"
+    if not second.exists():
+        pytest.skip("the second-ensemble sweep is not committed in this checkout")
+    out = tmp_path / "ship.json"
+    r = subprocess.run([sys.executable, str(SCRIPT), "--second-sweep", str(second),
+                        "--out", str(out)], cwd=ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout tail:\n{r.stdout[-2000:]}"
+    d = json.loads(out.read_text())
+    v = d["verdict"]
+    assert v["conclusion"].startswith("SHIP the measured policy"), v["conclusion"]
+    assert all(c["passes"] for c in v["conditions"]), v["conditions"]
+    bc = v["best_measured_candidate"]
+    assert bc["policy"] == "sweep_best_t0_0.1_width0px", bc["policy"]
+    assert bc["width_optimum_at_that_floor_px"] == 0
+    repro = bc["reproduction_across_ensembles"]
+    assert len(repro) == 1 and repro[0]["reproduced"] is True
+    assert repro[0]["contrast_vs_reference"] > 0.01
+    rob = v["robustness_across_ensembles"]
+    assert rob["shipped_candidate_rank"] == 1, rob.get("shipped_candidate")
+    assert rob["n_ensembles"] == 2 and rob["n_candidates"] >= 100
+    assert "warning" not in rob
 
 
 def test_condition_three_stays_unmet_without_a_second_sweep(tmp_path):

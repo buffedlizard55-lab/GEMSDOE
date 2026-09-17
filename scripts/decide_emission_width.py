@@ -21,8 +21,16 @@ directions:
 
   C. proxy-only population (truth = 6,166 km of USGS SGMC fault trace that the training labels
      do NOT contain; the closest measurable stand-in for the scored "new fault" universe)
-       skeleton 0.0144  <  1 px 0.0205  <  2 px 0.0256  <  3 px 0.0312  <  4 px 0.0340  <  6 px 0.0395
-     -> wider wins, monotonically.
+     The 2026-09-16 grids moved the FLOOR only through `shaping_thresholds()`'s log spacing, whose
+     low end is 0.043 -- so "the floor is binary on this field" was true of the grid, not of the
+     field.  The 2026-09-17 sweep (session 11, run 35262778745) swept explicit floors
+     0 .. 0.9 and found that the winning policy is a FLOOR change with no widening at all:
+
+       floor 0.1, width 0 px  ->  DTI 0.1365   (shipped policy on the same field: 0.0410)
+       floor 0.1, width 1 px  ->  DTI 0.0918   ... widening HURTS once the floor is right,
+       floor 0.6, width 20 px ->  DTI 0.0741   ... and every floor >= 0.2 still prefers a band.
+
+    -> the decision variable is the joint (floor, thinning, width) policy, not the width alone.
 
 The disagreement is not noise, it is the point.  A and C measure the SAME operator against
 populations that differ in exactly the way the competition cares about: in A the model has seen
@@ -52,8 +60,18 @@ that identity is asserted below, since the whole projection rests on it).  Two c
 That makes the decision a *sensitivity* question with a computable answer: which of the plausible
 scored-truth sizes are we actually in?  This script reports the crossovers, projects every
 measured policy onto a range of plausible |G|, and states the verdict against the repository's
-pre-registered rule (a change must beat the current default by > 0.01 on the new-fault-like
-population AND dominate it across plausible truth sizes AND reproduce on a second ensemble).
+pre-registered rule.  The rule is evaluated CANDIDATE-WISE, against the best measured candidate
+(a joint floor x width policy, ranked on the first ensemble's sweep):
+
+  1. it beats the shipped policy on the new-fault-like population by > 0.01;
+  2. every plausible scored-truth anchor favours it (a recorded crossover, not a boast);
+  3. its CONTRAST reproduces on every further independently trained ensemble that was handed in
+     with --second-sweep (absolute proxy DTI is not comparable across fold sets, so the record
+     keeps each sweep's own reference policy and compares contrasts).
+
+Session 13 added (3) as a LIST and added the cross-ensemble robustness ranking printed at the end:
+the candidate is ranked by its WORST contrast across every sweep in the record, because a maximum
+that exists on one field only is a field-specific maximum, not a policy.
 
 THE FINDING THAT MATTERS MORE THAN THE WIDTH
 --------------------------------------------
@@ -206,6 +224,45 @@ def policy_reproduction(sweep: dict, t0: float, width: int) -> dict | None:
             "reference_policy_dti": round(float(ref), 6),
             "contrast_vs_reference": round(float(target["dti"]) - float(ref), 6),
             "reference_is": "sweep_verdict.current_policy_dti of that same sweep"}
+
+
+def cross_ensemble_ranking(sweeps: list[tuple[str, dict]], limit: int = 10) -> dict:
+    """Rank every hard (floor, width) candidate by its WORST contrast taken over every sweep.
+
+    ``best_measured_candidate`` is the argmax of the FIRST ensemble's sweep, which is a maximum of
+    one field.  A policy is only worth shipping if it is not: this ranks the candidates that exist
+    in EVERY sweep by the smallest contrast they earn against each sweep's own reference policy, so
+    the record shows whether the shipped candidate is the robust one or merely the first field's
+    favourite.  (It is also the cheapest check of the pre-registered rule: a candidate whose worst
+    contrast is <= 0.01 cannot pass condition 3 on the sweeps supplied.)
+    """
+    per: list[tuple[str, float, dict]] = []
+    common: set | None = None
+    for name, sw in sweeps:
+        rows = [r for r in sw["results"]["shaping_sweep"]
+                if r["thin"] and not r.get("soft") and float(r.get("gamma", 1.0)) == 1.0]
+        ref = (sw["results"].get("sweep_verdict") or {}).get("current_policy_dti")
+        if ref is None:
+            continue
+        table = {(round(float(r["t0"]), 6), int(r["dilate"])): r for r in rows}
+        per.append((name, float(ref), table))
+        common = set(table) if common is None else (common & set(table))
+    if not per or not common:
+        return dict(n_ensembles=len(per), n_candidates=0, ranked=[],
+                    meaning="no candidate is present in every supplied sweep")
+    ranked = []
+    for t0, w in sorted(common):
+        contrasts = {name: table[(t0, w)]["dti"] - ref for name, ref, table in per}
+        ranked.append({"floor_t0": t0, "width_px": w,
+                       "contrast_by_ensemble": {k: round(v, 6) for k, v in contrasts.items()},
+                       "worst_contrast": round(min(contrasts.values()), 6),
+                       "mean_contrast": round(sum(contrasts.values()) / len(contrasts), 6),
+                       "dti_first_ensemble": round(per[0][2][(t0, w)]["dti"], 6),
+                       "emission_px_first_ensemble": int(per[0][2][(t0, w)].get("emission_px", -1))})
+    ranked.sort(key=lambda r: (-r["worst_contrast"], -r["mean_contrast"]))
+    return {"n_ensembles": len(per), "n_candidates": len(ranked), "ranked": ranked[:limit],
+            "meaning": ("ranked by the worst contrast against each sweep's own reference policy; "
+                        "a candidate that only wins on one field is a field-specific maximum")}
 
 
 def main() -> int:
@@ -429,6 +486,35 @@ def main() -> int:
         v["best_measured_candidate"]["reproduced_on_second_ensemble"] = repros[0]
         v["best_measured_candidate"]["reproduction_across_ensembles"] = repros
 
+    # ---------------------------------------------------------------- cross-ensemble robustness
+    # The candidate was picked as the argmax of ONE field.  Before the verdict is stated, every
+    # candidate that exists in every supplied sweep is ranked by its worst contrast, and the record
+    # carries both the ranking and where the shipped candidate sits in it.  A policy that only wins
+    # on the first ensemble would be reported here, loudly, instead of shipping as a maximum of one
+    # field - which is exactly what a single-ensemble sweep cannot see.
+    all_sweeps = [("eval_sweep.json", sw)]
+    for path_str in second_sweeps:
+        if Path(path_str).exists():
+            all_sweeps.append((path_str, load(Path(path_str))))
+    if len(all_sweeps) > 1:
+        rank = cross_ensemble_ranking(all_sweeps)
+        cand_t0 = float(m_best.group(1)) if m_best else None
+        cand_w = int(m_best.group(2)) if m_best else None
+        cand_key = (round(cand_t0, 6), cand_w) if m_best else None
+        pos = next((i + 1 for i, r in enumerate(rank["ranked"])
+                    if (r["floor_t0"], r["width_px"]) == cand_key), None)
+        rank["shipped_candidate"] = (f"floor {cand_t0:g}, width {cand_w} px "
+                                     f"ranks {pos} of {rank['n_candidates']}"
+                                     if pos else "the shipped candidate is not in the ranking")
+        rank["shipped_candidate_rank"] = pos
+        if pos and pos > 1:
+            best_of = rank["ranked"][0]
+            rank["warning"] = (f"the shipped candidate is NOT the worst-case best: floor "
+                               f"{best_of['floor_t0']}g, width {best_of['width_px']} px has the "
+                               f"higher worst-case contrast ({best_of['worst_contrast']:+.4f} vs "
+                               f"{rank['ranked'][pos - 1]['worst_contrast']:+.4f})")
+        v["robustness_across_ensembles"] = rank
+
     # ---------------------------------------------------------------- conditions, candidate-wise
     gain = round(best_cand["measured_dti"] - shipped["measured_dti"], 6)
     v["conditions"].append({
@@ -600,6 +686,17 @@ def main() -> int:
         print("  reproduction on %s: DTI %.4f vs its own reference %.4f -> %+.4f  %s"
               % (r2["sweep_file"], r2["measured_dti"], r2["reference_policy_dti"],
                  r2["contrast_vs_reference"], "REPRODUCED" if r2["reproduced"] else "NOT reproduced"))
+    rob = v.get("robustness_across_ensembles")
+    if rob and rob.get("ranked"):
+        print("\ncross-ensemble robustness (worst contrast against each sweep's own reference):")
+        for i, r in enumerate(rob["ranked"][:6], 1):
+            print("  %2d. floor %-8s width %2d px  worst %+.4f  mean %+.4f  per-ensemble %s"
+                  % (i, r["floor_t0"], r["width_px"], r["worst_contrast"], r["mean_contrast"],
+                     ", ".join(f"{k.split('/')[-1]}: {v2:+.4f}"
+                               for k, v2 in r["contrast_by_ensemble"].items())))
+        print("  %s" % rob.get("shipped_candidate"))
+        if rob.get("warning"):
+            print("  WARNING: %s" % rob["warning"])
     print("\nconclusion: %s" % v["conclusion"])
     print("top priority: %s" % v["top_priority"])
     print(f"\nwrote {op}")

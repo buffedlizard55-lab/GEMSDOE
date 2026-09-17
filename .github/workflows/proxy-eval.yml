@@ -410,10 +410,26 @@ jobs:
           set -euo pipefail
           LABEL="${{ needs.params.outputs.sweep_label }}"
           SUF=""; [ -n "$LABEL" ] && SUF="-$LABEL"
-          # The first ensemble's sweep (eval_sweep.json) stays the reference record; a labeled
-          # sweep is handed in as the SECOND ensemble so condition 3 can be evaluated.
+          # The first ensemble's sweep (eval_sweep.json) stays the reference record; every LABELLED
+          # sweep is handed in as an independent ensemble so condition 3 can be evaluated.
+          #
+          # EVERY labelled sweep on the branch is handed in, not only this run's (2026-09-17,
+          # session 13): condition 3 is "reproduced on a second (and every further) independently
+          # trained ensemble", and a record that keeps only the newest sweep forgets the earlier
+          # ensembles - a policy would then look reproduced on one evidence file while an earlier
+          # disagreement quietly left the record.
           SECOND=""
-          [ -n "$LABEL" ] && SECOND="--second-sweep data/evidence/proxy/eval_sweep$SUF.json"
+          if [ -n "$LABEL" ]; then
+            THIS="data/evidence/proxy/eval_sweep$SUF.json"
+            LIST="$THIS"
+            for f in data/evidence/proxy/eval_sweep-*.json; do
+              [ -e "$f" ] || continue
+              [ "$f" = "$THIS" ] && continue
+              LIST="$LIST,$f"
+            done
+            SECOND="--second-sweep $LIST"
+            echo "reproduction sweeps handed to the decision: $LIST"
+          fi
           python scripts/decide_emission_width.py \
             --out data/evidence/emission_decision.json $SECOND \
             2>&1 | tee "data/evidence/proxy/emission_decision$SUF.log"

@@ -739,17 +739,25 @@ def _emission_decision(ev: dict) -> str:
         c_dir = (f", still rising — <b>wide</b>" if rising
                  else ", falling with width once the floor is right — <b>narrow</b>")
 
+    # The anchor table is about the best measured CANDIDATE (a joint floor x width policy), not
+    # about the width axis: session 13 moved the winner from "widen the band" to "lower the floor,
+    # keep width 0", and a panel phrased around the widest band would have described a policy the
+    # search did not pick.  Keys are read with fallbacks so an older record still renders.
+    def _cand_cell(a):
+        return (a.get("candidate_dti", a.get("wide_dti")), a.get("candidate_wins", a.get("wide_wins")))
     anchors = "".join(
         '<tr><td>%s</td><td class="num">%s</td><td class="num">%.4f</td><td class="num">%.4f</td>'
-        '<td>%s</td></tr>' % (e(a["anchor"]), f'{a["truth_px"]:,}', a["shipped_dti"], a["wide_dti"],
-                              '<span class="pill ok">wider wins</span>' if a["wide_wins"]
-                              else '<span class="pill">skeleton wins</span>')
+        '<td>%s</td></tr>' % (e(a["anchor"]), f'{a["truth_px"]:,}', a["shipped_dti"],
+                              _cand_cell(a)[0],
+                              '<span class="pill ok">candidate wins</span>' if _cand_cell(a)[1]
+                              else '<span class="pill">shipped wins</span>')
         for a in (d["verdict"].get("anchor_projection") or []))
 
     return f"""<h2 id="emission">The emission question: three measurements, one decision</h2>
-<p>How wide a band should a submission emit around its skeleton? Three measurements exist and the
-first one disagrees with the other two — which is the interesting part, because they differ exactly
-in whether the model has seen the truth:</p>
+<p>How wide a band should a submission emit around its skeleton — and, once the floor is swept
+rather than assumed, at what floor? Three measurements exist and the first one disagrees with the
+other two — which is the interesting part, because they differ exactly in whether the model has
+seen the truth:</p>
 <table><thead><tr><th>measurement</th><th>truth</th><th>what it says</th></tr></thead><tbody>
 <tr><td><b>A</b> held-out crops</td><td>the catalogue the model trained on</td>
 <td>{a_txt} — <b>narrow</b></td></tr>
