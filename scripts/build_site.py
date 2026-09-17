@@ -69,6 +69,7 @@ def page(title: str, active: str, body: str, subtitle: str = "") -> str:
         ("results.html", "Results"),
         ("sources.html", "Sources"),
         ("verification.html", "Verification"),
+        ("review.html", "Current review"),
         ("reproduce.html", "Reproduce"),
     ]
     links = "".join(
@@ -282,8 +283,9 @@ faults back is therefore not the goal; finding the <em>unmapped</em> ones is.</p
 
 <h2>Where this stands</h2>
 <p>The pipeline runs end-to-end on the real competition rasters — train → inference → blend → format
-validation → scoring — on CPU runners, and locally in-sandbox against a committed real-data fixture
-(37 tests, all green). The 2026-09-16 audit found and fixed a defect that had silently destroyed the
+validation → scoring — on CPU runners, and locally in-sandbox against a committed real-data fixture.
+The regression suite is executed by CI; its exact count is kept in the run log rather than hard-coded
+in this page. The 2026-09-16 audit found and fixed a defect that had silently destroyed the
 ensemble's submission; a rebuild from the surviving fold artifacts produces the newest submission
 below. What remains for a competitive score is (1) optimising against the <em>scored</em> universe
 rather than the catalogue and (2) GPU training at full capacity; see
@@ -505,6 +507,55 @@ straight from <a href="{e(lb['url'])}">the leaderboard page</a> (no account need
 {more}
 {not_on_it}
 {how_to_read}"""
+
+
+def build_review(ev: dict) -> str:
+    """Render the dated review without copying mutable leaderboard/run numbers.
+
+    The detailed review lives in the repository so it remains available even when a Pages
+    deployment is stale. This page deliberately contains only the official source links and
+    the changes/limitations summary; measured run data continues to come from evidence JSON.
+    """
+    rows = [
+        ("Task", "develop models that identify geological faults", PROB),
+        ("Scored target", "new expert-labelled faults; final round uses the expanded labels", PROB + "#competition-structure"),
+        ("Format", "EPSG:32611, 100 m, one float32 probability layer", PROB + "#submission-format"),
+        ("Metric", "distance-weighted Tversky; 300 m support; alpha 0.2, beta 0.8", PROB + "#performance-metric"),
+        ("Data context", "GeoDAWN, USGS/INGENIOUS labels and 1 m DEM links", PROB + "#datasets"),
+        ("Deadline / prize", "Dec. 3, 2026 at 11:59 p.m. UTC; $300,000 total", COMP),
+        ("External data", "allowed when licensing permits challenge use and sponsor sharing", COMP + "#use-of-external-data"),
+        ("Scientific references", "automatic fault mapping and Western USA fault mapping", ABOUT + "#additional-information"),
+    ]
+    table = "".join(
+        '<tr><td><b>%s</b></td><td>%s</td><td><a href="%s">official source</a></td></tr>'
+        % (e(k), e(v), e(u)) for k, v, u in rows
+    )
+    return f"""<h2>Source review dated 2026-09-17 UTC</h2>
+<p>This page is a concise, reader-friendly companion to the full
+<a href="{REPO}/blob/main/REVIEW_2026-09-17.md">repository review</a>. The official competition pages
+were fetched and read on that date. The table below maps each load-bearing statement to the official
+page where it can be checked manually; the repository's generated evidence and the official rules PDF
+remain authoritative over any summary here.</p>
+<table class="wide"><thead><tr><th>topic</th><th>review result</th><th>manual check</th></tr></thead>
+<tbody>{table}</tbody></table>
+<h2>What changed in the code</h2>
+<ul>
+<li><b>Submission reliability:</b> direct inference now uses the same fail-loud writer as blending;
+read-back checks reject invalid, empty or incorrectly tiled GeoTIFFs.</li>
+<li><b>Workflow reliability:</b> trainer and inference exit codes are no longer hidden by a
+successful filtering subshell; incomplete fold matrices cannot be blended.</li>
+<li><b>Optional DEM path:</b> a local USGS 3DEP mosaic is reprojected to the feature grid and five
+well-defined derivatives are added symmetrically to train and inference. It is disabled by default
+until a path is supplied.</li>
+</ul>
+<h2>Access still required</h2>
+<div class="note warn"><b>No leaderboard claim is made.</b> The data tab and submission form require an
+entrant account. Full training also needs GPU compute and external-data storage. The private test
+labels are intentionally withheld. The repository can fetch through a GitHub runner, train, create
+and validate a submission artifact; it cannot enroll an entrant, upload a submission or observe a
+private score.</div>
+<p>See <a href="verification.html">Verification</a> for the independent-source checks and
+<a href="reproduce.html">Reproduce</a> for commands.</p>"""
 
 
 def build_verification(ev: dict) -> str:
@@ -1494,6 +1545,8 @@ def main() -> int:
         "results.html": build_results(ev),
         "sources.html": build_sources(ev),
         "verification.html": build_verification(ev),
+        "review.html": page("Current review", "review.html", build_review(ev),
+                             "What was re-checked on 2026-09-17, what changed, and what remains blocked."),
         "reproduce.html": build_reproduce(ev),
     }
     for name, content in pages.items():

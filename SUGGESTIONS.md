@@ -1,5 +1,18 @@
 # Suggestions and Improvements — Implemented for Top Leaderboard
 
+**Review update 2026-09-17:** official competition pages were fetched again; see
+[`REVIEW_2026-09-17.md`](REVIEW_2026-09-17.md) for the line-by-line source table and limitations.
+
+## Session 8 implementation queue closed
+
+| Improvement | Why it matters | Status / evidence |
+|---|---|---|
+| Route direct inference through the fail-loud submission writer | The blend path was protected, but a user running `src.inference` could still recreate the invalid tiled TIFF | ✅ `src/inference.py`, `tests/test_ensemble.py`, `src/submission_io.py` |
+| Make Python pipeline failures observable | A successful `grep || true` subshell can turn a crashed trainer into a green workflow | ✅ `.github/workflows/train-and-submit.yml` and `train-ensemble.yml` now use `set -euo pipefail` without masking filters; failed folds block blending |
+| Wire optional 3DEP DEM derivatives consistently | A config flag previously advertised DEM features without adding them, risking train/inference channel mismatch | ✅ `src/external_data.py` + `src/dataset.py`; reprojected local mosaic, five derivatives, explicit path; default disabled until data is supplied |
+| Keep lightweight checks lightweight | A test importing a split helper should not require SMP model construction | ✅ `src/models.py` lazy import; model creation still reports a clear dependency error |
+| Make optional rules text evidence explicit | A report without `extracted_text` is valid for link/source verification | ✅ `tests/test_rules_quotes.py` skips only that unavailable optional artifact |
+
 **Goal:** Constantly reviewed and improved upon via autonomous deep research, scientific literature, organized knowledge, critical thinking.
 
 **Sources:** All verified, no hallucinations, links for manual review in `docs/literature.md` and `docs/references.md`.

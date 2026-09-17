@@ -9,7 +9,7 @@ We extend to ensemble of architectures for leaderboard top.
 
 import torch
 import torch.nn as nn
-import segmentation_models_pytorch as smp
+
 
 def get_model(arch="unetplusplus", encoder="efficientnet-b5", in_channels=19, classes=1, pretrained=True):
     """Build a segmentation model.
@@ -22,6 +22,18 @@ def get_model(arch="unetplusplus", encoder="efficientnet-b5", in_channels=19, cl
     the wrong default never reached a run, but it was a trap for anyone importing
     get_model directly.
     """
+    # Keep SMP optional for metric, data and submission-format utilities.  Importing
+    # `src.train` only to use its split helper should not require the heavyweight model
+    # stack; model construction below still fails clearly if an actual training run
+    # omitted the required dependency.
+    try:
+        import segmentation_models_pytorch as smp
+    except ImportError as exc:
+        raise ImportError(
+            "segmentation-models-pytorch is required to build a model; install "
+            "requirements.txt (or use the lightweight metric/test dependencies)"
+        ) from exc
+
     def _mk(maker, **kw):
         """Build with ImageNet weights, falling back to random init if the weights
         download fails (the sandbox cannot reach the release-asset host; runners can).

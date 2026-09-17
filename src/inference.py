@@ -37,6 +37,7 @@ from .dataset import (apply_norm_stats, band_names, fit_norm_stats, load_feature
                       load_norm_stats, resolve_path, FEATURE_NAME_CANDIDATES, SAMPLE_NAME_CANDIDATES)
 from .models import get_model
 from .postprocess import postprocess_pipeline
+from .submission_io import clean_profile, write_submission
 
 
 def _gaussian_weight(p: int, sigma_frac: float = 0.25) -> np.ndarray:
@@ -135,10 +136,13 @@ def main():
     out_dir = Path(cfg["data"]["output_dir"])
     model_dir = Path(args.model_dir) if args.model_dir else out_dir
 
-    X, y, fmeta, lmeta, tags = load_features_and_labels(cfg["data"].get("feature_path"),
-                                                        cfg["data"].get("label_path"),
-                                                        require_labels=bool(args.score_against),
-                                                        use_fixture=bool(cfg["data"].get("use_fixture")))
+    X, y, fmeta, lmeta, tags = load_features_and_labels(
+        cfg["data"].get("feature_path"), cfg["data"].get("label_path"),
+        require_labels=bool(args.score_against),
+        use_fixture=bool(cfg["data"].get("use_fixture")),
+        use_external_dem=bool(cfg["data"].get("use_external_dem", False)),
+        external_dem_path=cfg["data"].get("external_dem_path"),
+    )
     stats_path = out_dir / "norm_stats.json"
     if stats_path.exists():
         stats = load_norm_stats(stats_path)
@@ -229,20 +233,28 @@ def main():
         buf[:hh, :ww] = final[:hh, :ww]
         final = buf
 
-    if cfg["data"].get("use_external_dem"):
-        from .external_data import augment_with_dem_features   # noqa: F401 (documented hook)
-        print("note: DEM augmentation is applied at training time via external_data.py; "
-              "inference must use the same band stack")
-
-    opts = dict(driver="GTiff", height=h, width=w, count=1, dtype="float32",
-                crs=crs, transform=tr, nodata=None, compress="lzw", TILED="YES")
-    with rasterio.open(args.out, "w", **opts) as dst:
-        dst.write(final, 1)
-        dst.set_band_description(1, "fault-presence probability (distance-weighted Tversky submission)")
-        dst.update_tags(source="GEMSDOE ensemble", models=";".join(c.name for c in ckpts),
-                        n_models=str(len(ckpts)), tta=str(not args.no_tta))
-    print(f"wrote {args.out}  valid_px={int(np.isfinite(final).sum())}/{final.size} "
-          f"min={np.nanmin(final):.4f} max={np.nanmax(final):.4f} mean={np.nanmean(final):.4f}")
+    # Always write through the fail-loud writer.  Do not copy the sample's block geometry
+    # and force TILED=YES: the official template is striped and its width (3292) is not a
+    # legal TIFF tile width.  That exact combination previously left a tiny unreadable
+    # stub while a piped workflow reported success; clean_profile() removes the stale
+    # layout and write_submission() reads the bytes back before returning.
+    if sample:
+        with rasterio.open(sample) as src:
+            source_profile = src.profile.copy()
+        profile = clean_profile(source_profile, height=h, width=w, crs=crs, transform=tr,
+                                dtype="float32")
+    else:
+        profile = clean_profile(None, height=h, width=w, crs=crs, transform=tr,
+                                dtype="float32")
+    written = write_submission(
+        args.out, final, profile,
+        band_description="fault-presence probability (distance-weighted Tversky submission)",
+        tags={"source": "GEMSDOE ensemble", "models": ";".join(c.name for c in ckpts),
+              "n_models": len(ckpts), "tta": not args.no_tta},
+    )
+    print(f"wrote {args.out}  valid_px={written['finite_px']}/{written['total_px']} "
+          f"nonzero={written['nonzero_px']} mass={written['prob_mass']:.1f} "
+          f"tiled={written['tiled']} blocks={written['block_shapes']}")
 
     # Run summary next to the submission: docs/results.html quotes these numbers, and
     # scripts/audit_docs.py re-derives that row from this file so a stale claim fails CI.

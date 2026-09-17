@@ -1,4 +1,30 @@
-# Project status — 2026-09-16 (session 4, extended by session 5 below)
+# Project status — 2026-09-17 (session 8 review)
+
+## Session 8 — reliability and provenance fixes
+
+The official competition home page, problem page and About page were fetched and read again on
+2026-09-17. The line-by-line source table and the changes made in this review are recorded in
+[`REVIEW_2026-09-17.md`](REVIEW_2026-09-17.md); the competition pages and official rules PDF remain the
+controlling sources.
+
+Implemented in this pass:
+
+- direct `src.inference` now uses `src.submission_io.write_submission()` rather than forcing tiled TIFF
+  output on the striped sample profile; the writer reads the bytes back and refuses an invalid or empty
+  raster;
+- training/inference workflow pipelines no longer use a successful `grep || true` subshell that masks a
+  failed Python process; the ensemble blend explicitly refuses an incomplete fold matrix;
+- optional USGS 3DEP DEM derivatives are now a real, symmetric path: a supplied local mosaic is reprojected
+  to the feature grid and used by both train and inference. The default GPU config is now disabled until
+  `data.external_dem_path` is set, so the documented default cannot silently change the channel count;
+- SMP is imported lazily and the rules evidence test handles a report that intentionally omits the optional
+  extracted PDF text.
+
+**Current local verification:** run `python -m pytest tests -q` after installing the project/test dependencies;
+`REVIEW_2026-09-17.md` explains why the sandbox cannot produce a leaderboard score. The full prior evidence
+and historical findings remain below; they are retained to make regressions auditable rather than erased.
+
+---
 
 Supersedes the previous `STATUS.md` (session 3, 2026-09-15). Session 3's own claims are quoted where
 this session falsified them, because the way they were falsified is the most useful thing in this file:

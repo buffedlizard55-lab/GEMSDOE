@@ -2,6 +2,7 @@
 
 > **Start here → [the generated project site](https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html)**
 > (Overview · [Data](https://buffedlizard55-lab.github.io/GEMSDOE/docs/data.html) ·
+> [Current review](REVIEW_2026-09-17.md) ·
 > [Metric](https://buffedlizard55-lab.github.io/GEMSDOE/docs/metric.html) ·
 > [Method](https://buffedlizard55-lab.github.io/GEMSDOE/docs/method.html) ·
 > [Results](https://buffedlizard55-lab.github.io/GEMSDOE/docs/results.html) ·
@@ -245,7 +246,8 @@ GEMSDOE/
 │   ├── prepare_data.py                # pre-flight CRS/resolution/bounds checks (exit != 0 on failure)
 │   ├── run_ab_loss_experiment.sh      # loss A/B used for the docs table
 │   └── validate_submission.py         # submission format validator (exit 1 = broken)
-├── requirements.txt            # ranges
+├── requirements.txt            # runtime/model ranges
+├── requirements-dev.txt        # runtime + pytest/PDF audit dependencies
 ├── requirements.verified.txt   # exact versions installed + import-verified
 ├── environment.yml
 ├── docs/                       # GitHub Pages site (index, methodology, data, results, ...)
@@ -257,9 +259,9 @@ GEMSDOE/
 ## 5b. What actually runs today (measured, 2026-09-12)
 
 ```bash
-pip install -r requirements.txt            # exact verified pins: requirements.verified.txt
+pip install -r requirements-dev.txt       # runtime + pytest/PDF audit dependencies
 python src/metrics.py --self-test          # 8 checks: scorer == literal formula transcription
-python tests/test_metric.py                # 20/20 pass
+python -m pytest tests -q                   # full regression suite (optional text extract test may skip)
 python scripts/build_reconstruction_dataset.py        # needs the pinned public-source tree (see data/README.md)
 python -m src.train     --config configs/config_recon_cpu.yaml
 python -m src.inference --config configs/config_recon_cpu.yaml --out outputs_recon/submission.tif
@@ -281,7 +283,7 @@ cd GEMSDOE
 conda env create -f environment.yml
 conda activate gemsdoe
 # or
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # 3. Place competition data
 mkdir -p data/

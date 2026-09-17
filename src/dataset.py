@@ -351,8 +351,28 @@ class FaultDataset(Dataset):
 # --------------------------------------------------------------------------------------
 # high-level loaders used by train.py / inference.py
 # --------------------------------------------------------------------------------------
+def _maybe_add_external_dem(X, meta, *, use_external_dem=False, external_dem_path=None):
+    """Append explicitly supplied DEM derivatives, or leave the official stack unchanged.
+
+    The competition's DEM URLs are optional external data, not a band that can be
+    silently inferred from the 19-band GeoTIFF.  Requiring a local mosaic path when the
+    flag is enabled prevents train/inference channel drift and makes provenance clear.
+    """
+    if not use_external_dem:
+        return X
+    if not external_dem_path:
+        raise FileNotFoundError(
+            "data.use_external_dem=true requires data.external_dem_path to point to a "
+            "local, grid-covering DEM mosaic; download and mosaic the licensed USGS 3DEP "
+            "tiles first, or set use_external_dem=false"
+        )
+    from .external_data import augment_from_dem_path
+    return augment_from_dem_path(X, external_dem_path, meta, resolution=100)
+
+
 def load_features_and_labels(feature_path=None, label_path=None, require_labels=True,
-                             use_fixture=False):
+                             use_fixture=False, use_external_dem=False,
+                             external_dem_path=None):
     """Back-compatible helper: returns (X(H,W,C), y(H,W), feat_meta, label_meta, tags).
 
     `use_fixture=True` loads data/fixture/ instead: a 512x512 window of the REAL
@@ -364,7 +384,14 @@ def load_features_and_labels(feature_path=None, label_path=None, require_labels=
         from .fixture import load_fixture
 
         X, y, meta, man = load_fixture()
+        X = _maybe_add_external_dem(
+            X, meta, use_external_dem=use_external_dem,
+            external_dem_path=external_dem_path,
+        )
         tags = meta.get("band_tags") or [{} for _ in range(X.shape[-1])]
+        if len(tags) < X.shape[-1]:
+            tags.extend({"description": n} for n in
+                         ("dem_slope", "dem_curvature", "dem_tpi", "dem_tri", "dem_detrended"))
         return X, y, meta, meta, tags
 
     fp = resolve_path(feature_path, FEATURE_NAME_CANDIDATES)
@@ -375,6 +402,13 @@ def load_features_and_labels(feature_path=None, label_path=None, require_labels=
         if require_labels:
             raise
     X, fmeta, tags = load_stack(fp)
+    X = _maybe_add_external_dem(
+        X, fmeta, use_external_dem=use_external_dem,
+        external_dem_path=external_dem_path,
+    )
+    if len(tags) < X.shape[-1]:
+        tags = list(tags) + [{"description": n} for n in
+                             ("dem_slope", "dem_curvature", "dem_tpi", "dem_tri", "dem_detrended")]
     if lp is None:
         return X, None, fmeta, None, tags
     y, lmeta = load_labels(lp)
