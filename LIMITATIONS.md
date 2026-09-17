@@ -1,3 +1,20 @@
+## Session 13 (2026-09-17) — which blockers moved
+
+The emission-policy question (a change had to beat the shipped policy by > 0.01 on the
+new-fault-like population, dominate it across plausible scored-truth sizes, and reproduce on an
+independent ensemble) is now **answered**: `data/evidence/emission_decision.json` passes all three
+conditions for floor 0.1 / thin / width 0 px on **three** independently measured fields — ensemble 1
+(+0.0954), ensemble 2 (+0.0456) and the shipping field itself, the mean of ensembles 1+2 (+0.0695) —
+the cross-ensemble ranking puts that candidate first of 132 by worst-case contrast, and the re-blend
+ships it. That closes the *policy* half of row 6 below without touching the *model* half, and it
+sharpens row 5 from "the proxy is a stand-in" to a number: the adopted policy is worth +0.0456 on
+the worst of the three fields, so the choice is not an artefact of one field.
+
+What is left is detection, and it is now the binding constraint rather than a suspicion: 74 % of the
+new-fault-like truth lies more than 12 px from any emitted pixel, a perfect localizer scores 1.0
+while the best 16 px band caps at 0.1618, and this model's 0.1365 on that population is 69 % of the
+leaderboard top (0.1972). Rows 1, 2, 7, 8, 9 and 10 below are unchanged.
+
 ## Sessions 11–12 (2026-09-17) — current status of every blocker, line by line
 
 Each row states the limitation, what it costs, and the smallest piece of access that would remove it.

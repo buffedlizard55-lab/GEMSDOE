@@ -145,18 +145,22 @@ def test_cross_ensemble_ranking_flags_a_field_specific_maximum():
 
 
 def test_the_committed_evidence_now_says_ship(tmp_path):
-    """Integration: on the committed evidence + the ensemble-2 sweep, all three conditions pass.
+    """Integration: on EVERY committed sweep, all three conditions pass and the rule is consistent.
 
-    This is the record the re-blend workflow adopts its policy from, so it is pinned end to end:
-    the script must exit 0, name the joint (floor, width) candidate, pass every condition, and
-    show that candidate ranked first by worst-case contrast (i.e. not a one-field maximum).
+    This is the record the re-blend workflow adopts its policy from, and the way the proxy-eval
+    workflow builds it: the labelled sweeps on the branch are handed in together (the shipping-field
+    mean12 sweep included), each contrasting the candidate with ITS OWN reference policy.  The test
+    derives the expected field count from the files present, so a new ensemble strengthens the record
+    instead of breaking the test - and the rank-1/first-place claim is checked against the number of
+    sweeps that were actually supplied.
     """
-    second = ROOT / "data/evidence/proxy/eval_sweep-ensemble2.json"
-    if not second.exists():
-        pytest.skip("the second-ensemble sweep is not committed in this checkout")
+    labelled = sorted((ROOT / "data/evidence/proxy").glob("eval_sweep-*.json"))
+    if not labelled:
+        pytest.skip("no labelled ensemble sweep is committed in this checkout")
     out = tmp_path / "ship.json"
-    r = subprocess.run([sys.executable, str(SCRIPT), "--second-sweep", str(second),
-                        "--out", str(out)], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, str(SCRIPT), "--second-sweep",
+                        ",".join(str(p) for p in labelled), "--out", str(out)],
+                       cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout tail:\n{r.stdout[-2000:]}"
     d = json.loads(out.read_text())
     v = d["verdict"]
@@ -166,11 +170,13 @@ def test_the_committed_evidence_now_says_ship(tmp_path):
     assert bc["policy"] == "sweep_best_t0_0.1_width0px", bc["policy"]
     assert bc["width_optimum_at_that_floor_px"] == 0
     repro = bc["reproduction_across_ensembles"]
-    assert len(repro) == 1 and repro[0]["reproduced"] is True
-    assert repro[0]["contrast_vs_reference"] > 0.01
+    assert len(repro) == len(labelled), (len(repro), [x["sweep_file"] for x in repro])
+    assert all(x["reproduced"] for x in repro), repro
+    assert min(x["contrast_vs_reference"] for x in repro) > 0.01
     rob = v["robustness_across_ensembles"]
     assert rob["shipped_candidate_rank"] == 1, rob.get("shipped_candidate")
-    assert rob["n_ensembles"] == 2 and rob["n_candidates"] >= 100
+    assert rob["n_ensembles"] == 1 + len(labelled), rob["n_ensembles"]
+    assert rob["n_candidates"] >= 100
     assert "warning" not in rob
 
 
@@ -219,6 +225,31 @@ def test_condition_three_fails_when_the_second_ensemble_flips_the_sign(tmp_path)
     out = d["verdict"]
     assert out["conclusion"].startswith("measured, not shipped")
     assert "condition 3" in out["conclusion"], out["conclusion"]
+
+
+def test_a_repeated_second_sweep_flag_does_not_drop_the_earlier_sweeps(tmp_path):
+    """`--second-sweep a --second-sweep b` evaluates BOTH (argparse would keep only the last).
+
+    The workflow joins the sweeps into one comma list, but a human or a future script calling the
+    flag twice would have had the earlier ensembles silently dropped while condition 3 still
+    reported a pass - less evidence under the same verdict.
+    """
+    paths = _evidence(tmp_path, second_gains=[0.0131, 0.0188, 0.0240])
+    second = paths.pop("--second-sweep")
+    third = tmp_path / "third_sweep.json"
+    third.write_text(json.dumps(_sweep([0.0131, 0.0188, 0.0240])))
+    out = tmp_path / "decision.json"
+    cmd = [sys.executable, str(SCRIPT), "--out", str(out)]
+    for k, v in paths.items():
+        cmd += [k, str(v)]
+    cmd += ["--second-sweep", str(second), "--second-sweep", str(third)]
+    r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    d = json.loads(out.read_text())
+    assert d["inputs"]["second_sweeps"] == [str(second), str(third)], d["inputs"]
+    assert d["inputs"]["second_sweep"] == f"{second},{third}", d["inputs"]
+    repro = d["verdict"]["best_measured_candidate"]["reproduction_across_ensembles"]
+    assert len(repro) == 2 and all(x["reproduced"] for x in repro), repro
 
 
 def test_a_second_list_of_sweeps_is_reproduced_one_by_one(tmp_path):

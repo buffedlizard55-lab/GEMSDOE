@@ -76,12 +76,16 @@ that exists on one field only is a field-specific maximum, not a policy.
 THE FINDING THAT MATTERS MORE THAN THE WIDTH
 --------------------------------------------
 The sweep measured a constant-ones submission (fill the data footprint with 1.0) on population C:
-DTI 0.0585, which BEATS the shipped skeleton's 0.0247 and every swept shaping candidate.  A
-constant map has no skill at all; it wins because recall is worth four times precision under this
-metric (alpha = 0.2, beta = 0.8) and because it pays its false-positive mass in a currency the
-denominator discounts.  Any policy that emits less coverage than a constant map is therefore not
-"conservative", it is *under-emitting*, and the crossover says at what truth size that becomes
-true.  This is reported here because it is actionable and it is uncomfortable.
+DTI 0.0585, which beat the shipped skeleton's 0.0247 and, at that point, every swept shaping
+candidate.  A constant map has no skill at all; it won because recall is worth four times
+precision under this metric (alpha = 0.2, beta = 0.8) and because it pays its false-positive mass
+in a currency the denominator discounts -- i.e. the shipped skeleton was not "conservative", it was
+*under-emitting*.  Session 13 then swept explicit floors and found a policy with actual skill that
+beats the constant map on the same population: floor 0.1 with NO widening scores 0.1365 there
+(constant-ones 0.0585, shipped 0.0247), so a low floor is not the same kind of bet as filling the
+footprint -- the candidate has to keep its contrast on further ensembles, which is what
+condition 3 measures.  The uncomfortable ordering is kept here on purpose: it is what made the
+floor axis, rather than the width axis, the thing worth measuring.
 
 NOT A LEADERBOARD PREDICTION.  Population C is state-geological-survey surface mapping, not the
 expert interpretation of GeoDAWN geophysics the prize scores; the numbers are for comparing
@@ -274,9 +278,12 @@ def main() -> int:
     ap.add_argument("--miss-distance", default="data/evidence/proxy/miss_distance-ensemble1.json",
                     help="scripts/measure_miss_distance.py evidence: the exact metric as a function "
                          "of the emitted band width, plus the localization/detection split")
-    ap.add_argument("--second-sweep", default=None,
+    ap.add_argument("--second-sweep", default=None, action="append",
                     help="sweep of a SECOND, independently trained ensemble (same recipe, different "
-                         "seed/folds), or a COMMA-SEPARATED LIST of them. Evaluated as condition 3: "
+                         "seed/folds), or a COMMA-SEPARATED LIST of them; the flag may be REPEATED and "
+                         "the lists are concatenated (a repeated flag that silently kept only the last "
+                         "list would let condition 3 pass on LESS evidence than the command line asked "
+                         "for). Evaluated as condition 3: "
                          "the policy this record proposes must keep the sign and size of its contrast "
                          "against each sweep's own reference policy. Written by the proxy-eval "
                          "workflow as data/evidence/proxy/eval_sweep-<label>.json")
@@ -287,9 +294,11 @@ def main() -> int:
 
     assert abs((ALPHA + BETA) - 1.0) < 1e-12, "the projection identity requires alpha + beta == 1"
     # A reproduction is per ENSEMBLE, so the flag takes a list: two independent sweeps that agree
-    # are a stronger claim than one, and the record has to be able to hold both.
-    second_sweeps = [q for q in (a.second_sweep or "").split(",") if q.strip()]
-    second_sweeps = [q.strip() for q in second_sweeps]
+    # are a stronger claim than one, and the record has to be able to hold both.  The flag is
+    # repeatable as well as comma-joined, and BOTH forms are concatenated - a repeated flag that
+    # quietly kept only the last list would shrink condition 3 without any visible symptom.
+    second_sweeps = [q.strip() for part in (a.second_sweep or [])
+                     for q in part.split(",") if q.strip()]
 
     # ------------------------------------------------------------------ measured policies (C)
     rows: list[dict] = []
@@ -410,6 +419,10 @@ def main() -> int:
     in_domain_rows = sorted(in_domain, key=lambda r: (r["t0"], r["dilate"]))
 
     # ------------------------------------------------------------------ verdict
+    # The rule is evaluated candidate-wise, so the best measured sweep candidate has to be known
+    # before any verdict text is written.
+    best_cand = max((r for r in rows if r["policy"].startswith("sweep_")),
+                    key=lambda r: r["measured_dti"])
     shipped = next(r for r in rows if r["policy"] == "shipped_skeleton_dilate0")
     wide = next(r for r in rows if r["policy"] == wide_name)
     blanket = next(r for r in rows if r["policy"] == "baseline_blanket_ones")
@@ -428,19 +441,21 @@ def main() -> int:
         # Computed, not typed: the blanket baseline's own number moved between evidence versions
         # (0.0585 over the footprint-clipped support, 0.0249 over the whole footprint), and a
         # hard-coded ratio then contradicted the table beside it.
-        "top_priority": ("beating the constant-ones baseline on the new-fault-like population is "
-                         "worth more than the width choice: the shipped skeleton (%.4f) sits %s the "
-                         "blanket baseline (%.4f) measured in this same record, and the leaderboard's "
-                         "top score (%.4f) is %.1fx it"
-                         % (shipped["measured_dti"],
-                            "above" if shipped["measured_dti"] > blanket["measured_dti"] else "below",
+        "top_priority": ("detection, not the emission policy, is the binding constraint: the best "
+                         "measured candidate (%.4f, %s) %s the constant-ones baseline (%.4f) on the "
+                         "new-fault-like population it was measured on, while the leaderboard's top "
+                         "score (%.4f) is %.1fx that baseline; the skeleton the candidate replaces "
+                         "scores %.4f there"
+                         % (best_cand["measured_dti"], best_cand["policy"],
+                            "beats" if best_cand["measured_dti"] > blanket["measured_dti"]
+                            else "trails",
                             blanket["measured_dti"], LEADERBOARD_TOP,
-                            LEADERBOARD_TOP / max(blanket["measured_dti"], 1e-9))),
+                            LEADERBOARD_TOP / max(blanket["measured_dti"], 1e-9),
+                            shipped["measured_dti"])),
     }
     # Sweep policies only: the baselines (blanket, catalogue copy) are ranked in the same table but
-    # they are controls, not candidates the shaping pipeline can produce.
-    best_cand = max((r for r in rows if r["policy"].startswith("sweep_")),
-                    key=lambda r: r["measured_dti"])
+    # they are controls, not candidates the shaping pipeline can produce (best_cand is computed
+    # above, before the verdict text that names it).
     v["best_measured_candidate"] = {
         "policy": best_cand["policy"],
         "measured_dti": best_cand["measured_dti"],
@@ -582,7 +597,7 @@ def main() -> int:
             f"scored-truth anchors with a crossover of {cw:,.0f} px ({cw * PX_KM:,.0f} km) "
             f"(condition 2), and the contrast reproduces on {len(repros)} independent ensemble(s) "
             f"({repro_txt}) (condition 3). Ship it through the re-blend workflow's "
-            f"SHAPING_T0/SHAPING_DILATE, which is the only path that writes an adopted policy")
+            f"SHAPING_T0/SHAPING_DILATE, which is the only path that writes an adopted policy.")
     elif not repros:
         v["conclusion"] = (
             f"measured, not yet reproduced: {cand_txt} beats the shipped policy on the "
@@ -628,7 +643,8 @@ def main() -> int:
         "purpose": ("reconcile the three disagreeing emission-width measurements and decide the "
                     "shipped shaping policy on the record, using the metric's own scaling in |G|"),
         "inputs": {"proxy_eval": a.proxy_eval, "reblend_eval": a.reblend_eval, "sweep": a.sweep,
-                   "second_sweep": a.second_sweep, "second_sweeps": second_sweeps,
+                   "second_sweep": ",".join(second_sweeps) or None,
+                   "second_sweeps": second_sweeps,
                    "miss_distance": a.miss_distance,
                    "in_domain": a.in_domain,
                    "metric": {"alpha": ALPHA, "beta": BETA, "R_pixels": 3, "R_meters": 300}},
