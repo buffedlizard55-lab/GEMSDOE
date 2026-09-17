@@ -2,13 +2,14 @@ widest swept emission: 6 px at floor 0
 proxy truth |G_proxy| = 61,664 px (6,166 km)
 
 measured policies on the new-fault-like population (population C):
-  baseline_blanket_ones              DTI 0.0585  coverage  99.98%  wrong mass FP_w    4960570.1  emitted   5165852 px
   ensemble_soft_map                  DTI 0.0478  coverage  12.47%  wrong mass FP_w     549544.5  emitted   5165852 px
   reblend_hard_39517px               DTI 0.0410  coverage   3.81%  wrong mass FP_w      37269.1  emitted     39517 px
   sweep_t0_0_width6px                DTI 0.0395  coverage   5.72%  wrong mass FP_w     195635.3  emitted    205477 px
   sweep_t0_0.0432675_width6px        DTI 0.0395  coverage   5.72%  wrong mass FP_w     195635.3  emitted    205477 px
   sweep_t0_0_width3px                DTI 0.0312  coverage   3.56%  wrong mass FP_w     103170.5  emitted    108521 px
   sweep_t0_0.0432675_width3px        DTI 0.0312  coverage   3.56%  wrong mass FP_w     103170.5  emitted    108521 px
+  baseline_blanket_ones              DTI 0.0249  coverage 100.00%  wrong mass FP_w   12073458.8  emitted  12279160 px
+  baseline_blanket_ones_whole_grid   DTI 0.0249  coverage 100.00%  wrong mass FP_w   12073458.8  emitted  12279160 px
   shipped_skeleton_dilate0           DTI 0.0247  coverage   2.15%  wrong mass FP_w      20211.1  emitted     21492 px
   baseline_catalogue_plus_submission DTI 0.0203  coverage   2.15%  wrong mass FP_w      78606.1  emitted     79887 px
   sweep_t0_0_width0px                DTI 0.0144  coverage   1.22%  wrong mass FP_w      13609.8  emitted     14285 px
