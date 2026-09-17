@@ -81,6 +81,10 @@ import json
 from pathlib import Path
 
 ALPHA, BETA = 0.2, 0.8
+# The published leaderboard's best public score, snapshotted 2026-09-16 in
+# data/evidence/independent_verification.json (competition_standing.top_dti).  Only used for the
+# top_priority sentence, and refreshed by editing this pin when that evidence is refreshed.
+LEADERBOARD_TOP = 0.1972
 PX_KM = 0.1            # 100 m pixels
 AOI_AREA_KM2 = 3292 * 3730 * PX_KM ** 2          # 122,791.6 km^2
 GEODAWN_AREA_KM2 = 51857.0                       # USGS GeoDAWN data release, 10.5066/P93LGLVQ
@@ -359,10 +363,17 @@ def main() -> int:
                                "with the population, which is why neither number alone can decide it"),
         "conditions": [],
         "conclusion": "",
+        # Computed, not typed: the blanket baseline's own number moved between evidence versions
+        # (0.0585 over the footprint-clipped support, 0.0249 over the whole footprint), and a
+        # hard-coded ratio then contradicted the table beside it.
         "top_priority": ("beating the constant-ones baseline on the new-fault-like population is "
-                         "worth more than the width choice: the shipped skeleton does not beat it at "
-                         "any truth size above the crossover printed above, and the leaderboard's "
-                         "top score (0.1972) is 3.4x the blanket's 0.0585 on this population"),
+                         "worth more than the width choice: the shipped skeleton (%.4f) sits %s the "
+                         "blanket baseline (%.4f) measured in this same record, and the leaderboard's "
+                         "top score (%.4f) is %.1fx it"
+                         % (shipped["measured_dti"],
+                            "above" if shipped["measured_dti"] > blanket["measured_dti"] else "below",
+                            blanket["measured_dti"], LEADERBOARD_TOP,
+                            LEADERBOARD_TOP / max(blanket["measured_dti"], 1e-9))),
     }
     # Sweep policies only: the baselines (blanket, catalogue copy) are ranked in the same table but
     # they are controls, not candidates the shaping pipeline can produce.
