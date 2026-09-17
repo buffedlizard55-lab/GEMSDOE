@@ -86,6 +86,10 @@ on:
 #
 # .github/triggers/proxy-eval-params may set:
 #   RUN_ID=<actions run id whose fold-* artifacts to sweep>   (default 35042805806 = ensemble 1)
+#          MAY BE A COMMA-SEPARATED LIST (a,b,c): the sweep then re-blends every run's fold-* artifacts
+#          into ONE ensemble mean and sweeps that field.  This is how the field that will actually be
+#          submitted gets its own floor measurement - the optimum depends on the field, and a
+#          3-ensemble mean is not the same field as any single ensemble's mean.
 #   SWEEP_LABEL=<suffix>       -> data/evidence/proxy/eval_sweep-<label>.json (default: no suffix)
 #   DILATE_GRID=0,1,2,3,...    (default 0,1,2,3,4,6,8,10,12 - the proxy curve was still rising at 6)
 #   SHAPING_GRID=<int>         (default 11 floor candidates - 4 was too coarse: the log grid
@@ -122,6 +126,8 @@ jobs:
     timeout-minutes: 10
     outputs:
       run_id: ${{ steps.p.outputs.run_id }}
+      run_id_2: ${{ steps.p.outputs.run_id_2 }}
+      run_id_3: ${{ steps.p.outputs.run_id_3 }}
       sweep_label: ${{ steps.p.outputs.sweep_label }}
       dilate_grid: ${{ steps.p.outputs.dilate_grid }}
       shaping_grid: ${{ steps.p.outputs.shaping_grid }}
@@ -159,8 +165,20 @@ jobs:
             echo "no $F - sweeping run $RUN_ID with grid $DIL"
           fi
           [ -n "$SUB" ] || SUB="data/evidence/runs/$RUN_ID/submission.tif"
+          # MULTI-ENSEMBLE SWEEP (2026-09-17, session 13).  `cut -f2` returns the WHOLE line when
+          # there is no delimiter, so a single run id would silently become run_id_2 as well and the
+          # same fold artifacts would be blended twice - parse only when a comma is present (the
+          # same defect reblend.yml documents).
+          RUN1="$(printf '%s' "$RUN_ID" | cut -d, -f1 | tr -d ' ')"
+          R2=""; R3=""
+          if printf '%s' "$RUN_ID" | grep -q ','; then
+            R2="$(printf '%s' "$RUN_ID" | cut -d, -f2 | tr -d ' ')"
+            R3="$(printf '%s' "$RUN_ID" | cut -d, -f3 | tr -d ' ')"
+          fi
           {
-            echo "run_id=$RUN_ID"
+            echo "run_id=$RUN1"
+            echo "run_id_2=$R2"
+            echo "run_id_3=$R3"
             echo "sweep_label=$LABEL"
             echo "dilate_grid=$DIL"
             echo "shaping_grid=$GRID"
@@ -292,6 +310,26 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
 
+      - name: Download fold artifacts from run ${{ needs.params.outputs.run_id_2 }} (second ensemble)
+        if: ${{ needs.params.outputs.run_id_2 != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fold-*
+          path: folds2
+          run-id: ${{ needs.params.outputs.run_id_2 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+
+      - name: Download fold artifacts from run ${{ needs.params.outputs.run_id_3 }} (third ensemble)
+        if: ${{ needs.params.outputs.run_id_3 != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fold-*
+          path: folds3
+          run-id: ${{ needs.params.outputs.run_id_3 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+
       - name: Download the competition rasters
         run: |
           set -euo pipefail
@@ -304,8 +342,20 @@ jobs:
       - name: Re-blend the fold maps, keeping the pre-shaping ensemble
         run: |
           set -euo pipefail
+          # Every downloaded ensemble is blended into ONE mean before the sweep, so the floor
+          # measurement is taken on the field that would actually be submitted.  A directory that
+          # downloaded nothing contributes nothing (nullglob), and the count is printed so an
+          # empty second ensemble cannot pass as a successful multi-ensemble sweep.
+          shopt -s nullglob
+          FOLD_ARGS=()
+          for base in folds folds2 folds3; do
+            [ -d "$base" ] || continue
+            for d in "$base"/fold-*/; do FOLD_ARGS+=("$d"); done
+          done
+          echo "fold dirs passed to the blend: ${#FOLD_ARGS[@]}"
+          if [ "${#FOLD_ARGS[@]}" -lt 1 ]; then echo "FAIL: no fold artifacts downloaded" >&2; exit 1; fi
           python scripts/blend_submission.py \
-            --folds folds/fold-*/ \
+            --folds "${FOLD_ARGS[@]}" \
             --config configs/config_ci_ensemble.yaml \
             --sample data/sample_submission.tif --labels data/labels.tif \
             --out submission.tif --report blend_report.json --weights equal \
@@ -346,12 +396,12 @@ jobs:
             --proxy data/evidence/proxy/proxy_catalogue.tif --labels data/labels.tif \
             --out "data/evidence/proxy/eval_reblend_submission$SUF.json" --truth only \
             2>&1 | tee "data/evidence/proxy/eval_reblend_submission$SUF.log"
-          python - "${{ needs.params.outputs.run_id }}" "$SUF" <<'PF'
+          python - "${{ needs.params.outputs.run_id }}$( [ -n '${{ needs.params.outputs.run_id_2 }}' ] && printf ',%s' '${{ needs.params.outputs.run_id_2 }}' )$( [ -n '${{ needs.params.outputs.run_id_3 }}' ] && printf ',%s' '${{ needs.params.outputs.run_id_3 }}' )" "$SUF" <<'PF'
           import json, pathlib, sys
           d = pathlib.Path("data/evidence/proxy")
           (d / f"sweep_source{sys.argv[2]}.json").write_text(json.dumps({
               "swept_run_id": sys.argv[1],
-              "note": "fold-* artifacts of this Actions run were re-blended and swept",
+              "note": "fold-* artifacts of these Actions runs were re-blended into ONE mean and swept",
               "sweep_file": f"eval_sweep{sys.argv[2]}.json"}, indent=1))
           PF
 

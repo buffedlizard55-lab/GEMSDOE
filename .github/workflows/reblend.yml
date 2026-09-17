@@ -42,6 +42,12 @@ name: Re-blend existing fold artifacts -> submission
 #     MIN_DILATE=<int>              (default 0 = pure skeleton)
 #     MIN_FOLDS=<int>               (default 4)
 #     CALIBRATE=pooled|loo
+#     SHAPING_T0=<float>            ADOPT a floor measured on the new-fault-like population
+#     SHAPING_DILATE=<int>          the width it was measured WITH (both or neither - the candidate
+#                                   is a joint policy, and a floor from one measurement combined
+#                                   with a width from another is not a measured policy)
+#     SHAPING_SOURCE=<path>         the evidence file the policy was measured in (recorded in the
+#                                   blend report and in the submission's TIFF tags)
 # =============================================================================
 on:
   workflow_dispatch:
@@ -99,6 +105,9 @@ jobs:
       dilate_grid: ${{ steps.p.outputs.dilate_grid }}
       min_dilate: ${{ steps.p.outputs.min_dilate }}
       min_folds: ${{ steps.p.outputs.min_folds }}
+      shaping_t0: ${{ steps.p.outputs.shaping_t0 }}
+      shaping_dilate: ${{ steps.p.outputs.shaping_dilate }}
+      shaping_source: ${{ steps.p.outputs.shaping_source }}
       calibrate: ${{ steps.p.outputs.calibrate }}
       weights: ${{ steps.p.outputs.weights }}
     steps:
@@ -114,6 +123,7 @@ jobs:
           CAL="${{ github.event.inputs.calibrate || 'loo' }}"
           W="${{ github.event.inputs.weights || 'equal' }}"
           MIND="0"
+          ST0=""; SDIL=""; SRC=""
           F=".github/triggers/reblend-params"
           if [ -f "$F" ]; then
             echo "parameters from $F:"; tr -d '\r' < "$F" | grep -E '^[A-Z_]+=' || true
@@ -123,9 +133,19 @@ jobs:
             [ -n "$(v DILATE_GRID)" ] && DIL="$(v DILATE_GRID)" || true
             [ -n "$(v MIN_DILATE)" ] && MIND="$(v MIN_DILATE)" || true
             [ -n "$(v MIN_FOLDS)" ] && MINF="$(v MIN_FOLDS)" || true
+            [ -n "$(v SHAPING_T0)" ] && ST0="$(v SHAPING_T0)" || true
+            [ -n "$(v SHAPING_DILATE)" ] && SDIL="$(v SHAPING_DILATE)" || true
+            [ -n "$(v SHAPING_SOURCE)" ] && SRC="$(v SHAPING_SOURCE)" || true
             [ -n "$(v CALIBRATE)" ] && CAL="$(v CALIBRATE)" || true
           fi
           [ -n "$ED" ] || ED="data/evidence/runs/$RUN_ID-experiment"
+          # An adopted policy is a JOINT (floor, width) measurement: a floor from one sweep with a
+          # width from another is a policy nothing measured.  The blend refuses half of a policy at
+          # parse time, and this catches it one step earlier, where the log names the trigger file.
+          if { [ -n "$ST0" ] && [ -z "$SDIL" ]; } || { [ -z "$ST0" ] && [ -n "$SDIL" ]; }; then
+            echo "FAIL: SHAPING_T0 and SHAPING_DILATE must be set together in $F (got t0='$ST0' dilate='$SDIL')" >&2
+            exit 1
+          fi
           # MULTI-ENSEMBLE BLEND (2026-09-17, session 11).  One ensemble is 6 folds on one seed;
           # two independent ensembles are 11-12 folds over two seeds, which is strictly more
           # averaging for the same shaping.  RUN_ID may therefore be a comma-separated list and
@@ -149,10 +169,14 @@ jobs:
             echo "dilate_grid=$DIL"
             echo "min_dilate=$MIND"
             echo "min_folds=$MINF"
+            echo "shaping_t0=$ST0"
+            echo "shaping_dilate=$SDIL"
+            echo "shaping_source=$SRC"
             echo "calibrate=$CAL"
             echo "weights=$W"
           } >> "$GITHUB_OUTPUT"
           echo "RUN_ID=$RUN_ID ED=$ED DIL=$DIL MIN_DILATE=$MIND MIN_FOLDS=$MINF CAL=$CAL W=$W"
+          echo "ADOPTED POLICY: t0=$ST0 dilate=$SDIL source=$SRC"
 
   blend:
     runs-on: ubuntu-latest
@@ -256,6 +280,19 @@ jobs:
       - name: Blend + shape + write submission (fail-loud)
         run: |
           set -euo pipefail
+          # SHAPING_T0/SHAPING_DILATE adopt a policy MEASURED on the new-fault-like population
+          # (data/evidence/emission_decision.json).  The in-domain calibration maximises held-out
+          # DTI against the faults the model trained on, and the prize scores faults the labels do
+          # NOT contain - so when a measured policy is on the record, this is how it ships.  Empty
+          # (the default) leaves the calibrated path exactly as it was.
+          ADOPT=""
+          if [ -n "${{ needs.params.outputs.shaping_t0 }}" ]; then
+            ADOPT="--shaping-t0 ${{ needs.params.outputs.shaping_t0 }} --shaping-dilate ${{ needs.params.outputs.shaping_dilate }}"
+            if [ -n "${{ needs.params.outputs.shaping_source }}" ]; then
+              ADOPT="$ADOPT --shaping-source ${{ needs.params.outputs.shaping_source }}"
+            fi
+          fi
+          echo "adopted shaping flags: '${ADOPT}'"
           python scripts/blend_submission.py \
             --folds $(cat usable_folds.txt) \
             --config configs/config_ci_ensemble.yaml \
@@ -266,6 +303,7 @@ jobs:
             --shaping-grid "${{ github.event.inputs.shaping_grid || '15' }}" \
             --dilate-grid "${{ needs.params.outputs.dilate_grid }}" \
             --min-dilate "${{ needs.params.outputs.min_dilate }}" \
+            $ADOPT \
             --calibrate "${{ needs.params.outputs.calibrate }}" \
             --loo-grid "${{ github.event.inputs.loo_grid || '7' }}" 2>&1 | tee blend.log
 

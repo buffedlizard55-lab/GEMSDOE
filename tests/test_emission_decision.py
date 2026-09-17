@@ -31,19 +31,27 @@ sys.path.insert(0, str(ROOT))
 TRUTH_PX = 61664
 
 
-def _sweep(gains: list[float], floors=(0.0, 0.05, 0.1), widths=(0, 3, 6)) -> dict:
-    """A synthetic sweep whose width-0 DTI is fixed and whose widest band moves by `gains`."""
+def _sweep(gains: list[float], floors=(0.0, 0.05, 0.1), widths=(0, 3, 6),
+           current_ref: float = 0.02, fp_w: float = 3e3) -> dict:
+    """A synthetic sweep whose width-0 DTI is fixed and whose widest band moves by `gains`.
+
+    `current_ref` is the sweep's own reference policy (the shipped policy re-blended from THIS
+    fold set), because a reproduction is a contrast against the same sweep's reference - absolute
+    proxy DTI is not comparable across ensembles.  `fp_w` scales the candidate's wrong mass, which
+    is what decides whether the projection wins at every plausible scored-truth anchor.
+    """
     rows = []
     for g, t0 in zip(gains, floors):
         for d in widths:
             dti = 0.02 + (g if d == max(widths) else 0.0)
             rows.append(dict(t0=t0, thin=True, dilate=d, dti=dti,
-                             TP_w=dti * TRUTH_PX * 0.5, FP_w=1e4 * (1 + d),
-                             FN_w=1e4, mass=1e4 * (1 + d), emission_px=int(1e4 * (1 + d))))
+                             TP_w=dti * TRUTH_PX * 0.5, FP_w=fp_w * (1 + d),
+                             FN_w=1e4, mass=fp_w * (1 + d), emission_px=int(fp_w * (1 + d))))
     return {"results": {"shaping_sweep": rows,
                         "as_provided": dict(dti=0.03, TP_w=2000.0, FP_w=5e5, emission_px=5165852),
                         "sweep_verdict": {"acceptance_rule": "test rule",
-                                          "skeleton_dti": 0.02, "best_dti": 0.04}}}
+                                          "skeleton_dti": 0.02, "best_dti": 0.04,
+                                          "current_policy_dti": current_ref}}}
 
 
 def _evidence(tmp: Path, second_gains=None) -> dict:
@@ -102,22 +110,39 @@ def test_decision_script_runs_on_the_committed_evidence(tmp_path):
 
 
 def test_condition_three_stays_unmet_without_a_second_sweep(tmp_path):
+    """No second ensemble sweep -> condition 3 is NOT MEASURED, and the verdict says so.
+
+    Session 13 made the conditions about the best measured CANDIDATE (a joint floor x width policy)
+    rather than about the width axis at a fixed floor: the search's winner on the proxy population
+    is a floor change (floor 0.1, width 0 px), and a verdict phrased around "the widest band" could
+    not have described it.
+    """
     r, d = _run(tmp_path, _evidence(tmp_path))
     assert r.returncode == 0, r.stderr
     cond3 = d["verdict"]["conditions"][-1]
     assert cond3["passes"] is False
     assert "NOT MEASURED" in cond3["measured"]
-    assert d["verdict"]["conclusion"].startswith("widen, but not yet")
+    assert d["verdict"]["conclusion"].startswith("measured, not yet reproduced")
+    cand = d["verdict"]["best_measured_candidate"]
+    assert cand["policy"] in d["verdict"]["conclusion"]
+    assert cand["reproduced_on_second_ensemble"] is None
 
 
 def test_condition_three_passes_when_the_second_ensemble_reproduces_the_gain(tmp_path):
+    """The candidate's CONTRAST against the second sweep's own reference policy is what must hold."""
     r, d = _run(tmp_path, _evidence(tmp_path, second_gains=[0.0131, 0.0188, 0.0240]))
     assert r.returncode == 0, r.stderr
     cond3 = d["verdict"]["conditions"][-1]
     assert cond3["passes"] is True, cond3
-    assert "all floors positive" in cond3["measured"]
-    assert d["verdict"]["width_gain_second_ensemble"]["n_floors"] == 3
-    assert d["verdict"]["conclusion"].startswith("WIDEN")
+    assert "reproduced" in cond3["measured"] and "NOT reproduced" not in cond3["measured"]
+    repro = d["verdict"]["best_measured_candidate"]["reproduction_across_ensembles"]
+    assert len(repro) == 1 and repro[0]["reproduced"] is True
+    assert repro[0]["reference_is"] == "sweep_verdict.current_policy_dti of that same sweep"
+    # ... and when every condition passes the record instructs the ship path, naming the workflow
+    # flags that write an adopted policy (a conclusion that cannot be acted on is not a decision)
+    assert d["verdict"]["conclusion"].startswith("SHIP the measured policy")
+    assert "SHAPING_T0/SHAPING_DILATE" in d["verdict"]["conclusion"]
+    assert all(c["passes"] for c in d["verdict"]["conditions"]), d["verdict"]["conditions"]
 
 
 def test_condition_three_fails_when_the_second_ensemble_flips_the_sign(tmp_path):
@@ -125,8 +150,39 @@ def test_condition_three_fails_when_the_second_ensemble_flips_the_sign(tmp_path)
     assert r.returncode == 0, r.stderr
     cond3 = d["verdict"]["conditions"][-1]
     assert cond3["passes"] is False, cond3
-    assert "NOT all positive" in cond3["measured"]
-    assert d["verdict"]["conclusion"].startswith("widen, but not yet")
+    assert "NOT reproduced" in cond3["measured"]
+    out = d["verdict"]
+    assert out["conclusion"].startswith("measured, not shipped")
+    assert "condition 3" in out["conclusion"], out["conclusion"]
+
+
+def test_a_second_list_of_sweeps_is_reproduced_one_by_one(tmp_path):
+    """`--second-sweep a,b` : two independent ensembles, each contrasted with its own reference.
+
+    One agreeing ensemble is weak evidence; the record has to be able to hold several, and it must
+    fail when ANY of them disagrees (an average over ensembles would hide exactly the case that
+    matters).
+    """
+    paths = _evidence(tmp_path, second_gains=[0.0131, 0.0188, 0.0240])
+    third = _sweep([0.0131, 0.0188, 0.0240])
+    third_path = tmp_path / "third_sweep.json"
+    third_path.write_text(json.dumps(third))
+    paths["--second-sweep"] = str(paths["--second-sweep"]) + "," + str(third_path) + \
+        "," + str(tmp_path / "missing.json")          # a missing path is skipped, not invented
+    r, d = _run(tmp_path, paths)
+    assert r.returncode == 0, r.stderr
+    repro = d["verdict"]["best_measured_candidate"]["reproduction_across_ensembles"]
+    assert len(repro) == 2 and all(x["reproduced"] for x in repro)
+    assert d["verdict"]["conditions"][-1]["passes"] is True
+
+    # now make the second one disagree: the same policy, a flipped contrast
+    third_path.write_text(json.dumps(_sweep([-0.02, -0.02, -0.02], current_ref=0.05)))
+    r, d = _run(tmp_path, paths)
+    assert r.returncode == 0, r.stderr
+    repro = d["verdict"]["best_measured_candidate"]["reproduction_across_ensembles"]
+    assert [x["reproduced"] for x in repro] == [True, False], repro
+    assert d["verdict"]["conditions"][-1]["passes"] is False
+    assert d["verdict"]["conclusion"].startswith("measured, not shipped")
 
 
 def test_stale_proxy_evidence_is_flagged_by_the_km_field():
