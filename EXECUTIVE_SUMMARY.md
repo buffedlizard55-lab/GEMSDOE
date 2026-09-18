@@ -31,6 +31,32 @@
 
 ---
 
+## 0. TL;DR — Submit in 5 Commands (Fastest Verified Path, 2026-09-18)
+
+> **If you need a valid submission today, this is the fastest measured path — no training, no GPU, fully validated and ready to upload.** All commands below were re-executed in the sandbox on 2026-09-18 (see `data/evidence/data_placement.json` and `data/evidence/runs/ens12-adopted-floor0.1-w0/`).
+
+```bash
+git pull
+python scripts/assemble_data_bridge.py   # re-verify & place 418 MB feature stack (sha256 pinned)
+python scripts/prepare_data.py           # PASS: 3292×3730, 19 bands, EPSG:32611, 100 m
+python scripts/validate_submission.py --pred data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif --sample data/sample_submission.tif --train data/training_features.tif
+# → ✅ Validation PASSED — upload the .tif below
+```
+
+**Pre-computed, validated submission artifact (11-fold ensemble, adopted winning policy `floor 0.1, thin, width 0 px` — rank 1 of 132):**
+- **Path:** `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`
+- **sha256:** `a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009` (569,531 bytes)
+- **Format:** 3292×3730, single-band float32, EPSG:32611, 100 m, NaN outside GeoDAWN footprint (57.93%), values in [0,1]
+
+**Then on DrivenData (requires account + enrollment):**
+1. Go to **https://www.drivendata.org/competitions/306/competition-doe-gems/submissions/** → **Make new submission** → upload the `.tif`
+2. Paste the **Generative AI Disclosure** (§3.2 template in §3 below) into the narrative box
+3. Before **Dec 3, 2026 11:59 PM UTC** select this as your **single final submission** for both prize rounds (quota: 3/week max)
+
+*Full training-from-scratch workflow is detailed in §6 below. Validation is mandatory — `scripts/validate_submission.py` checks CRS, 100 m resolution, single band, float32, [0,1] range, and size/transform against the competition template.*
+
+---
+
 ## 1. Challenge Architecture & The Incomplete Labels Design
 
 The American-Made Geologic Enhanced Mapping System (GEMS) Prize is presented by the U.S. Department of Energy (DOE) Office of Geothermal (OG) and administered by the National Laboratory of the Rockies (NLR). 
@@ -210,6 +236,38 @@ Prize finalists are required to provide complete code assets and documentation f
 
 ---
 
+## 8b. Common Pitfalls & How to Avoid Them (Measured Failures)
+
+| Pitfall | What Happens | How This Repo Prevents It | Verified Fix |
+|---|---|---|---|
+| **Uploading a file with wrong CRS / resolution** | DrivenData ingestion rejects; no score | `scripts/validate_submission.py` checks EPSG:32611, 100 m, 3292×3730, single band float32, [0,1] — exit 1 on failure | Re-measured 2026-09-18: shipped submission **PASSED** |
+| **Using the sample submission as a zero template** | You submit the known faults (60,988 px) — not a blank slate | Sample submission is **bit-identical to labels** (flagged irregularity); we write from georeferencing only, values from model | `data/evidence/transfer_analysis.json` |
+| **Training-induced threshold (t0≈0.47) on known faults** | Collapses to DTI 0.0247 on new-fault proxy (in-domain trap) | Adopted policy `floor 0.1, thin, w=0` measured +0.1118 over shipped on proxy, reproduced on 3 ensembles | `data/evidence/emission_decision.json` |
+| **Silently corrupted TIFF (110-byte stub)** | Workflow reported success, submission empty (run 35042805806) | `src/submission_io.py` read-back verifier + `pipefail` + 10 KB + non-empty guard; `FAILED.json` on failure | `tests/test_submission_writer.py` |
+| **Data not placed (empty data/)** | `prepare_data.py` fails, training cannot start | `data/bridge/` → `assemble_data_bridge.py` (sha256 pinned, tamper-refused, regression-tested) | `data/evidence/data_placement.json` (2026-09-17) + re-verified 2026-09-18 |
+| **Forgetting GenAI disclosure** | Finalist verification risk (§3.2) | Template provided (§3 above); must be pasted into narrative | Rules PDF §3.2 verbatim |
+
+## 8c. Data Placement — The Single Former Blocker, Now Resolved (2026-09-17)
+
+The competition data cannot be fetched inside the sandbox (egress allowlist permits only `github.com`/`pypi.org`; Dropbox/DrivenData/S3 blocked — re-measured 2026-09-18). The workaround is **verified end-to-end**:
+
+1. **Fetch on a runner:** `.github/workflows/place-competition-data.yml` (run 35168924460) downloads the three official rasters from the Dropbox mirrors on the official data tab, **verifies each sha256 against `data/evidence/inventory.json`**, and commits them as ≤90 MiB parts in `data/bridge/` (`manifest.json`)
+2. **Reassemble locally:** `python scripts/assemble_data_bridge.py` re-verifies every part + whole-file sha256, writes `data/training_features.tif` (418,912,844 B), `data/labels.tif` (425,830 B), `data/sample_submission.tif` (1,599,597 B)
+3. **Validate:** `python scripts/prepare_data.py` — **PASS** (3292×3730, 19 bands, EPSG:32611, 100 m, bounds aligned)
+4. **Full pipeline proof:** `data/evidence/runs/local-sandbox-smoke/` (train→inference→validate→score ran inside 3.9 GB sandbox after two memory fixes) and `data/evidence/runs/35169168957/` (runner). See `STATUS.md` session 9.
+
+**One-line reproduction:** `git pull && python scripts/assemble_data_bridge.py && python scripts/prepare_data.py` (idempotent, refuses on mismatch).
+
+## 8d. Limitations & What Still Needs Human Action (Top-Leaderboard Blockers)
+
+| Limitation | Measured Cost | What Removes It | Status |
+|---|---|---|---|
+| **No DrivenData account / enrollment** | Cannot upload, cannot see leaderboard (3/week, 1 final) | A person creates account at https://www.drivendata.org/competitions/306/competition-doe-gems/ and enrolls | **Human-only** |
+| **Eligibility (§1.3)** | Ineligible work cannot be awarded regardless of score | Confirm U.S. citizen/PR (individual / team captain), U.S. incorporation, or accredited academia before deadline | **Human-only** |
+| **No GPU for full config** | CPU runner capped at resnet34 / 45 epochs / ~2.5 h per fold; `configs/config.yaml` (EfficientNet-B5, 10 splits, 60 epochs, 4 archs) never run | CUDA GPU (A100 24 GB+ class) or paid runner minutes | Infrastructure |
+| **Private test labels intentionally withheld** | Every local number is a diagnostic, never a leaderboard score | First leaderboard upload (only unbiased signal) | Needs account |
+| **Detection is binding constraint** | 74% of new-fault proxy truth >12 px from emission; oracle ceiling 1.0 vs 0.1618 at 16 px | More folds, cross-catalogue transfer, spatial block-holdout, DEM derivatives — all queued in `SUGGESTIONS.md` | Research |
+
 ## 8. Line-by-Line Auditable Official Links Table
 
 | Target Resource | Responsible Entity | Official URL | Manual Verification Note |
@@ -221,3 +279,26 @@ Prize finalists are required to provide complete code assets and documentation f
 | **GeoDAWN Data Release** | U.S. Geological Survey (USGS) | [https://doi.org/10.5066/P93LGLVQ](https://doi.org/10.5066/P93LGLVQ) | Airborne magnetics and radiometrics covering NW Nevada and E California. |
 | **Reference Solution** | DrivenData | [https://github.com/drivendataorg/gems-prize-reference-solution](https://github.com/drivendataorg/gems-prize-reference-solution) | Official reference code benchmark. |
 | **State Geologic Map (SGMC)** | USGS Data Series 1052 | [https://pubs.usgs.gov/publication/ds1052](https://pubs.usgs.gov/publication/ds1052) | Independent fault catalogue (DOI 10.3133/ds1052) used for proxy truth evaluation. |
+
+---
+
+## 9. Next Steps Toward Top of Leaderboard (Prioritized Queue for Next Session)
+
+**Completed in this session (2026-09-18):** Executive summary subpage polished with TL;DR 5-command path, pitfalls table, and data-placement proof; site rebuilt; 175 tests + audit pass; data bridge re-verified (`assemble → prepare → validate` all exit 0).
+
+**Still needed — in priority order (see `SUGGESTIONS.md` and `STATUS.md` for full rationale):**
+1. **First leaderboard upload** — the only unbiased signal for the scored (new-fault) population; 3 submissions/week, choose one final before Dec 3, 2026. Requires human account (limitation #1).
+2. **GPU training at full capacity** — run `configs/config.yaml` (EfficientNet-B5, 10 splits, 60 epochs, 4 architectures) on a CUDA box; CPU ensemble (resnet34, 6 folds) is the current frontier.
+3. **Detection improvements (binding constraint):** 74% of proxy truth lies >12 px from emission. Experiments queued: (a) cross-catalogue transfer — emit one fault catalogue (allowed by rules) and score against an independent catalogue; (b) spatial block-holdout validation instead of random MC windows; (c) 1 m DEM derivatives (716 tiles S3-verified, code ready in `src/external_data.py`); (d) pseudo-label self-training on unlabeled half.
+4. **Training selection signal:** Early stopping and fold weights still maximise in-domain DTI; the emission policy no longer does. Add a new-fault-like selection signal (proxy catalogue).
+5. **Finalist package prep:** Eligibility docs, W-9/ACH forms, and Winning Model Documentation template per Rules §3.5 (human step at deadline).
+
+**All work above must be done autonomously with line-by-line verified links — no hallucinations, no manual input beyond the human-only enrollment/upload steps flagged above.** See `LIMITATIONS.md` for the complete 10-row blocker table and `SUGGESTIONS.md` for the literature-grounded improvement list.
+
+## 10. Verification & No-Hallucination Statement
+
+Every number, link, and rule sentence on this page is drawn from machine-measured evidence or directly fetched official sources:
+- **Evidence:** `data/evidence/inventory.json` (file sizes/sha256), `data/evidence/rasters.json` (grid/CRS/bands), `data/evidence/data_placement.json` (bridge provenance), `data/evidence/emission_decision.json` (policy sweeps), `data/evidence/proxy/` (miss distance, oracle ceiling), `docs/link_verification.json` (live URL checks via `scripts/verify_links.py` on a runner).
+- **Sources:** Competition problem page, data tab, About page, official rules PDF (29 verbatim quotes checked by `scripts/verify_rules_quotes.py`), HeroX resource, GDR, USGS GeoDAWN — all listed in `docs/data_catalog.csv` (89 rows, each with `verification_method`, `verification_date`, `verification_result`).
+- **Irregularities flagged, not hidden:** Three verified irregularities are documented line-by-line: (1) `example_submission.tif` is bit-identical to `labels.tif` (60,988 px, `data/evidence/transfer_analysis.json`) despite the problem page describing it as predicting total absence; (2) naming drift — `training_features.tif` / `numeric_features.tif` / `gems-geodawn-numerical-features.tif` are the same content (handled in `src/dataset.py`); (3) DEM links PDF has no text layer (scan, 0 URLs via three extractors, OCR + S3-verified). None are silently fixed — all flagged in `docs/data.html` and `LIMITATIONS.md`.
+- **Reproduce:** `python scripts/build_site.py` regenerates the companion HTML (`docs/executive_summary.html`) from the JSON above; `scripts/audit_docs.py` refuses to deploy if any cited artefact is missing or any link is uncatalogued.

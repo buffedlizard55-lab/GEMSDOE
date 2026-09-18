@@ -1,5 +1,24 @@
 # Suggestions and Improvements — Implemented for Top Leaderboard
 
+## Session 15 (2026-09-18) — executive summary polished for submission, 3-pass review, data re-verified
+
+| Area | What changed | Why it matters | Evidence |
+|---|---|---|---|
+| **Executive summary TL;DR** | 5-command box at top (`assemble → prepare → validate → upload`) | Entrants need copy-paste path without training | `EXECUTIVE_SUMMARY.md` §0 + `docs/executive_summary.html` TL;DR |
+| **Pitfalls table** | 6 measured failures (stub, CRS, in-domain trap, sample-as-zero, missing data, GenAI) | Prevents silent failures that cost leaderboard submissions | `EXECUTIVE_SUMMARY.md` §8b + `tests/test_submission_writer.py` |
+| **Data placement resolved** | One-line reproduction `git pull && assemble && prepare` | Former blocker verified gone (35168924460) | `data/evidence/data_placement.json` + 2026-09-18 re-verify |
+| **Limitations & blockers** | Human-only vs infrastructure table | Top-leaderboard progress gated by account/GPU/eligibility | `EXECUTIVE_SUMMARY.md` §8d + `LIMITATIONS.md` |
+| **3-pass review** | Implement → audit → re-check | No hallucinations, line-by-line verified | `audit_docs.py` PASS, 175 tests, self-test 8/8 |
+
+**Next session queue (priority order):**
+1. **First leaderboard upload** — 3/week, 1 final before Dec 3, 2026 11:59 PM UTC (human-only)
+2. **GPU full-config** — EfficientNet-B5, 10 splits, 60 epochs (`configs/config.yaml`)
+3. **Detection** — cross-catalogue transfer, spatial block-holdout, DEM derivatives, pseudo-labels
+4. **Selection signal** — add proxy-based early stopping / fold weighting
+5. **Finalist package** — Winning Model Documentation, code assets, GenAI disclosure, W-9/ACH
+
+---
+
 ## Session 13 (2026-09-17) — the emission policy is measured, reproduced, and SHIPPED
 
 | Improvement | Why it matters | Status / evidence |

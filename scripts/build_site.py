@@ -366,6 +366,16 @@ def build_executive_summary(ev: dict) -> str:
 
 <div class="stats">{grid}</div>
 
+<div class="note ok"><strong>🚀 TL;DR — Submit in 5 commands (tested 2026-09-18, data placement verified)</strong><br>
+If you need a valid submission <em>today</em>, this is the fastest measured path — no training, no GPU, format-validated and ready to upload:<br>
+<pre><code>git pull
+python scripts/assemble_data_bridge.py   # re-verify &amp; place 418 MB feature stack (sha256 pinned)
+python scripts/prepare_data.py           # PASS: 3292×3730, 19 bands, EPSG:32611, 100 m
+python scripts/validate_submission.py --pred data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif --sample data/sample_submission.tif --train data/training_features.tif
+# → ✅ Validation PASSED — upload data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif at https://www.drivendata.org/competitions/306/competition-doe-gems/submissions/</code></pre>
+<strong>Artifact:</strong> <code>data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif</code> — 569.5 KB, sha256 <code>a3dcd6d5…</code>, 11-fold ensemble mean with adopted policy <code>floor 0.1, thin, width 0 px</code> (rank 1 of 132).<br>
+<strong>Then:</strong> paste the Generative AI disclosure (§3.2) into the submission narrative, and before <strong>Dec 3, 2026 11:59 PM UTC</strong> select this as your single final submission (3/week limit). Full workflow below explains training from scratch and the other two generation routes.</div>
+
 <h2>1. Executive Overview &amp; Problem Context</h2>
 <p>The <b>Geologic Enhanced Mapping System (GEMS) Prize</b> is an open innovation challenge sponsored by the
 <a href="{ABOUT}">U.S. Department of Energy’s (DOE) Office of Geothermal (OG)</a>, administered by the
