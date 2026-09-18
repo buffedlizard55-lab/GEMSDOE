@@ -215,9 +215,80 @@ Prize finalists are required to provide complete code assets and documentation f
 | Target Resource | Responsible Entity | Official URL | Manual Verification Note |
 |---|---|---|---|
 | **Problem Description** | DrivenData / DOE OG | [https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/](https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/) | Defines task, UTM 11N, 100m res, single band float32, DTI α=0.2, β=0.8. |
+| **Competition Home & Data Tab** | DrivenData / DOE | [https://www.drivendata.org/competitions/306/competition-doe-gems/](https://www.drivendata.org/competitions/306/competition-doe-gems/) · [https://www.drivendata.org/competitions/306/competition-doe-gems/data/](https://www.drivendata.org/competitions/306/competition-doe-gems/data/) | Lists Dec 3 2026 11:59pm UTC deadline, $300k pool; data tab requires login (verified redirect to /accounts/login/). |
+| **About Page & Scientific Background** | DrivenData / DOE / USGS | [https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/](https://www.drivendata.org/competitions/306/competition-doe-gems/page/968/) | GeoDAWN definition, fault taxonomy, cited papers: Matteo et al 2021 & Hermant et al 2025. |
 | **Official Rules PDF** | National Lab of the Rockies (NLR) | [https://docs.nlr.gov/docs/fy26osti/96647.pdf](https://docs.nlr.gov/docs/fy26osti/96647.pdf) | OSTI 96647; 29 verbatim machine-checked quotes; governs eligibility, 3/week, GenAI disclosure, $300k awards. |
 | **HeroX Rules Page** | American-Made Challenges | [https://www.herox.com/GEMSPrize/resource/2274](https://www.herox.com/GEMSPrize/resource/2274) | Resource 2274; official terms linking to the rules document. |
 | **INGENIOUS Regional Data** | Geothermal Data Repository | [https://gdr.openei.org/submissions/1391](https://gdr.openei.org/submissions/1391) | DOI 10.15121/1881483; official source of training faults. |
 | **GeoDAWN Data Release** | U.S. Geological Survey (USGS) | [https://doi.org/10.5066/P93LGLVQ](https://doi.org/10.5066/P93LGLVQ) | Airborne magnetics and radiometrics covering NW Nevada and E California. |
-| **Reference Solution** | DrivenData | [https://github.com/drivendataorg/gems-prize-reference-solution](https://github.com/drivendataorg/gems-prize-reference-solution) | Official reference code benchmark. |
-| **State Geologic Map (SGMC)** | USGS Data Series 1052 | [https://pubs.usgs.gov/publication/ds1052](https://pubs.usgs.gov/publication/ds1052) | Independent fault catalogue (DOI 10.3133/ds1052) used for proxy truth evaluation. |
+| **USGS SGMC (Proxy Catalogue)** | USGS | [https://doi.org/10.3133/ds1052](https://doi.org/10.3133/ds1052) | DOI 10.3133/ds1052; independent fault catalogue used for proxy evaluation. |
+| **Reference Solution** | DrivenData | [https://github.com/drivendataorg/gems-prize-reference-solution](https://github.com/drivendataorg/gems-prize-reference-solution) | Official reference code benchmark (commit aebe92f). |
+| **This Repository** | GEMSDOE | [https://github.com/buffedlizard55-lab/GEMSDOE](https://github.com/buffedlizard55-lab/GEMSDOE) | Top-leaderboard framework, verified data bridge, and auditable site. |
+
+### 8b. Competition Data Files — Official Names & Dropbox Mirrors (for manual verification)
+
+The same files appear under different names on different official pages (flagged irregularity, handled in code). Every URL below was extracted from the competition data tab (requires login) and re-printed in `data/README.md`; every sha256 is pinned in `data/evidence/inventory.json`.
+
+| Content | Problem Page Name | Dropbox Mirror (from data tab) | Size | sha256 (first 16) |
+|---|---|---|---|---|
+| **Feature stack (19 bands)** | `training_features.tif` | [gems-geodawn-numerical-features.tif](https://www.dropbox.com/scl/fi/3vz9o0wwavi26xaeoxlwr/gems-geodawn-numerical-features.tif?rlkey=je8d8fepqfbst9lnwsq9rkplu&st=zj1lag1r&dl=0) | 399.5 MB | `4371c82e3b8339b8…` |
+| **Training labels** | `labels.tif` | [existing_faults.tif](https://www.dropbox.com/scl/fi/t7fyt03qdh9egyme0itwo/existing_faults.tif?rlkey=yiao96uluqdkipf0h5vju71jf&st=rnino7ya&dl=0) | 415.8 KB | `7ba308ccdc4418b3…` |
+| **Sample submission** | `sample_submission.tif` | [example_submission.tif](https://www.dropbox.com/scl/fi/6rgvnuady818ol8yqgis4/example_submission.tif?rlkey=kbykilvau066xuogoosbf4cq8&st=8junzdyw&dl=0) | 1.5 MB | `2176d08e485aa2cd…` |
+| **1m DEM tile links** | `1m_DEM_links.csv` | [Digital-elevation-model-links-JSON.pdf](https://www.dropbox.com/scl/fi/ig0mban712ns1atphgphe/Digital-elevation-model-links-JSON.pdf?rlkey=zm77f1vbtt2if8hlruymptnu3&st=srhhir10&dl=0) | 22.0 MB | `c2996eaf0adcc76b…` |
+| **Official rules PDF** | `GEMS_96647.pdf` | [GEMS_96647.pdf](https://www.dropbox.com/scl/fi/aemhtutjgcp6tr3tint94/GEMS_96647.pdf?rlkey=rek210cj2smnmzb8n0sla1vmd&st=wz4kofki&dl=0) | 444.5 KB | `50d854b1e0239fe6…` |
+
+> **Naming drift — verified:** Reference solution calls feature file `numeric_features.tif`, problem page calls it `training_features.tif`, Dropbox calls it `gems-geodawn-numerical-features.tif` — all same 399.5 MB file. Sample submission described as “total fault absence” but is bit-identical to labels (60,988 px) — flagged; we write from georeferencing only.
+
+---
+
+## 9. Limitations, Required Access & What Is Still Human-Only
+
+This repository is engineered to be auditable and reproducible, but several steps are gated by competition design or sandbox network policy. Each limitation states why it exists and the exact manual action to clear it.
+
+| Limitation / Gate | Why It Is Blocked Here | What You Need | How to Resolve |
+|---|---|---|---|
+| **DrivenData login & enrollment** | Data tab redirects to `/accounts/login/` without auth; submission form behind same gate. | Human with U.S. citizen / permanent resident identity (rules §1.3) must create account and click “Compete!” | Go to [competition home](https://www.drivendata.org/competitions/306/competition-doe-gems/) → “Compete!” → accept rules. **Only step that cannot be automated.** |
+| **Private test labels withheld** | By design — scored “new faults” are hidden; public labels are incomplete by ~6,166 km trace. | No one outside organizers can observe them; even public LB is held-out split of hidden set. | Treat local DTI on `labels.tif` as plumbing monitor only; proxy population (SGMC, §5 & metric page) is honest local monitor. |
+| **Competition data cannot be fetched inside sandbox** | Egress allowlist: sandbox reaches only `github.com / api.github.com / pypi.org`; Dropbox, S3, DrivenData blocked (TLS 35). | Any unrestricted machine (laptop, GH runner, cloud VM). | **Option A (preferred, verified 2026-09-17):** `git pull && python scripts/assemble_data_bridge.py && python scripts/prepare_data.py` — reassembles sha256-pinned git bridge in `data/bridge/` with no network.<br>**Option B:** `bash scripts/download_competition_data.sh` into `data/` then `python scripts/prepare_data.py`. Both verify sha256 vs `inventory.json`. |
+| **GPU needed for competitive training** | Full config (EfficientNet-B5, 10 MC splits, 60 epochs, 4 architectures) needs ~24 GB VRAM; sandbox has 3.9 GB RAM / 2 vCPU, no GPU. | GPU box (≥16 GB VRAM) with CUDA, or GH Actions ensemble workflow (shards 6 folds). | `python -m src.train --config configs/config.yaml` (GPU) or dispatch `train-ensemble.yml`. CPU smoke proves plumbing but not competitive. |
+| **Pretrained weights blocked in sandbox** | `objects.githubusercontent.com` blocked; `pretrained:true` fails here. | Unrestricted egress or `pretrained:false` for sandbox. | On unrestricted machine configs work as-is; in sandbox use `config_fixture.yaml` or override `model.pretrained=false`. |
+| **Leaderboard submission & scoring** | Requires authenticated DrivenData POST; private DTI never disclosed. | Same enrolled human (3/week; 1 final selection before deadline without private scores — §3.4, §3.6.2). | Validate locally (`validate_submission.py`), then upload at [Submissions page](https://www.drivendata.org/competitions/306/competition-doe-gems/submissions/) → “Make new submission” (include §3.2 GenAI disclosure). |
+| **GitHub Pages deployment** | Workflow `pages.yml` deploys only from `main` (environment protection). | Maintainer must merge to `main`. | Merge this branch → `main` → site publishes `docs/` to [GitHub Pages](https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html). |
+
+> **Single remaining blocker — now RESOLVED for local use.** Prior sessions noted “run `bash scripts/download_competition_data.sh` on any unrestricted machine” as blocker. Since 2026-09-17 that download is committed as **sha256-pinned git parts in `data/bridge/`** (workflow run 35168924460); sandbox itself now runs `assemble_data_bridge.py` and `prepare_data.py` **passes** (3292×3730, 19 bands, EPSG:32611, 100 m). Full train→inference→validate→score ran on real bytes both on runner (`35169168957`) and inside sandbox (`local-sandbox-smoke`). GPU and DrivenData-auth upload remain only gates to leaderboard-visible result.
+
+---
+
+## 10. Free Publicly Available External Data We Are Allowed to Use
+
+Competition **explicitly permits external data** provided license allows challenge use and sponsor sharing ([problem page #external-datasets](https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#external-datasets) → rules PDF §3.2). This repo uses **only public-domain or openly licensed sources** in `docs/data_catalog.csv`; every link is re-fetched live by `verify_links.py`. Key free sources wired into pipeline:
+
+| Source & DOI | License / Access | Why It Helps Top-Leaderboard | Evidence / How to Use |
+|---|---|---|---|
+| **USGS 3DEP 1m DEM** (projects CA_SierraNevada_B22, NV_WestCentral_EarthMRI_2020_D20, NV_Humboldt_2021_D21) — Host: `prd-tnm.s3.amazonaws.com` | **Public Domain** (U.S. Government) — “All 3DEP products available free without restrictions” ([USGS 3DEP](https://www.usgs.gov/3d-elevation-program/about-3dep-products-services)) | Fault scarps/lineaments are direct surface expressions at 1m; resampled to 100m + derived slope/curvature/TPI/hillshade complement 19 bands. | 716 tiles confirmed vs bucket (see Data page). Derive: `python scripts/download_dem_tiles.py --complete-listing` → `src/external_data.py`. |
+| **USGS Quaternary Faults (QFaults)** — [doi.org/10.5066/P9BCVRCK](https://doi.org/10.5066/P9BCVRCK) | **Public Domain** (USGS); shapefiles & KML via [ScienceBase 589097…](https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23) | Training-label provenance; independent catalogue for cross-catalogue transfer experiments (emit A, score vs B). | Verified via ScienceBase; programmatic [ArcGIS MapServer](https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer). |
+| **USGS SGMC State Geologic Maps** — [doi.org/10.3133/ds1052](https://doi.org/10.3133/ds1052) | **Public Domain** (USGS); Data Series 1052 | Source of **proxy catalogue** (61,664 px absent from labels) — only local population resembling scored new faults. | Wired: `fetch_proxy_faults.py` → `build_proxy_catalogue.py` → `eval_proxy_catalogue.py`; evidence `data/evidence/proxy/`. |
+| **INGENIOUS Great Basin Compilation** — [doi.org/10.15121/1881483](https://doi.org/10.15121/1881483) | **CC / Publicly Accessible** via [GDR 1391](https://gdr.openei.org/submissions/1391) | Origin of training features & labels; sub-datasets provide official dt-elevation, geophysics grids. | Verified via GDR + ScienceBase; sub-DOIs in Sources page. |
+| **INGENIOUS Detrended Elevation** — [doi.org/10.5066/P9MQRCBY](https://doi.org/10.5066/P9MQRCBY) | **Public Domain** (USGS); 12.34 GB grids | Ready-made fault-emphasising topography over whole study area at 30m. | Candidate extra band; source for re-derived slope. |
+| **GeoDAWN Mag/Radiometrics** — [doi.org/10.5066/P93LGLVQ](https://doi.org/10.5066/P93LGLVQ) | **CC0 1.0 Universal** (USGS) | Survey underlying 19-band stack; clarifies band semantics and flight-line provenance. | ScienceBase 657e1d85… (149,030 line-km; 51,857 km²). |
+
+> **License compliance — non-negotiable.** Rules require external data shareable with sponsor (§3.2). Only PD/CC/CC0 sources above are used — any dataset without clear PD/CC/open license is **not** used even if it might improve DTI, because unverifiable license = disqualification risk. If you add external data, add it to `docs/data_catalog.csv` with publisher, DOI/URL, and license, and let `verify_links.py` confirm.
+
+---
+
+## 11. What Still Needs Doing — Suggestions to Reach Top Leaderboard (Next Session Priority)
+
+Pipeline runs end-to-end on real competition rasters, but placing top-5 (current best 0.1972) requires moving from **measured plumbing fixes** to **geophysical detection gains**. Prioritized by impact/risk:
+
+| # | Improvement | Why It Matters (measured) | Status | Next Action |
+|---|---|---|---|---|
+| 1 | **Fix detection, not just width — cross-catalogue transfer** | 74% of new-fault-like truth >12 px (1.2 km) from any emitted pixel; widening to 16 px lifts DTI only 0.0247→0.0713. Remaining error is detection, not localization (`miss_distance-ensemble1.json`). | Not yet measured; highest-upside. | Emit catalogue A (SGMC), score vs independent catalogue B (QFaults), report transfer as prior on hidden-expert-set recall; then train with that external catalogue as auxiliary supervision. |
+| 2 | **Spatial block-holdout (solve in-domain/proxy sign conflict)** | In-domain DTI (0.1903→0.0908 when widening) and proxy DTI (+0.11) disagree on sign — choosing one corrupts other. | Not yet implemented; designed in `docs/DISCOVERY_PLAN.md`. | Hold out geographic blocks for model selection so both metrics computed on unseen geography; calibrate floor & width on proxy-like blocks. |
+| 3 | **1m DEM derivatives as additional bands** | Fault scarps are direct surface expressions; 716 tiles confirmed deliver slope/curvature/lineament at 100× finer native res than 100m stack. | Code ready (`src/external_data.py`, `download_dem_tiles.py`); disabled by default (`external_dem_path: null`). | On unrestricted machine: download tiles, build mosaic, derive 5 features, set `external_dem_path`, re-train. |
+| 4 | **Model selection on new-fault-like population** | Early stopping & fold weighting still maximize in-domain DTI; emission policy no longer does but model does. | Emission uses proxy DTI; training loop not yet. | Add second early-stopping signal on proxy-like validation; or ensemble-weight by proxy DTI (A/B shows equal weights safer until proxy signal stable). |
+| 5 | **More independent folds (seed diversity)** | 3-ensemble mean (16 live folds, seeds 42/43/44) confirms +0.0581 contrast; more folds = cheapest variance reduction. | Ensembles 1 (6), 2 (5 live), 3 (6 live) committed; 11-fold blend shipped. | Dispatch ensemble 4 (seed 45) via `train-ensemble.yml`; reblend with `reblend.yml RUN_ID=a,b,c,d`. |
+| 6 | **Full-capacity GPU training (EfficientNet-B5, 60 epochs)** | Current frontier is MobileNetV2/resnet34 at 8–15 epochs on CPU; reference config is 10 MC splits × 60 epochs × 4 architectures on EfficientNet-B5. | Config ready (`configs/config.yaml`); needs 24 GB GPU (~1 h) vs ~4 h CPU for smoke. | Run on GPU box or via Actions with GPU runner; bridge already supplies data. |
+| 7 | **Pseudo-label / self-training from proxy trace** | SGMC trace allowed to inform model (rules), but only through held-out split so gain ≠ label leakage. | Not yet measured; queued after transfer exp. | Train on SGMC trace with spatial holdout; measure gain on held-out trace before trusting on proxy sweep. |
+| 8 | **Human-only: DrivenData account + first leaderboard upload** | All above is local; only externally-sourced quality signal is public LB split of new faults. | Not yet done; 3/week; 1 final selection before Dec 3 2026 without private scores. | Enroll → upload shipped `submission.tif` → observe public DTI → iterate within weekly quota. |
+
+> **Suggested order for next session:** **Spatial block-holdout first** (resolves sign conflict by construction), then **cross-catalogue transfer** (measures whether external catalogue improves detection), then **ensemble 4** if GPU time allows. Items 1–2 run entirely on already-placed bridge data (no new download, no GPU). Items 3–6 require unrestricted machine/GPU but bridge already supplies rasters. Item 8 is only human-gated — until upload, every number remains local proxy; private leaderboard is first unbiased signal.
