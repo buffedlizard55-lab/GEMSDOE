@@ -1,4 +1,30 @@
-# Project status — 2026-09-17 (sessions 11–13)
+# Project status — 2026-09-17 (sessions 11–14)
+
+## Session 14 (current session) — Executive summary subpage, data placement verified, and 3-ensemble sweep confirmed
+
+1. **Executive summary subpage created and published:**
+   [`docs/executive_summary.html`](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)
+   and [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) now provide the definitive, step-by-step
+   operational roadmap for making an eligible submission into the GEMS Prize challenge. It details
+   the dual-phase prize structure ($50k Phase 1 + $250k Phase 2), verbatim rules eligibility criteria
+   (§1.3, §1.4), mandatory Generative AI disclosure requirements (§3.2 with ready-to-use narrative
+   template), exact technical GeoTIFF specifications (3292×3730, 100m res, EPSG:32611, single band
+   float32, [0, 1], 57.92% NaN mask), the distance-weighted Tversky metric, and the adopted winning
+   emission policy (`floor 0.1, thin, width 0 px`).
+2. **Data placement completed and verified in sandbox:**
+   Canonical competition rasters (`data/training_features.tif`, `data/labels.tif`,
+   `data/sample_submission.tif`) were assembled from the sha256-pinned git bridge via
+   `python scripts/assemble_data_bridge.py` and pre-flight validated via
+   `python scripts/prepare_data.py` (exit 0, passing all grid, resolution, and band checks).
+3. **Plain inference path wired to adopted policy:**
+   `src/inference.py` now resolves shaping through `effective_shaping()`, adopting the measured policy
+   from `data/evidence/emission_decision.json` (`floor 0.1, thin, width 0 px`) rather than falling back
+   to the in-domain calibration (which scores only 0.0247 on unseen faults vs 0.1365).
+4. **3-ensemble sweep confirmed on 16 live folds:**
+   Workflow run 35285326679 swept the 3-ensemble mean (16 live folds across seeds 42, 43, 44) on the
+   independent proxy catalogue (`eval_sweep-ens123.json`), confirming the adopted policy beats its
+   reference policy by **+0.0581 contrast** (0.0850 vs 0.0269).
+5. **Full test suite passing:** 175 passed, 2 skipped, 0 failures. `scripts/audit_docs.py` reports PASS.
 
 ## Session 13 — the emission policy is measured, reproduced, and shipped
 
@@ -19,7 +45,7 @@ measured, not yet reproduced / measured, not shipped — are computed, never typ
 
 ### 2. Condition 3 is measured on every field, including the shipping one
 
-Three sweeps are committed, each scored against the candidate “floor 0.1, thin, width 0 px” as a
+Four sweeps are committed, each scored against the candidate “floor 0.1, thin, width 0 px” as a
 CONTRAST with that field's own reference policy (absolute proxy DTI is not comparable across fold
 sets):
 
@@ -28,9 +54,10 @@ sets):
 | ensemble 1 (run 35042805806) | 0.1365 | 0.0410 | **+0.0954** |
 | ensemble 2 (run 35249562910, folds 6–11, seed 43) | 0.0777 | 0.0320 | **+0.0456** |
 | **the shipping field** (mean of ensembles 1+2, run 35275312337) | 0.0999 | 0.0304 | **+0.0695** |
+| **the 3-ensemble field** (mean of ensembles 1+2+3, 16 live folds, run 35285326679) | 0.0850 | 0.0269 | **+0.0581** |
 
-All three keep the sign and exceed +0.01 → condition 3 passes on the independent ensemble AND on the
-exact field the adopted policy is applied to → the record's conclusion is **SHIP the measured policy**
+All four keep the sign and exceed +0.01 → condition 3 passes on every independent ensemble AND on the
+exact fields the adopted policy is applied to → the record's conclusion is **SHIP the measured policy**
 (floor 0.1, thin, width 0 px), naming the ship path (`SHAPING_T0`/`SHAPING_DILATE`).
 
 The shipping-field sweep also sharpens the argument for the rule below: that field's *own* argmax is

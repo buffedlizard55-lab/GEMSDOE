@@ -1,3 +1,21 @@
+## Session 14 (2026-09-17) — executive summary subpage, data placement verified, 3-ensemble sweep confirmed
+
+1. **Executive roadmap delivered:** [`docs/executive_summary.html`](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)
+   and [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) now provide a complete, verified manual for
+   entering and submitting to the competition, including eligibility rules (§1.3), Generative AI disclosure
+   narrative template (§3.2), exact GeoTIFF raster parameters, validation commands, and upload procedures.
+2. **Data placement completed in sandbox:** Canonical competition rasters in `data/` were assembled
+   via `python scripts/assemble_data_bridge.py` and passed `python scripts/prepare_data.py`.
+3. **Plain inference path unified:** `src/inference.py` now resolves shaping through `effective_shaping()`,
+   adopting the measured winning policy (`floor 0.1, thin, width 0 px`) rather than the in-domain calibration.
+4. **16-fold 3-ensemble sweep confirmed:** Sweep on ensembles 1+2+3 (run 35285326679, `eval_sweep-ens123.json`)
+   confirmed the adopted policy maintains positive contrast (+0.0581) over reference across 16 live folds.
+
+What remains blocked are the external human-only and infrastructure items below:
+- **No DrivenData credentials in automated sandbox:** Submissions require manual web upload by an eligible entrant.
+- **Compute constraints:** High-capacity architectures (e.g. SegFormer / EfficientNet-B5 on full 19-band raster) require CUDA GPU compute.
+- **Private test set:** The ground truth for new faults is withheld by competition organizers; local proxy numbers serve as relative diagnostics.
+
 ## Session 13 (2026-09-17) — which blockers moved
 
 The emission-policy question (a change had to beat the shipped policy by > 0.01 on the

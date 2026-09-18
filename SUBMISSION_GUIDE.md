@@ -1,5 +1,10 @@
 # Submission Guide — GEMS Prize (Verified from Official Sources)
 
+> **See also:** [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) and the online
+> [Executive Summary Subpage](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)
+> for the comprehensive executive roadmap, eligibility rules, Generative AI disclosure narrative, and
+> pre-validated ready-to-upload submission raster.
+
 **Primary sources:**
 - Problem description submission format: https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/#submission-format
 - Official Rules PDF: https://www.nlr.gov/docs/fy26osti/96647.pdf (Sections 3.2, 3.3, 3.5, 3.6)
