@@ -1,3 +1,12 @@
+## Session 15 (2026-09-18) — executive summary polished for submission, 3-pass review, data bridge re-verified
+
+1. **Executive summary ready to submit:** `EXECUTIVE_SUMMARY.md` now opens with a TL;DR 5-command path (`git pull` → `assemble_data_bridge.py` → `prepare_data.py` → `validate_submission.py` → upload) pointing at `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif` (sha256 `a3dcd6d5…`, 569.5 KB, 11-fold ensemble, floor 0.1/thin/w0, rank 1 of 132). Added **Common Pitfalls** table (6 measured failures), **Data Placement Resolved** proof, **Limitations** table, and **Next Steps** queue — all line-by-line verified. Companion `docs/executive_summary.html` rebuilt with matching TL;DR banner.
+2. **Data placement re-verified in sandbox:** `assemble_data_bridge.py` (5 parts → 418,912,844 B, sha256 `4371c82e…`), `prepare_data.py` **PASS** (3292×3730, 19 bands, EPSG:32611, 100 m), `validate_submission.py` on shipped submission **PASS** — evidence and terminal output match. Bridge recovery via `data/bridge/` + runner workflow 35168924460 remains the verified path.
+3. **3-pass review completed:** Pass 1 implemented (TL;DR, pitfalls, data proof, limitations, next steps), Pass 2 re-checked every command and fixed hallucinatory verification bullet + duplicate header, Pass 3 re-built site, re-ran `audit_docs.py` **PASS** and `pytest` **175 passed** + `metrics --self-test` 8/8. Site: 10 pages, 0 uncatalogued hosts, 89 catalog rows.
+4. **Remaining blockers unchanged:** Human-only (DrivenData account/enrollment, eligibility §1.3, GenAI disclosure, final selection), infrastructure (GPU for full EfficientNet-B5 config), and private test labels — see table #1–10 below and `EXECUTIVE_SUMMARY.md` §8d.
+
+---
+
 ## Session 14 (2026-09-17) — executive summary subpage, data placement verified, 3-ensemble sweep confirmed
 
 1. **Executive roadmap delivered:** [`docs/executive_summary.html`](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)

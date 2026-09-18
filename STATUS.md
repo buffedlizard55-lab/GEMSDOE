@@ -1,6 +1,13 @@
 # Project status — 2026-09-17 (sessions 11–14)
 
-## Session 14 (current session) — Executive summary subpage, data placement verified, and 3-ensemble sweep confirmed
+## Session 15 (current session, 2026-09-18) — Executive summary subpage polished for submission, data bridge re-verified, 175 tests + audit pass
+
+1. **Executive summary subpage polished for direct submission:** `docs/executive_summary.html` now opens with a **TL;DR 5-command box** (`git pull` → `assemble_data_bridge.py` → `prepare_data.py` → `validate_submission.py` → upload) pointing at the pre-computed, format-validated `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif` (sha256 `a3dcd6d5…`, 569.5 KB, 11-fold ensemble, floor 0.1/thin/w0, rank 1 of 132). Companion markdown `EXECUTIVE_SUMMARY.md` adds the same quickstart, a **Common Pitfalls** table (6 measured failures + prevention), a **Data Placement Resolved** section (35168924460 → bridge → re-verify), a **Limitations** table, and a **Next Steps** queue. Both cite official sources line-by-line with `docs/data_catalog.csv` (89 rows) and machine evidence.
+2. **Data placement re-verified in sandbox (2026-09-18):** `python scripts/assemble_data_bridge.py` (5 parts → 418,912,844 B, sha256 `4371c82e…`), `python scripts/prepare_data.py` (**PASS**, 3292×3730, 19 bands, EPSG:32611, 100 m), `python scripts/validate_submission.py` on shipped submission (**PASS**). Evidence: `data/evidence/data_placement.json` + fresh terminal output.
+3. **Site rebuilt + audit + tests + metric self-test all green:** `python scripts/build_site.py` (10 pages), `python scripts/audit_docs.py` **PASS** (0 uncatalogued hosts), `python -m pytest` **175 passed, 2 skipped** (21 s), `python src/metrics.py --self-test` 8 checks — the same commands an entrant runs before upload.
+4. **PR workflow:** Changes committed on `arena/01a0b255-gemsdoe`, PR opened, and merged to `main` to publish the Pages site via `docs/`.
+
+## Session 14 (2026-09-18) — Executive summary subpage, data placement verified, and 3-ensemble sweep confirmed
 
 1. **Executive summary subpage created and published:**
    [`docs/executive_summary.html`](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)
