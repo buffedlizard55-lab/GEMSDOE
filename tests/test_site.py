@@ -162,3 +162,46 @@ def test_verification_page_without_evidence_says_so_and_invents_nothing():
     assert "not available" in html.lower()
     assert "0.1972" not in html and "mzoorob" not in html, \
         "a missing verification record must not render a leaderboard"
+
+
+# --------------------------------------------------------------------------- executive summary page
+def test_executive_summary_page_renders_all_required_sections():
+    mod = _site_mod()
+    ev = {
+        "rules_quotes": _evidence_quotes(),
+        "emission_decision": json.loads((ROOT / "data/evidence/emission_decision.json").read_text()),
+        "independent_verification": json.loads((ROOT / "data/evidence/independent_verification.json").read_text()),
+        "inventory": json.loads((ROOT / "data/evidence/inventory.json").read_text()),
+    }
+    html = mod.build_executive_summary(ev)
+    assert "Executive Summary" in html
+    assert "Dual-Phase Prize Structure" in html
+    assert "$300,000" in html
+    assert "$50,000" in html and "$250,000" in html
+    assert "Generative AI" in html
+    assert "EPSG:32611" in html
+    assert "100.0 m" in html or "100m" in html or "100 m" in html
+    assert "Distance-Weighted Tversky" in html
+    assert "Floor 0.1" in html
+    assert "validate_submission.py" in html
+    assert "DrivenData" in html
+    assert ("docs.nlr.gov" in html) or ("www.nlr.gov" in html)
+    assert "https://www.herox.com/GEMSPrize/resource/2274" in html
+    assert len(html) > 10000
+
+
+def test_executive_summary_without_evidence_handles_gracefully():
+    mod = _site_mod()
+    html = mod.build_executive_summary({})
+    assert "Executive Summary" in html
+    assert "EPSG:32611" in html
+    assert "$300,000" in html
+    assert "validate_submission.py" in html
+
+
+def test_nav_bar_links_to_executive_summary():
+    mod = _site_mod()
+    html = mod.page("Test", "test.html", "<p>content</p>")
+    assert 'href="executive_summary.html"' in html
+    assert "Executive summary" in html
+

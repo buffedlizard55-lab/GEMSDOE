@@ -1,4 +1,30 @@
-# Project status — 2026-09-17 (sessions 11–13)
+# Project status — 2026-09-17 (sessions 11–14)
+
+## Session 14 (current session) — Executive summary subpage, data placement verified, and 3-ensemble sweep confirmed
+
+1. **Executive summary subpage created and published:**
+   [`docs/executive_summary.html`](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)
+   and [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) now provide the definitive, step-by-step
+   operational roadmap for making an eligible submission into the GEMS Prize challenge. It details
+   the dual-phase prize structure ($50k Phase 1 + $250k Phase 2), verbatim rules eligibility criteria
+   (§1.3, §1.4), mandatory Generative AI disclosure requirements (§3.2 with ready-to-use narrative
+   template), exact technical GeoTIFF specifications (3292×3730, 100m res, EPSG:32611, single band
+   float32, [0, 1], 57.92% NaN mask), the distance-weighted Tversky metric, and the adopted winning
+   emission policy (`floor 0.1, thin, width 0 px`).
+2. **Data placement completed and verified in sandbox:**
+   Canonical competition rasters (`data/training_features.tif`, `data/labels.tif`,
+   `data/sample_submission.tif`) were assembled from the sha256-pinned git bridge via
+   `python scripts/assemble_data_bridge.py` and pre-flight validated via
+   `python scripts/prepare_data.py` (exit 0, passing all grid, resolution, and band checks).
+3. **Plain inference path wired to adopted policy:**
+   `src/inference.py` now resolves shaping through `effective_shaping()`, adopting the measured policy
+   from `data/evidence/emission_decision.json` (`floor 0.1, thin, width 0 px`) rather than falling back
+   to the in-domain calibration (which scores only 0.0247 on unseen faults vs 0.1365).
+4. **3-ensemble sweep confirmed on 16 live folds:**
+   Workflow run 35285326679 swept the 3-ensemble mean (16 live folds across seeds 42, 43, 44) on the
+   independent proxy catalogue (`eval_sweep-ens123.json`), confirming the adopted policy beats its
+   reference policy by **+0.0581 contrast** (0.0850 vs 0.0269).
+5. **Full test suite passing:** 175 passed, 2 skipped, 0 failures. `scripts/audit_docs.py` reports PASS.
 
 ## Session 13 — the emission policy is measured, reproduced, and shipped
 
@@ -19,7 +45,7 @@ measured, not yet reproduced / measured, not shipped — are computed, never typ
 
 ### 2. Condition 3 is measured on every field, including the shipping one
 
-Three sweeps are committed, each scored against the candidate “floor 0.1, thin, width 0 px” as a
+Four sweeps are committed, each scored against the candidate “floor 0.1, thin, width 0 px” as a
 CONTRAST with that field's own reference policy (absolute proxy DTI is not comparable across fold
 sets):
 
@@ -28,9 +54,10 @@ sets):
 | ensemble 1 (run 35042805806) | 0.1365 | 0.0410 | **+0.0954** |
 | ensemble 2 (run 35249562910, folds 6–11, seed 43) | 0.0777 | 0.0320 | **+0.0456** |
 | **the shipping field** (mean of ensembles 1+2, run 35275312337) | 0.0999 | 0.0304 | **+0.0695** |
+| **the 3-ensemble field** (mean of ensembles 1+2+3, 16 live folds, run 35285326679) | 0.0850 | 0.0269 | **+0.0581** |
 
-All three keep the sign and exceed +0.01 → condition 3 passes on the independent ensemble AND on the
-exact field the adopted policy is applied to → the record's conclusion is **SHIP the measured policy**
+All four keep the sign and exceed +0.01 → condition 3 passes on every independent ensemble AND on the
+exact fields the adopted policy is applied to → the record's conclusion is **SHIP the measured policy**
 (floor 0.1, thin, width 0 px), naming the ship path (`SHAPING_T0`/`SHAPING_DILATE`).
 
 The shipping-field sweep also sharpens the argument for the rule below: that field's *own* argmax is
@@ -96,7 +123,31 @@ completed and the answer is yes: on the shipping field floor 0.1 beats the refer
 **+0.0695** (0.0999 vs 0.0304, `eval_sweep-mean12.json`), and the decision step rewrote
 `data/evidence/emission_decision.json` with all three fields in condition 3 (commit `8713331`).
 
-### 6. What is left
+### 6. The inference path stopped silently shipping the old policy
+
+`reblend.yml` was the only path that applied the adopted policy. `python -m src.inference` — which is
+what `train-and-submit.yml` drives — shaped with `manifest["shaping"]`, the floor calibrated against
+the faults the model trained on, and said nothing about which policy it had used. The two are not
+close on the population that is scored: **0.0247 (calibration) vs 0.1365 (adopted)** on the
+new-fault-like population.
+
+`src/inference.py` now resolves shaping through `effective_shaping()`, in this order:
+
+1. an explicit `inference.submission_shaping.t0` in the config — kept, but tagged
+   `explicit_config_override` and *reported as having overridden a measurement* when one exists, so
+   an experiment can never pass for the adopted default;
+2. the SHIP record's best measured candidate (the default, because the shipped configs carry nulls);
+3. the manifest's in-domain calibration — reached only when no measurement exists, and labelled.
+
+Every written raster now carries the same provenance tags as the blend path
+(`shaping_t0/thin/dilate/source/evidence`), the emission width is actually passed to
+`optimize_submission` (it was dropped, so a future adopted non-zero width would have been applied as
+0 while the summary claimed otherwise), and the run summary records both the adopted policy and the
+in-domain counterfactual. `tests/test_inference_adopted_shaping.py` (9 tests) pins all of it — the
+precedence, the tags, the `ast`-level check that `dilate` reaches the call, and that a record which
+does not say SHIP is never adopted.
+
+### 7. What is left
 
 1. ~~Mean-of-1+2 sweep~~ **DONE** (run 35275312337, `SWEEP_LABEL=mean12`): the adopted policy beats
    the reference policy on the exact field it is applied to by +0.0695, and the decision record now

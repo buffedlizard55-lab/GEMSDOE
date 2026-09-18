@@ -17,41 +17,42 @@
    the exact mean field the adopted policy is applied to, floor 0.1 beats the reference policy by
    **+0.0695** (0.0999 vs 0.0304) and the record now carries all three sweeps in condition 3, with the
    shipped candidate still rank 1 of 132 by worst-case contrast (`eval_sweep-mean12.json`, committed
-   by the same run at `8713331`). The next field-level confirmation is the 3-ensemble mean once
-   ensemble 3 has landed.
-2. **Ensemble 3** (run 35263581931, folds 12–17, seed 44): fold 4 failed in training and fold 0 is
-   still running (started 19:13Z, >3 h at the last check). Fire recipe when it lands — never ship an
-   unmeasured field: (a) `RUN_ID=35042805806,35249562910,35263581931` + `SWEEP_LABEL=ens123` in
-   `.github/triggers/proxy-eval-params`, then touch `.github/triggers/proxy-eval`; the run blends
-   every fold into ONE mean and sweeps that exact field, and its decide step hands every committed
-   sweep to condition 3, so the record gains a THIRD independent field. (b) only if that record still
-   says SHIP, set the same `RUN_ID` list in `.github/triggers/reblend-params` (plus
-   `SHAPING_T0=0.1`/`SHAPING_DILATE=0`/`SHAPING_SOURCE=data/evidence/emission_decision.json` and
-   `MIN_FOLDS` pinned to the fold count) and touch `.github/triggers/reblend`. A 17-fold mean over
-   three seeds is the improvement; the policy is applied after the blend either way.
-3. **Two paths can still ship the OLD policy.** `.github/workflows/reblend.yml` is the only path that
-   applies the adopted policy; `configs/config.yaml` (`submission_shaping.t0: null`) and a plain
-   `src/inference.py` run fall back to the IN-DOMAIN calibrated floor (0.469674), which the proxy
-   population measures at 0.0247 against the adopted policy's 0.1365. Either make every submission
-   path read `data/evidence/emission_decision.json` or make a non-adopted shaping abort loudly; today
-   it is silent, and the difference is larger than every other knob in this file.
-4. **Detection is the binding constraint, now quantified.** 74 % of the new-fault-like truth lies
+   by the same run at `8713331`).
+2. ~~Ensemble 3 sweep confirmation~~ **DONE** (run 35285326679, `SWEEP_LABEL=ens123`, 16 live folds
+   over ensembles 1+2+3). The sweep on the 16-fold mean over seeds 42, 43, 44 (`eval_sweep-ens123.json`)
+   confirmed that floor 0.1 / thin / width 0 px beats its reference policy by **+0.0581 contrast**
+   (0.0850 vs 0.0269), providing a fourth field-level reproduction of the adopted policy's superiority.
+3. ~~Two paths can still ship the OLD policy~~ **FIXED.** `python -m src.inference` (the
+   path `train-and-submit.yml` drives) used to shape with `manifest["shaping"]`, the floor calibrated
+   against the faults the model trained on — worth 0.0247 on the new-fault-like population against the
+   adopted 0.1365 — and said nothing about which it had used. `src/inference.py` now resolves the
+   policy through `effective_shaping()`: an explicit config floor wins but is tagged
+   `explicit_config_override` and reported as having overridden a measurement; otherwise the SHIP
+   record is adopted; the in-domain calibration is reached only when no measurement exists, and is
+   labelled as such. Every written raster now carries `shaping_t0/thin/dilate/source/evidence` tags
+   (matching `blend_submission.py`) and the run summary records the adopted policy AND the in-domain
+   counterfactual. `tests/test_inference_adopted_shaping.py` pins all of it, including that a record
+   which does not say SHIP is never adopted.
+4. **Executive Summary Delivered:** Created [`docs/executive_summary.html`](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)
+   and [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) containing the complete executive guide for contest
+   submission, rules compliance (§1.3, §1.4, App A), GenAI disclosure (§3.2), and GeoTIFF validation.
+5. **Detection is the binding constraint, now quantified.** 74 % of the new-fault-like truth lies
    more than 12 px from any emitted pixel (`miss_distance-ensemble1.json`); the oracle ceiling is
    1.0000 at width 0 and 0.1618 at 16 px, and the leaderboard's top score (0.1972) is 7.9× the
    constant-ones baseline measured here. The two experiments below are the remaining upside.
-5. **Cross-catalogue transfer measurement.** Emitting an external fault catalogue (allowed by the
+6. **Cross-catalogue transfer measurement.** Emitting an external fault catalogue (allowed by the
    rules) would raise recall on unmapped faults directly, but the proxy population CANNOT measure it:
    the proxy *is* the catalogue (a catalogue copy scores 0.0 there by the acceptance test). The
    honest design is to emit catalogue A and score against an independent catalogue B (e.g. the USGS
    Quaternary fault and fold database), reporting the transfer as a prior on what A captures of the
    hidden expert set. Nothing in the repository measures that yet; it is the highest-upside
    unmeasured idea left.
-6. **Spatial block-holdout** — resolves the in-domain/proxy sign conflict by construction instead of
+7. **Spatial block-holdout** — resolves the in-domain/proxy sign conflict by construction instead of
    choosing between populations.
-7. **Training selection still maximises in-domain DTI** (early stopping, fold weights). The emission
+8. **Training selection still maximises in-domain DTI** (early stopping, fold weights). The emission
    policy no longer does; the model still does. A selection signal on a new-fault-like population is
    the structural fix.
-8. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
+9. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
    check (§1.3), Pages source setting, generative-AI + code assets at the deadline.
 
 

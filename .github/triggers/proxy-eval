@@ -24,3 +24,4 @@ proxy-eval
 # 2026-09-17 (session 13): fire the sweep on the SHIPPING field - the mean of ensembles 1 and 2 -
 # so the adopted (floor, width) policy is measured where it will be applied, not only per ensemble.
 # Settings: .github/triggers/proxy-eval-params (RUN_ID=35042805806,35249562910, SWEEP_LABEL=mean12).
+# fired 2026-09-17T23:1xZ — ens123 sweep (16 live folds over ensembles 1+2+3)

@@ -1,10 +1,10 @@
 {
- "generated_utc": "2026-09-17T23:08:15+00:00",
+ "generated_utc": "2026-09-17T23:47:05+00:00",
  "generated_by": "scripts/eval_proxy_catalogue.py",
  "purpose": "score a prediction against faults the training labels do not contain (docs/DISCOVERY_PLAN.md 3b) - the only local measurement aligned with the scored 'new fault' population",
  "inputs": {
-  "pred": "data/evidence/runs/35042805806/submission.tif",
-  "pred_sha256": "a5ae61d572b0cd95eac111cab86954eca2219ad310fc0febddcda7ab92fb7969",
+  "pred": "submission.tif",
+  "pred_sha256": "5287d4aa9d7ad339f3005229dd03997be8f295d256d3556857dde87543694446",
   "pred_meta": {
    "width": 3292,
    "height": 3730,
@@ -58,8 +58,8 @@
   "catalogue_coverage_of_proxy": 0.2494
  },
  "prediction": {
-  "emission_px": 21492,
-  "mass": 21492.0
+  "emission_px": 79760,
+  "mass": 79760.0
  },
  "baseline_support": {
   "source": "labels (the competition footprint)",
@@ -68,20 +68,20 @@
  },
  "results": {
   "as_provided": {
-   "dti": 0.024685,
-   "TP_w": 1324.081,
-   "FP_w": 20211.052,
-   "FN_w": 60339.919,
-   "mass": 21492.0,
-   "emission_px": 21492
+   "dti": 0.036488,
+   "TP_w": 2365.224,
+   "FP_w": 75088.343,
+   "FN_w": 59298.776,
+   "mass": 79760.0,
+   "emission_px": 79760
   },
   "as_submitted": {
-   "dti": 0.024685,
-   "TP_w": 1324.081,
-   "FP_w": 20211.052,
-   "FN_w": 60339.919,
-   "mass": 21492.0,
-   "emission_px": 21492
+   "dti": 0.036488,
+   "TP_w": 2365.224,
+   "FP_w": 75088.343,
+   "FN_w": 59298.776,
+   "mass": 79760.0,
+   "emission_px": 79760
   },
   "prediction_role": "the raster at --pred as provided: equals the committed submission only when --pred points at one; check inputs.pred_sha256 before quoting this as a submission score",
   "baselines": {
@@ -118,12 +118,12 @@
     "emission_px": 60988
    },
    "catalogue_plus_submission": {
-    "dti": 0.020272,
-    "TP_w": 1324.081,
-    "FP_w": 78606.052,
-    "FN_w": 60339.919,
-    "mass": 79887.0,
-    "emission_px": 79887
+    "dti": 0.031415,
+    "TP_w": 2365.224,
+    "FP_w": 127428.343,
+    "FN_w": 59298.776,
+    "mass": 132100.0,
+    "emission_px": 132100
    }
   },
   "acceptance": {
