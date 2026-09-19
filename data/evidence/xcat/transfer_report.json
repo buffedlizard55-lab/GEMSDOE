@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-19T01:31:18+00:00",
+ "generated_utc": "2026-09-19T01:39:02+00:00",
  "generated_by": "scripts/measure_cross_catalogue_transfer.py",
  "purpose": "REFUSED cross-catalogue transfer measurement: catalogue B turned out not to be independent of the training labels, so there is no 'new fault' population to score against and no transfer claim is possible",
  "sources": {
