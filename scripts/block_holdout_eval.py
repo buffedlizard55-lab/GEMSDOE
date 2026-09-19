@@ -317,11 +317,45 @@ def per_block_sign_agreement(labels_rows: List[dict], proxy_rows: List[dict],
 # --------------------------------------------------------------------------------------
 # report
 # --------------------------------------------------------------------------------------
+def combined_truth_provenance(labels_path: Path, proxy_path: Path, n_labels: int,
+                              n_proxy_only: int, n_combined: int) -> dict:
+    """What the `combined` population IS, and what it is only a surrogate for.
+
+    Phase 2 of the prize scores the SAME submission against "all fault labels in the updated
+    set" (official rules 3.6, verbatim in data/evidence/rules_quotes.json): the existing mapped
+    faults PLUS the faults the expert panel adds after reviewing the predictions.  Neither
+    committed population is that set on its own - `labels` is only the existing mapped faults and
+    `proxy_only` is only the new-fault-like part - so a decision that trades one against the other
+    (the SGMC pseudo-label experiment: proxy DTI up, catalogue DTI down) cannot be read from
+    either arm alone.  Their union is the closest thing this repository can build from bytes it
+    already has, and it is a SURROGATE: the real updated set is written by experts after seeing
+    the predictions, so it is neither SGMC nor QFaults.
+    """
+    return dict(
+        definition="labels.tif fault pixels UNION proxy_catalogue.tif code-2 pixels, inside the footprint",
+        inputs=dict(labels=str(labels_path), proxy=str(proxy_path), proxy_code=PROXY_CODE_ONLY),
+        px=dict(labels=int(n_labels), proxy_only=int(n_proxy_only), combined=int(n_combined)),
+        disjoint=bool(n_labels + n_proxy_only == n_combined),
+        surrogacy=("surrogate for the Phase-2 'complete updated test set' (rules 3.6: the same "
+                   "submission is scored again against all fault labels in the set the expert "
+                   "panel updates after the competition closes).  It is NOT that set: the updated "
+                   "set is written by experts, partly FROM the predictions, so it can contain "
+                   "faults no free catalogue maps and can omit SGMC traces the panel rejects."),
+        why_not_decomposable=("FP_w is a sum over PREDICTION pixels of 1 - max_g k(d(x,g)), so the "
+                              "combined FP_w cannot be recomposed from the two component "
+                              "populations' FP_w (TP_w and FN_w can: both are sums over truth "
+                              "pixels, and the two truth sets are disjoint).  The combined "
+                              "population is therefore scored from the rasters, never inferred "
+                              "from the two committed reports."),
+    )
+
+
 def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
                  template_path: Optional[Path], block_px: int, n_folds: int,
                  floors: Sequence[float], widths: Sequence[int], reference: dict,
                  n_boot: int, seed: int, R: int, alpha: float, beta: float, eps: float,
-                 score_fold: Optional[int] = None, complement: bool = False) -> dict:
+                 score_fold: Optional[int] = None, complement: bool = False,
+                 combined_population: bool = False) -> dict:
     pred_raw, pred_grid = read_band(pred_path)
     labels_raw, labels_grid = read_band(labels_path)
     proxy_raw, proxy_grid = read_band(proxy_path)
@@ -336,6 +370,10 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
     labels = (np.nan_to_num(np.asarray(labels_raw, dtype=np.float64), nan=0.0) > 0.5) & footprint
     proxy_codes = np.nan_to_num(np.asarray(proxy_raw, dtype=np.float64), nan=0.0).astype(np.int16)
     proxy_only = (proxy_codes == PROXY_CODE_ONLY) & footprint
+    # The optional THIRD population: existing mapped faults + new-fault-like trace, i.e. the
+    # closest local surrogate for the Phase-2 "complete updated test set" (rules 3.6).  It is
+    # off by default so every committed report keeps the schema its tests pin.
+    combined = (labels | proxy_only) if combined_population else None
 
     if not labels.any():
         raise SystemExit("labels contain no fault pixels inside the footprint - nothing to score")
@@ -384,6 +422,8 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
         footprint = footprint & keep
         labels = labels & footprint
         proxy_only = proxy_only & footprint
+        if combined_population:
+            combined = labels | proxy_only      # both operands are already restricted
         if not labels.any() or not proxy_only.any():
             raise SystemExit(f"the fold-{score_fold} restriction left no truth pixels "
                              f"(labels {int(labels.sum())}, proxy-only {int(proxy_only.sum())}) - "
@@ -438,9 +478,11 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
     if float(reference["floor"]) not in floors or int(reference["width"]) not in widths:
         raise ValueError(f"reference candidate {ref_label} is outside the swept grid "
                          f"(floors {floors}, widths {widths})")
-    pops = score_candidates(pred, footprint,
-                            {"labels": labels.astype(np.float64),
-                             "proxy_only": proxy_only.astype(np.float64)},
+    truths = {"labels": labels.astype(np.float64),
+              "proxy_only": proxy_only.astype(np.float64)}
+    if combined_population:
+        truths["combined"] = combined.astype(np.float64)
+    pops = score_candidates(pred, footprint, truths,
                             floors, widths, blocks, n_blocks, R, alpha, beta, eps)
     for name, pop in pops.items():
         pop["candidates"].sort(key=lambda c: (c["label"] != ref_label, c["floor"], c["width"]))
@@ -448,12 +490,16 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
             raise AssertionError(f"{name}: reference candidate is not first "
                                  f"({pop['candidates'][0]['label']} != {ref_label})")
     pop_labels, pop_proxy = pops["labels"], pops["proxy_only"]
+    pop_combined = pops.get("combined")
     boot_proxy = block_bootstrap(pop_proxy["candidates"], alpha, beta, eps, n_boot=n_boot, seed=seed)
     boot_labels = block_bootstrap(pop_labels["candidates"], alpha, beta, eps, n_boot=n_boot, seed=seed)
+    boot_combined = (block_bootstrap(pop_combined["candidates"], alpha, beta, eps,
+                                     n_boot=n_boot, seed=seed) if pop_combined else None)
     agreement = per_block_sign_agreement(pop_labels["candidates"], pop_proxy["candidates"], ref_label)
 
     proxy_by = {c["label"]: c for c in pop_proxy["candidates"]}
     labels_by = {c["label"]: c for c in pop_labels["candidates"]}
+    combined_by = ({c["label"]: c for c in pop_combined["candidates"]} if pop_combined else {})
     ref_proxy = proxy_by[ref_label]["global_dti"]
     best_proxy = max((c for c in pop_proxy["candidates"] if c["global_dti"] is not None),
                      key=lambda c: c["global_dti"])
@@ -464,7 +510,7 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
     first_of = {}
     for c in pop_proxy["candidates"]:
         first_of.setdefault(c.get("emission_key"), c["label"])
-    for pop in (pop_proxy, pop_labels):
+    for pop in tuple(p for p in (pop_proxy, pop_labels, pop_combined) if p is not None):
         for c in pop["candidates"]:
             c["duplicate_of"] = (None if first_of.get(c.get("emission_key")) == c["label"]
                                  else first_of.get(c.get("emission_key")))
@@ -489,6 +535,7 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
         reference_proxy_dti=ref_proxy,
         reference_proxy_ci95=boot_ref["dti_ci95"],
         reference_labels_dti=labels_by[ref_label]["global_dti"],
+        reference_combined_dti=(combined_by[ref_label]["global_dti"] if combined_by else None),
         best_swept_candidate=best_proxy["label"],
         best_swept_proxy_dti=best_proxy["global_dti"],
         best_swept_contrast=round(best_proxy["global_dti"] - ref_proxy, 6),
@@ -502,6 +549,38 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
               "in-domain (the shipped model trained on every label); per-block proxy-only DTI is "
               "not, because those pixels are absent from the training labels by construction."),
     )
+    combined_section = None
+    if combined_by:
+        best_comb = max((c for c in pop_combined["candidates"] if c["global_dti"] is not None),
+                        key=lambda c: c["global_dti"])
+        n_lab, n_pro, n_com = int(labels.sum()), int(proxy_only.sum()), int(combined.sum())
+        for nm, got, want in (("labels", n_lab, pop_labels["n_gt"]),
+                              ("proxy_only", n_pro, pop_proxy["n_gt"]),
+                              ("combined", n_com, pop_combined["n_gt"])):
+            if got != want:
+                raise AssertionError(f"combined population: {nm} mask has {got} px but the scored "
+                                     f"population reports {want} - the mask and the score drifted")
+        ref_comb = combined_by[ref_label]
+        combined_section = dict(
+            provenance=combined_truth_provenance(labels_path, proxy_path, n_lab, n_pro, n_com),
+            reference=dict(label=ref_label, dti=ref_comb["global_dti"],
+                           ci95=boot_combined[ref_label]["dti_ci95"],
+                           support_px=ref_comb["support_px"], TP_w=ref_comb["TP_w"],
+                           FP_w=ref_comb["FP_w"], FN_w=ref_comb["FN_w"]),
+            best_swept=dict(label=best_comb["label"], dti=best_comb["global_dti"],
+                            support_px=best_comb["support_px"],
+                            contrast_vs_reference=round(best_comb["global_dti"]
+                                                        - ref_comb["global_dti"], 6),
+                            prob_beats_reference=boot_combined[best_comb["label"]][
+                                "prob_beats_reference"]),
+            component_dti=dict(labels=labels_by[ref_label]["global_dti"],
+                               proxy_only=proxy_by[ref_label]["global_dti"],
+                               combined=ref_comb["global_dti"]),
+            caveat=("best_swept is a maximum over the swept grid ON THE JUDGING POPULATION: "
+                    "upward biased, never a shipping recommendation (the same caveat "
+                    "docs/FIELD_SELECTION_RULE.md records).  The combined population is a "
+                    "surrogate, not the Phase-2 set - see provenance.surrogacy."),
+        )
     return dict(
         generated_utc=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         generated_by="scripts/block_holdout_eval.py",
@@ -518,12 +597,15 @@ def build_report(pred_path: Path, labels_path: Path, proxy_path: Path,
         footprint=dict(px=int(footprint.sum()), frac_of_grid=round(float(footprint.mean()), 6)),
         prediction=pred_profile,
         restriction=restriction,
-        populations=dict(labels=pop_labels, proxy_only=pop_proxy),
+        populations=dict(labels=pop_labels, proxy_only=pop_proxy,
+                         **({"combined": pop_combined} if pop_combined else {})),
         bootstrap=dict(n=n_boot, seed=seed, unit="spatial block, resampled with replacement, "
                                                  "recomposed from the additive metric components",
                        reliability=bootstrap_reliability(len(scored_ids), n_blocks, n_boot,
                                                          restriction),
-                       proxy_only=boot_proxy, labels=boot_labels),
+                       proxy_only=boot_proxy, labels=boot_labels,
+                       **({"combined": boot_combined} if boot_combined else {})),
+        **({"combined_population": combined_section} if combined_section else {}),
         population_agreement=agreement,
         interpretation=per_block_caveat_from(verdict, agreement, pop_proxy),
         verdict=verdict,
@@ -753,11 +835,22 @@ def print_report(rep: dict) -> None:
     print(f"populations: catalogue {rep['populations']['labels']['n_gt']:,} px "
           f"({rep['populations']['labels']['truth_km']:,.1f} km) | proxy-only "
           f"{rep['populations']['proxy_only']['n_gt']:,} px "
-          f"({rep['populations']['proxy_only']['truth_km']:,.1f} km)")
+          f"({rep['populations']['proxy_only']['truth_km']:,.1f} km)"
+          + (f" | combined {rep['populations']['combined']['n_gt']:,} px "
+             f"({rep['populations']['combined']['truth_km']:,.1f} km)"
+             if "combined" in rep["populations"] else ""))
     print(f"\nreference candidate {v['reference_candidate']}:")
     print(f"  proxy-only DTI {v['reference_proxy_dti']:.4f}  block-bootstrap CI95 "
           f"[{v['reference_proxy_ci95'][0]:.4f}, {v['reference_proxy_ci95'][1]:.4f}]")
     print(f"  catalogue  DTI {v['reference_labels_dti']:.4f}  (in-domain - see the note in the JSON)")
+    cs = rep.get("combined_population")
+    if cs:
+        cd = cs["component_dti"]
+        print(f"  combined   DTI {cd['combined']:.4f}  block-bootstrap CI95 "
+              f"[{cs['reference']['ci95'][0]:.4f}, {cs['reference']['ci95'][1]:.4f}]  "
+              f"(Phase-2-like surrogate: labels {cd['labels']:.4f} + proxy-only {cd['proxy_only']:.4f}; "
+              f"{cs['provenance']['px']['combined']:,} truth px, disjoint="
+              f"{cs['provenance']['disjoint']})")
     print(f"  worst single-block contrast {v['worst_block_contrast_proxy']:+.4f}; "
           f"{v['blocks_where_reference_gains']} of {v['blocks_scoreable_proxy']} scoreable blocks gain")
     print(f"  best of the recoverable sweep: {v['best_swept_candidate']} "
@@ -838,6 +931,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                    reference_floor=0.1, reference_width=0, bootstraps=2000, seed=0,
                    R=DEFAULT_R_PIXELS, alpha=DEFAULT_ALPHA, beta=DEFAULT_BETA, eps=EPS,
                    crosscheck_sweep="data/evidence/proxy/eval_sweep-mean12.json",
+                   combined_population=False,
                    out="data/evidence/block_holdout/block_stratified.json")
     ap.add_argument("--block-px", type=int, default=None)
     ap.add_argument("--folds", type=int, default=None,
@@ -864,6 +958,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--complement", action="store_true",
                     help="with --score-fold K: score the OTHER blocks (the ones fold K trained "
                          "on), so the held-out/complement gap can be measured")
+    ap.add_argument("--combined-population", action="store_true", default=None,
+                    help="also score the UNION of the catalogue labels and the new-fault-like "
+                         "proxy pixels as a third population - the closest local surrogate for "
+                         "the Phase-2 'complete updated test set' (rules 3.6), and the only "
+                         "population on which a change that trades catalogue DTI for proxy DTI "
+                         "can be read as a gain or a loss.  Off by default so committed reports "
+                         "keep the schema their tests pin")
     ap.add_argument("--keep-duplicate-rows", action="store_true",
                     help="write the per-block rows of duplicate emissions too (4x larger file, "
                          "no extra information on a hard-band submission)")
@@ -892,7 +993,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                        a.block_px, a.folds, floors, widths,
                        dict(floor=a.reference_floor, width=a.reference_width),
                        a.bootstraps, a.seed, a.R, a.alpha, a.beta, a.eps,
-                       a.score_fold, a.complement)
+                       a.score_fold, a.complement, bool(a.combined_population))
     if a.crosscheck_sweep:
         rep["reproduction"] = crosscheck_against_committed_sweep(
             rep, Path(a.crosscheck_sweep), dict(floor=a.reference_floor, width=a.reference_width))

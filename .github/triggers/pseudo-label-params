@@ -11,3 +11,13 @@
 FOLD=0
 SEED=46
 PSEUDO_WEIGHT=1.0
+# BASELINE_RUN_ID  35413207736 = the Actions run whose artifact block-holdout-fold-0 still
+#       holds the baseline fold-0 RAW probability field (outputs/prob_raw.tif, 24.8 MB).  The
+#       workflow downloads it, checks its sha256 against the one recorded in
+#       data/evidence/block_holdout/fold0_heldout.json (inputs.pred_grid.sha256) and re-scores
+#       it on the COMBINED population, so both arms of the paired contrast exist on all three
+#       populations without a second 300-minute training run.  Verified present on 2026-09-19
+#       (artifact id 10576951939, expires 2026-10-03).  Set it empty to skip the re-score - the
+#       combined contrast is then reported NOT_SCORED rather than being guessed.  A different
+#       FOLD needs the run that trained THAT fold (folds 1-3: run 35451858112).
+BASELINE_RUN_ID=35413207736
