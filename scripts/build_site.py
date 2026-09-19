@@ -882,7 +882,7 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
     <tr>
       <td><b>USGS Quaternary Faults (QFaults)</b><br><a href="https://doi.org/10.5066/P9BCVRCK">doi.org/10.5066/P9BCVRCK</a></td>
       <td><b>Public Domain</b> (USGS); shapefiles &amp; KML via <a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23">ScienceBase 589097…</a></td>
-      <td>Training-label provenance; also useful as independent fault catalogue for cross-catalogue transfer experiments (emit A, score against B).</td>
+      <td>Training-label provenance — <b>and measured to be the training labels</b>: 100.00% of its in-footprint traces are already within R = 3 px of a label (<a href="results.html#xcat">cross-catalogue refusal</a>), so it is <i>not</i> an independent catalogue B for transfer experiments in this footprint.</td>
       <td>Interactive map &amp; downloads verified via ScienceBase; programmatic access via <a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer">ArcGIS MapServer</a>.</td>
     </tr>
     <tr>
@@ -933,15 +933,15 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
       <td>1</td>
       <td><b>Fix detection, not just width — cross-catalogue transfer</b></td>
       <td>74% of new-fault-like truth is &gt;12 px (1.2 km) from any emitted pixel; widening to 16 px lifts DTI only 0.0247 → 0.0713. The remaining error is <b>detection</b>, not localization — <code>miss_distance-ensemble1.json</code>.</td>
-      <td>Not yet measured; flagged as highest-upside experiment.</td>
-      <td>Emit catalogue A (e.g. SGMC), score against independent catalogue B (e.g. QFaults), report transfer as a prior on hidden-expert-set recall. Then train with that external catalogue as auxiliary supervision.</td>
+      <td><b>MEASURED 2026-09-19 — verdict <code>REFUSED</code>, and the refusal is the finding.</b> A runner fetched QFaults layer 21 (14,481 features, integrity gate <code>fetched == service_reported</code>) and rasterised it on the competition grid: of <b>60,939</b> B pixels inside the scored footprint, <b>60,938 (100.00%)</b> are already within R = 3 px of a training label and exactly <b>1</b> is code 2. Reciprocally, <b>60,986 of 60,988</b> label fault pixels lie within R of a QFaults trace. <b>In this footprint the training labels are QFaults.</b> No statistic computed on a 1-pixel truth population means anything, so <code>measure_cross_catalogue_transfer.py</code> refuses by pre-registered threshold and commits the overlap instead — <a href="results.html#xcat">full section</a>, <code>data/evidence/xcat/transfer_report.json</code>.</td>
+      <td><b>Do not re-run this expecting a different answer</b> — the overlap is a property of the two catalogues, not of the run. The question is answered negatively: no free second <i>Quaternary</i> catalogue is independent of these labels, so a hidden-expert-set prior cannot come from one. Pursue detection through item 3 (DEM derivatives) or item 6 (capacity); any future candidate catalogue must first be checked for disjointness with <code>build_proxy_catalogue.py</code>.</td>
     </tr>
     <tr>
       <td>2</td>
       <td><b>Spatial block-holdout (solve the in-domain / proxy sign conflict)</b></td>
       <td>In-domain DTI (0.1903 → 0.0908 when widening) and proxy DTI (+0.11 when widening) disagree on sign — choosing one population corrupts the other.</td>
-      <td>Not yet implemented; designed in <code>docs/DISCOVERY_PLAN.md</code>.</td>
-      <td>Hold out geographic blocks for model selection so both metrics are computed on unseen geography; calibrate floor &amp; width on the proxy-like blocks.</td>
+      <td><b>MEASURED 2026-09-18/19.</b> <code>scripts/block_holdout_eval.py</code> scores the shipped submission per 51.2 km block and bootstraps over blocks: proxy DTI <b>0.0999, CI95 [0.0883, 0.1119]</b>; the best genuinely different alternative (width 1 px, 0.0878) beats the reference with probability <b>0.008</b>, so the adopted policy is confirmed <i>with an error bar</i>. A GitHub-hosted runner then recomputed all ten quantities from the same bytes: <b><code>agree: true</code></b>, DTI 0.099859 and both CI bounds identical (<a href="metric.html#runner-reproduction">reproduction table</a>). Training-side holdout is wired too (<code>configs/config_block_holdout.yaml</code>, <code>--score-fold K [--complement]</code>), with the scoring partition cross-checked against the training partition at runtime.</td>
+      <td>Fire <code>.github/workflows/block-holdout.yml</code> with <code>TRAIN_FOLDS=0,1,2,3</code> for the four-fold generalisation gap (needs GPU hours). Until then the per-block numbers are a <b>reshaping</b> measurement on a model that saw every block — the report says so in <code>restriction.note</code>, and they must not be quoted as transfer to unseen geography.</td>
     </tr>
     <tr>
       <td>3</td>
@@ -962,7 +962,7 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
       <td><b>More independent folds (seed diversity)</b></td>
       <td>3-ensemble mean (16 live folds, seed 42/43/44) already confirms +0.0581 contrast; adding folds is the cheapest variance reduction left.</td>
       <td>Ensembles 1 (6 folds), 2 (5 live), 3 (6 live) committed; 11-fold blend shipped.</td>
-      <td>Dispatch ensemble 4 (seed 45) via <code>train-ensemble.yml</code>; reblend with <code>reblend.yml RUN_ID=a,b,c,d</code>.</td>
+      <td><b>Deferred on evidence (2026-09-19).</b> At matched emission support the 11-fold shipped mean scores <b>0.0999</b> while the 16-fold <code>ens123</code> scores <b>0.0850</b> (<code>data/evidence/emission_field_axis.json</code>, <code>ranking_stable_across_windows: true</code>) — more folds did not help. Fire ensemble 4 only after item 3 or 6 changes the field, then reblend with <code>reblend.yml RUN_ID=a,b,c,d</code>.</td>
     </tr>
     <tr>
       <td>6</td>
@@ -988,7 +988,7 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
   </tbody>
 </table>
 
-<div class="note warn"><b>How to work on these in the next session(s).</b> Items 1–2 are pure protocol/code and run entirely on the already-placed bridge data (no new download, no GPU). Items 3–6 require an unrestricted machine and/or GPU but the bridge already supplies the competition rasters. Item 8 is the only human-gated step — until a submission is uploaded, every number here remains a local proxy; the private leaderboard is the first unbiased signal. Suggested order for the very next session: <b>spatial block-holdout first</b> (resolves the sign conflict by construction), then <b>cross-catalogue transfer</b> (measures whether an external fault catalogue improves detection), then <b>ensemble 4</b> if GPU time allows.</div>
+<div class="note warn"><b>How to work on these in the next session(s).</b> Items <b>1</b> and <b>2</b> are now <i>closed by measurement</i>: the cross-catalogue transfer refused itself because the training labels and QFaults are the same lines in this footprint (1 code-2 pixel of 60,939), and the block-holdout evidence was reproduced bit-for-bit on an independent runner. Item <b>5</b> is deferred because more folds measurably did not help. The remaining upside is therefore <b>8</b> (human: upload and read the public leaderboard — now the only source of unbiased signal) → <b>3</b> (1 m DEM derivatives) → <b>6</b> (GPU capacity) → <b>4</b> (selection on a new-fault-like population) → <b>7</b> (pseudo-labels under spatial holdout). Items 3–7 require an unrestricted machine and/or GPU; the bridge already supplies the competition rasters.</div>
 """)
 
     return page("Executive Summary — How to Enter & Submit", "executive_summary.html", "\n".join(out),
@@ -1631,6 +1631,81 @@ all three run by the <em>Proxy catalogue</em> workflow.</p>
     return head + table + warn_note + sweep_html + ok_note
 
 
+def _cross_catalogue_refused(d: dict, ev: dict) -> str:
+    """Render a REFUSED transfer report: the two catalogues turned out to be the same lines.
+
+    This is the shape the real QFaults measurement came back in, so it is a first-class page state
+    and not an error path: the overlap that establishes the refusal IS the result, and the page must
+    show it rather than a table of numbers computed on a one-pixel truth population.
+    """
+    pop, v = d["population"], d["verdict"]
+    st = (ev.get("xcat_stats") or {}).get("proxy") or {}
+    fm = ev.get("xcat_fetch") or {}
+    thr = pop.get("thresholds") or {}
+    counts = fm.get("counts") or {}
+    rows = ""
+    if counts.get("fetched") is not None:
+        rows += (f'<tr><th>Features fetched</th><td><b>{int(counts["fetched"]):,}</b> of '
+                 f'{int(counts.get("service_reported", 0)):,} reported by the service &mdash; '
+                 f'integrity gate <code>{e(str(counts.get("integrity_gate", "")))}</code> '
+                 f'passed, so the catalogue is not silently truncated</td></tr>')
+    links = fm.get("link_checks") or {}
+    if links:
+        ok_urls = [k for k, v in links.items() if str(v).startswith("OK")]
+        tail = "" if len(ok_urls) == len(links) else (
+            "; the rest returned a transient 503 from the publisher and are recorded verbatim in "
+            "<code>fetch_meta.json</code>")
+        rows += ('<tr><th>Source links</th><td>%d of %d reachable from the runner (%s)%s</td></tr>'
+                 % (len(ok_urls), len(links), e(", ".join(ok_urls)), tail))
+    if st:
+        rows += (f'<tr><th>B on the whole grid</th><td>{int(st.get("mask_px", 0)):,} px rasterised, of '
+                 f'which <b>{int(st.get("outside_footprint_px", 0)):,}</b> fall outside the scored '
+                 f'footprint (NaN in the submission, therefore unscored)</td></tr>')
+    lab_frac = (100.0 * pop["labels_within_R_of_B_px"] / pop["label_fault_px"]
+                if pop.get("label_fault_px") else 0.0)
+    return f"""<h2 id="xcat">Cross-catalogue transfer &mdash; measured, and REFUSED</h2>
+<p>Catalogue A (SGMC structure, DOI 10.3133/ds1052) was to be emitted and scored against catalogue B
+(QFaults layer 21, DOI 10.5066/P9BCVRCK) on B&rsquo;s code-2 pixels &mdash; the traces the training
+labels do not contain. The runner fetched B and rasterised it on the competition grid, and that
+population turned out to be one pixel wide.</p>
+{note("bad", f"<b>Verdict: {e(v['conclusion'])}</b>")}
+<table class="kv"><tbody>
+{rows}
+<tr><th>B inside the footprint</th><td><b>{pop['B_in_footprint_px']:,} px</b> =
+  {pop['B_in_footprint_km']:,.0f} km of Quaternary fault trace</td></tr>
+<tr><th>&hellip;already in the labels</th><td><b>{pop['B_code1_near_a_label_px']:,} px
+  ({pop['B_code1_fraction'] * 100:.2f}%)</b> lie within R = {d['metric']['R_pixels']} px
+  ({d['metric']['R_meters']:,.0f} m) of a training label &mdash; code 1, unscored by construction</td></tr>
+<tr><th>&hellip;left as &ldquo;new&rdquo;</th><td><b>{pop['B_only_px']:,} px
+  ({pop['B_only_fraction'] * 100:.4f}%)</b> &mdash; below the pre-registered minimum of
+  {int(thr.get('min_b_only_px', 0)):,} px / {float(thr.get('min_b_only_fraction', 0)) * 100:.2f}%</td></tr>
+<tr><th>The reciprocal</th><td><b>{pop['labels_within_R_of_B_px']:,} of {pop['label_fault_px']:,}</b>
+  label fault pixels ({lab_frac:.3f}%) lie within R of a QFaults trace.
+  <b>In this footprint the training labels <i>are</i> QFaults.</b></td></tr>
+<tr><th>Reported numbers</th><td><b>none.</b> <code>measurements: []</code>,
+  <code>controls_pass: false</code>, <code>exit_code: 0</code> &mdash; a DTI computed against
+  {pop['B_only_px']:,} truth pixel(s) would be noise, and publishing it would be exactly the kind of
+  unsupported number this repository refuses to produce</td></tr>
+</tbody></table>
+{note("warn",
+    "<b>Why this exits 0 and not 1.</b> &ldquo;These two catalogues are the same lines&rdquo; is a "
+    "finding about the data, so it is committed as a report with the overlap that establishes it "
+    "(<code>data/evidence/xcat/transfer_report.json</code>, input sha256s included). A genuinely "
+    "broken B raster &mdash; under <code>--min-b-all-px</code> "
+    f"{int(thr.get('min_b_all_px', 0)):,} in-footprint pixels, i.e. empty, misaligned or miscoded "
+    "&mdash; still fails the run and writes nothing, so a defect can never masquerade as a result.")}
+<p><b>What this closes.</b> Rules &sect;3.3 says the scored faults are a <i>new</i> expert set, and
+&sect;11 item 1 of the executive summary asked for a prior on recall against it. That prior cannot
+come from a second Quaternary catalogue: none is independent of these labels, and that is now
+measured rather than argued. The SGMC proxy population
+(<code>data/evidence/proxy/proxy_catalogue.tif</code>, 61,664 code-2 px, 24.94% already covered by
+the labels) remains the only available surrogate for &ldquo;faults the labels lack&rdquo;, with its
+structural weakness intact &mdash; pre-Quaternary bedrock structure digitised from state geologic
+maps, not an expert interpretation of the GeoDAWN geophysics. Any future candidate catalogue must be
+checked for disjointness with <code>scripts/build_proxy_catalogue.py</code> <b>before</b> a transfer
+number is quoted.</p>"""
+
+
 def _cross_catalogue(ev: dict) -> str:
     """Does a policy TRAVEL between independently compiled catalogues?
 
@@ -1666,7 +1741,10 @@ by more than <b>0.01 DTI</b> with <b>P(union &gt; model) &ge; 0.95</b> over pair
 The verdict is derived, so <code>ADOPT</code> is unreachable if a control fails, and
 <code>REFUSED</code> is printed instead of a number nobody may act on.</p>"""
 
-    v, o, c = d["verdict"], d["overlap"], d["controls"]
+    v = d["verdict"]
+    if "population" in d:
+        return _cross_catalogue_refused(d, ev)
+    o, c = d["overlap"], d["controls"]
     kind = "ok" if v["conclusion"].startswith("ADOPT") else (
         "bad" if v["conclusion"].startswith("REFUSED") else "warn")
     rows = ""
@@ -1839,6 +1917,54 @@ candidate on the same draw (<code>bootstrap_from_blocks</code>, {d['bootstrap'][
 <ul>
 {''.join(f'<li>{c}</li>' for c in caveats)}
 </ul>"""
+
+
+def _runner_reproduction(ev: dict) -> str:
+    """Did an INDEPENDENT environment get the same numbers?
+
+    Every other section on this page was computed in one sandbox.  The block-holdout workflow
+    recomputes the same quantities on a GitHub-hosted runner from the same committed bytes and
+    compares them field by field, so "0.0999" is a property of the artefacts rather than of one
+    machine's BLAS, rasterio or numpy version.
+    """
+    d = ev.get("runner_reproduction")
+    if not d:
+        return ""
+    checks = d.get("checks") or []
+    agree = bool(d.get("agree"))
+    rows = ""
+    for c in checks:
+        r, sb, tol = c.get("runner"), c.get("sandbox"), c.get("tolerance")
+        fmt = (lambda x: (f"{x:,.6g}" if isinstance(x, (int, float)) and not isinstance(x, bool)
+                          else e(str(x))))
+        rows += ('<tr><td>%s</td><td class="num">%s</td><td class="num">%s</td><td class="num">%s</td>'
+                 '<td>%s</td></tr>'
+                 % (e(str(c.get("quantity"))), fmt(r), fmt(sb),
+                    ("&ndash;" if tol is None else f"{tol:g}"),
+                    ("&#10003;" if c.get("agree") else "&#10007; DISAGREE")))
+    return f"""<h2 id="runner-reproduction">Independent reproduction &mdash; sandbox vs GitHub runner</h2>
+{note("ok" if agree else "bad",
+      f"<b>{'AGREEMENT' if agree else 'DISAGREEMENT'} on {len(checks)} of {len(checks)} compared "
+      f"quantities.</b> The block-holdout workflow recomputed the shipped submission's block-stratified "
+      f"evidence on a GitHub-hosted runner (generated {e(str(d.get('runner_generated_utc')))} UTC) from "
+      f"the same committed bytes the sandbox used ({e(str(d.get('sandbox_generated_utc')))} UTC). "
+      + ("Every value matches within its pre-declared tolerance &mdash; the headline DTI and both "
+         "bootstrap bounds match to six decimals." if agree else
+         "See the rows marked DISAGREE: the committed numbers must not be quoted until this is "
+         "resolved."))}
+<table><thead><tr><th>quantity</th><th>runner</th><th>sandbox</th><th>tolerance</th>
+<th>agree</th></tr></thead><tbody>
+{rows}
+</tbody></table>
+<p><b>Why this matters more than another decimal place.</b> The sandbox has no GPU, two vCPUs and a
+different numpy/rasterio build than the runner. A metric that quietly depended on either would produce
+two plausible numbers and no way to choose between them. Comparing the three weighted components
+(TP<sub>w</sub>, FP<sub>w</sub>, FN<sub>w</sub>) as well as the ratio means an agreement cannot be a
+coincidence of cancelling errors, and comparing the bootstrap bounds means the resampling is
+deterministic given the seed. Artefacts:
+<code>data/evidence/block_holdout/sandbox_vs_runner.json</code>,
+<code>runner_block_stratified.json</code> (the runner's own full report),
+<code>.github/workflows/block-holdout.yml</code>.</p>"""
 
 
 def _field_axis(ev: dict) -> str:
@@ -2204,6 +2330,7 @@ coexist (%s): %s</p>
     body.append(_proxy_catalogue(ev))
     body.append(_emission_decision(ev))
     body.append(_block_holdout(ev))
+    body.append(_runner_reproduction(ev))
     body.append(_field_axis(ev))
     body.append(_miss_distance(ev))
     body.append(_scoring_universe(ev))
@@ -2718,6 +2845,9 @@ def main() -> int:
         # blocks, plus the gate that reproduces the runner's committed sweep row in the sandbox
         # (scripts/block_holdout_eval.py).
         "block_stratified": load(ROOT / "data/evidence/block_holdout/block_stratified.json"),
+        # The same quantities recomputed on a GitHub-hosted runner from the same committed bytes,
+        # compared field by field (.github/workflows/block-holdout.yml).
+        "runner_reproduction": load(ROOT / "data/evidence/block_holdout/sandbox_vs_runner.json"),
         # The FIELD axis at matched support: a floor is a threshold on a field whose scale changes
         # with the number of averaged folds, so fields are compared at equal emission, not at a
         # shared threshold (scripts/compare_emission_fields.py).
@@ -2725,6 +2855,10 @@ def main() -> int:
         # Cross-catalogue transfer: emit catalogue A (SGMC), score against catalogue B (QFaults).
         # Written on a runner - earthquake.usgs.gov is not reachable from the sandbox.
         "xcat_transfer": load(ROOT / "data/evidence/xcat/transfer_report.json"),
+        # The overlap that the transfer refusal is built on: how much of catalogue B the training
+        # labels already contain (scripts/build_proxy_catalogue.py --stats).
+        "xcat_stats": load(ROOT / "data/evidence/xcat/qfaults_stats.json"),
+        "xcat_fetch": load(ROOT / "data/evidence/xcat/fetch_meta.json"),
         # The localization/detection split on the new-fault-like population: how far the unseen
         # faults actually are from the emitted set, and what each emitted band width is worth
         # (scripts/measure_miss_distance.py).

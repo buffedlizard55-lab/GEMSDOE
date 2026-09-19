@@ -128,10 +128,11 @@ labels). Its structural weakness is now explicit: **the proxy is only one catalo
 whether a policy travels between independently compiled catalogues or merely fits that catalogue's
 mapping style. That is item **(b2)** below.
 
-**(b2) A SECOND independent catalogue, and the transfer measurement — BUILT 2026-09-18, awaiting runner
-egress.** Emit catalogue A (SGMC), score against catalogue B (USGS Quaternary Fault and Fold Database,
-QFaults layer 21 "National Database", DOI 10.5066/P9BCVRCK, public domain), and report transfer as a
-prior on hidden-expert-set recall.
+**(b2) A SECOND independent catalogue, and the transfer measurement — MEASURED 2026-09-19, verdict
+`REFUSED`: the second catalogue is not independent of the labels.** Emit catalogue A (SGMC), score
+against catalogue B (USGS Quaternary Fault and Fold Database, QFaults layer 21 "National Database",
+DOI 10.5066/P9BCVRCK, public domain), and report transfer as a prior on hidden-expert-set recall.
+The measurement ran on a runner and answered a different question than intended — a more useful one:
 
 * `scripts/fetch_qfaults.py` reads the layer metadata and its renderer vocabulary at run time (nothing
   hand-copied), computes the footprint envelope from `data/labels.tif` (never typed), pages until the
@@ -148,6 +149,29 @@ prior on hidden-expert-set recall.
   training labels (rules §3.3 — INGENIOUS distributes Quaternary fault layers), so only B's **code-2**
   pixels are scored, and the overlap fraction is measured rather than assumed; if that population is
   empty the measurement refuses to run.
+
+**What the run found.** 14,481 features fetched (`fetched == service_reported`, integrity gate passed)
+and rasterised on the competition grid: **169,115** B pixels in total, **108,176** of them outside the
+scored footprint (NaN in the submission, therefore unscored), leaving **60,939** inside it. Of those,
+**60,938 (100.00 %)** are already within R = 3 px of a training label and exactly **1 pixel** is code 2.
+The reciprocal is just as tight: **60,986 of the 60,988** label fault pixels (99.997 %) lie within R of a
+QFaults trace. **In this footprint the training labels are QFaults.**
+
+So the population the transfer test needs — faults an expert compiled that the labels lack — is one
+pixel wide, and no statistic computed on it means anything. `measure_cross_catalogue_transfer.py`
+therefore refuses by pre-registered threshold (`--min-b-only-px 100`, `--min-b-only-fraction 0.005`),
+writes `data/evidence/xcat/transfer_report.json` **with the overlap that establishes the refusal**, and
+exits 0: a finding, not a failure. A near-empty B raster (< `--min-b-all-px 1000` in-footprint pixels —
+empty, misaligned or miscoded) still exits non-zero, so a data bug cannot masquerade as a result.
+
+**What this closes and what it leaves open.** Closed: the idea that a second *Quaternary* catalogue can
+supply a hidden-expert-set prior here — none is independent of these labels, and that is now measured
+rather than argued. Open: the SGMC proxy population (`data/evidence/proxy/proxy_catalogue.tif`, 61,664
+code-2 px, 24.94 % already covered by the labels) remains the only available surrogate for "faults the
+labels lack", with its structural weakness intact — pre-Quaternary bedrock structure digitised from
+state geologic maps, not an expert interpretation of the GeoDAWN geophysics. Any future candidate
+catalogue must be checked for disjointness with `build_proxy_catalogue.py` **before** a transfer number
+is quoted.
 
 **(c) Discovery diagnostics on any submission or probability map** — implemented, no extra data
 needed (`src/discovery.py`, tests in `tests/test_discovery.py`):

@@ -533,7 +533,7 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
     <tr>
       <td><b>USGS Quaternary Faults (QFaults)</b><br><a href="https://doi.org/10.5066/P9BCVRCK">doi.org/10.5066/P9BCVRCK</a></td>
       <td><b>Public Domain</b> (USGS); shapefiles &amp; KML via <a href="https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23">ScienceBase 589097…</a></td>
-      <td>Training-label provenance; also useful as independent fault catalogue for cross-catalogue transfer experiments (emit A, score against B).</td>
+      <td>Training-label provenance — <b>and measured to be the training labels</b>: 100.00% of its in-footprint traces are already within R = 3 px of a label (<a href="results.html#xcat">cross-catalogue refusal</a>), so it is <i>not</i> an independent catalogue B for transfer experiments in this footprint.</td>
       <td>Interactive map &amp; downloads verified via ScienceBase; programmatic access via <a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer">ArcGIS MapServer</a>.</td>
     </tr>
     <tr>
@@ -584,15 +584,15 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
       <td>1</td>
       <td><b>Fix detection, not just width — cross-catalogue transfer</b></td>
       <td>74% of new-fault-like truth is &gt;12 px (1.2 km) from any emitted pixel; widening to 16 px lifts DTI only 0.0247 → 0.0713. The remaining error is <b>detection</b>, not localization — <code>miss_distance-ensemble1.json</code>.</td>
-      <td>Not yet measured; flagged as highest-upside experiment.</td>
-      <td>Emit catalogue A (e.g. SGMC), score against independent catalogue B (e.g. QFaults), report transfer as a prior on hidden-expert-set recall. Then train with that external catalogue as auxiliary supervision.</td>
+      <td><b>MEASURED 2026-09-19 — verdict <code>REFUSED</code>, and the refusal is the finding.</b> A runner fetched QFaults layer 21 (14,481 features, integrity gate <code>fetched == service_reported</code>) and rasterised it on the competition grid: of <b>60,939</b> B pixels inside the scored footprint, <b>60,938 (100.00%)</b> are already within R = 3 px of a training label and exactly <b>1</b> is code 2. Reciprocally, <b>60,986 of 60,988</b> label fault pixels lie within R of a QFaults trace. <b>In this footprint the training labels are QFaults.</b> No statistic computed on a 1-pixel truth population means anything, so <code>measure_cross_catalogue_transfer.py</code> refuses by pre-registered threshold and commits the overlap instead — <a href="results.html#xcat">full section</a>, <code>data/evidence/xcat/transfer_report.json</code>.</td>
+      <td><b>Do not re-run this expecting a different answer</b> — the overlap is a property of the two catalogues, not of the run. The question is answered negatively: no free second <i>Quaternary</i> catalogue is independent of these labels, so a hidden-expert-set prior cannot come from one. Pursue detection through item 3 (DEM derivatives) or item 6 (capacity); any future candidate catalogue must first be checked for disjointness with <code>build_proxy_catalogue.py</code>.</td>
     </tr>
     <tr>
       <td>2</td>
       <td><b>Spatial block-holdout (solve the in-domain / proxy sign conflict)</b></td>
       <td>In-domain DTI (0.1903 → 0.0908 when widening) and proxy DTI (+0.11 when widening) disagree on sign — choosing one population corrupts the other.</td>
-      <td>Not yet implemented; designed in <code>docs/DISCOVERY_PLAN.md</code>.</td>
-      <td>Hold out geographic blocks for model selection so both metrics are computed on unseen geography; calibrate floor &amp; width on the proxy-like blocks.</td>
+      <td><b>MEASURED 2026-09-18/19.</b> <code>scripts/block_holdout_eval.py</code> scores the shipped submission per 51.2 km block and bootstraps over blocks: proxy DTI <b>0.0999, CI95 [0.0883, 0.1119]</b>; the best genuinely different alternative (width 1 px, 0.0878) beats the reference with probability <b>0.008</b>, so the adopted policy is confirmed <i>with an error bar</i>. A GitHub-hosted runner then recomputed all ten quantities from the same bytes: <b><code>agree: true</code></b>, DTI 0.099859 and both CI bounds identical (<a href="metric.html#runner-reproduction">reproduction table</a>). Training-side holdout is wired too (<code>configs/config_block_holdout.yaml</code>, <code>--score-fold K [--complement]</code>), with the scoring partition cross-checked against the training partition at runtime.</td>
+      <td>Fire <code>.github/workflows/block-holdout.yml</code> with <code>TRAIN_FOLDS=0,1,2,3</code> for the four-fold generalisation gap (needs GPU hours). Until then the per-block numbers are a <b>reshaping</b> measurement on a model that saw every block — the report says so in <code>restriction.note</code>, and they must not be quoted as transfer to unseen geography.</td>
     </tr>
     <tr>
       <td>3</td>
@@ -613,7 +613,7 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
       <td><b>More independent folds (seed diversity)</b></td>
       <td>3-ensemble mean (16 live folds, seed 42/43/44) already confirms +0.0581 contrast; adding folds is the cheapest variance reduction left.</td>
       <td>Ensembles 1 (6 folds), 2 (5 live), 3 (6 live) committed; 11-fold blend shipped.</td>
-      <td>Dispatch ensemble 4 (seed 45) via <code>train-ensemble.yml</code>; reblend with <code>reblend.yml RUN_ID=a,b,c,d</code>.</td>
+      <td><b>Deferred on evidence (2026-09-19).</b> At matched emission support the 11-fold shipped mean scores <b>0.0999</b> while the 16-fold <code>ens123</code> scores <b>0.0850</b> (<code>data/evidence/emission_field_axis.json</code>, <code>ranking_stable_across_windows: true</code>) — more folds did not help. Fire ensemble 4 only after item 3 or 6 changes the field, then reblend with <code>reblend.yml RUN_ID=a,b,c,d</code>.</td>
     </tr>
     <tr>
       <td>6</td>
@@ -639,11 +639,11 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
   </tbody>
 </table>
 
-<div class="note warn"><b>How to work on these in the next session(s).</b> Items 1–2 are pure protocol/code and run entirely on the already-placed bridge data (no new download, no GPU). Items 3–6 require an unrestricted machine and/or GPU but the bridge already supplies the competition rasters. Item 8 is the only human-gated step — until a submission is uploaded, every number here remains a local proxy; the private leaderboard is the first unbiased signal. Suggested order for the very next session: <b>spatial block-holdout first</b> (resolves the sign conflict by construction), then <b>cross-catalogue transfer</b> (measures whether an external fault catalogue improves detection), then <b>ensemble 4</b> if GPU time allows.</div>
+<div class="note warn"><b>How to work on these in the next session(s).</b> Items <b>1</b> and <b>2</b> are now <i>closed by measurement</i>: the cross-catalogue transfer refused itself because the training labels and QFaults are the same lines in this footprint (1 code-2 pixel of 60,939), and the block-holdout evidence was reproduced bit-for-bit on an independent runner. Item <b>5</b> is deferred because more folds measurably did not help. The remaining upside is therefore <b>8</b> (human: upload and read the public leaderboard — now the only source of unbiased signal) → <b>3</b> (1 m DEM derivatives) → <b>6</b> (GPU capacity) → <b>4</b> (selection on a new-fault-like population) → <b>7</b> (pseudo-labels under spatial holdout). Items 3–7 require an unrestricted machine and/or GPU; the bridge already supplies the competition rasters.</div>
 
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-19 00:57 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-19 01:18 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>

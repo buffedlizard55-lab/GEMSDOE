@@ -27,16 +27,27 @@
    comparison, which is why all three are reported and the verdict requires stability; and **no
    pre-registered rule covers the field axis** (`data/evidence/emission_field_axis.json` says so). A rule
    must be committed *before* the next re-blend, or the choice stays an unruled judgement call.
-5. **Cross-catalogue transfer is built and dispatched, not yet measured.** `earthquake.usgs.gov` is
-   unreachable from the development sandbox (curl exit 35, verified 2026-09-18), so QFaults is fetched on a
-   runner. Everything downstream is written and unit-tested against a synthetic service (15 tests), but
-   **no transfer number exists yet**: until `data/evidence/xcat/transfer_report.json` lands, the prior on
-   hidden-expert-set recall that EXECUTIVE_SUMMARY §11 item 1 asks for is *unmeasured*, and any claim
-   otherwise would be a hallucination. Two structural limits are already known and recorded: QFaults is
-   independent of catalogue A but **not** of the training labels (rules §3.3 — the labels come from the
-   INGENIOUS Great Basin compilation, which distributes Quaternary fault layers), so only its **code-2**
-   pixels (no label within R) are scored; and if QFaults and the labels turned out to be the same lines,
-   that population would be empty and the measurement would refuse to run rather than report 0.
+5. **Cross-catalogue transfer was measured — and refused, because the two catalogues are the same
+   lines.** The runner fetched USGS QFaults layer 21 for the footprint (14,481 features, integrity gate
+   `fetched == service_reported` passed) and rasterised it on the competition grid with the same script
+   that rasterises catalogue A. The overlap is total: of **60,939** B pixels inside the scored footprint,
+   **60,938 (100.00 %)** are already within R = 3 px of a training label and exactly **1 pixel** is
+   code 2 (`data/evidence/xcat/qfaults_stats.json`, `transfer_report.json`). The reciprocal is just as
+   tight: **60,986 of the 60,988** label fault pixels (99.997 %) lie within R of a QFaults trace.
+   **The training labels in this footprint are QFaults.** A DTI computed against a 1-pixel truth
+   population would be noise, so `scripts/measure_cross_catalogue_transfer.py` now refuses it by
+   pre-registered threshold (`--min-b-only-px 100`, `--min-b-only-fraction 0.005`), writes the refusal
+   **with the overlap that establishes it**, and exits 0 — a finding, not a failure. (A genuinely broken
+   B raster — under `--min-b-all-px 1000` in-footprint pixels — still exits non-zero, so the two cases
+   are not conflated.)
+   **Consequence, stated plainly:** the prior on hidden-expert-set recall that EXECUTIVE_SUMMARY §11
+   item 1 asks for **cannot be obtained from a second Quaternary catalogue**, because no free one is
+   independent of these labels. The SGMC proxy population (`data/evidence/proxy/proxy_catalogue.tif`,
+   61,664 code-2 px, 24.94 % already covered by the labels) remains the **only** available surrogate,
+   with its known weakness: pre-Quaternary bedrock structure rather than an expert interpretation of the
+   geophysics. This was anticipated in the code before the fetch ("if QFaults and the labels turned out
+   to be the same lines, that population would be empty and the measurement would refuse to run rather
+   than report 0") and is now confirmed with data.
 6. **Block-holdout *training* is wired but not yet run.** `configs/config_block_holdout.yaml` +
    `--score-fold K [--complement]` can produce a genuine generalisation gap, and the scoring partition is
    cross-checked against the training partition at runtime (disagreement exits 2). **Limitation:** the
@@ -107,7 +118,7 @@ Nothing in the repository can substitute for the first row.
 | 5 | **The proxy population is a stand-in** | USGS SGMC state-map traces, not the expert interpretation of GeoDAWN geophysics. It bounds the *choice* between policies, not the score | Nothing available locally; it is a proxy by construction |
 | 6 | **Trained on the catalogue, scored on what the catalogue lacks** | Selection (early stopping, pooled floor, fold weights) maximises in-domain DTI, which is the opposite regime: the in-domain optimum is always the narrowest band (0.1903 → 0.0908 at 6 px) | A selection signal on a population resembling the scored one — the proxy is the closest, and it is a proxy |
 | 7 | **External data is inventoried but not downloaded** | 1 m DEM derivatives (`src/external_data.py`, `scripts/download_dem_tiles.py`) and the GeoDAWN/INGENIOUS products are unreachable in bulk from here; ~50 GB storage and S3/ArcGIS egress on a runner would be needed | A runner job with storage, or a machine with unrestricted network |
-| 8 | **No cross-catalogue transfer measurement yet** | Emitting an external fault catalogue (allowed by the rules) is the highest-upside unmeasured idea: the proxy cannot evaluate it, because the proxy IS the catalogue (score 0.0 by construction). Only a second independent catalogue can measure the transfer | One independent, free, licensed catalogue (e.g. the USGS Quaternary fault and fold database) fetched on a runner |
+| 8 | **No independent second catalogue exists for this footprint** (measured 2026-09-19) | The transfer measurement ran and refused: QFaults and the training labels overlap by **100.00 %** inside the scored footprint (60,938 of 60,939 B px within R of a label; **1** code-2 px left). Emitting an external fault catalogue therefore cannot be evaluated against QFaults, and the proxy cannot evaluate it either (the proxy IS catalogue A, score 0.0 by construction) | A catalogue that is *demonstrably* disjoint from `labels.tif` — e.g. a future INGENIOUS/GDR expert fault layer for the GeoDAWN footprint, or the organisers' own hidden set. Verify disjointness with `scripts/build_proxy_catalogue.py` before trusting any transfer number |
 | 9 | **Eligibility** (rules §1.3: an individual prize competitor must be a U.S. citizen or permanent resident; teams, entities and academia have their own clauses) | Retroactive: ineligible work cannot be submitted regardless of score | Confirmation of eligibility before the deadline |
 | 10 | **Deadline artefacts** (rules §3.2: assets sufficient to reproduce + the generative-AI disclosure in the narrative; §3.5: one final submission for both rounds) | Not started; they are a human step on the submission path | Human authoring at submission time |
 

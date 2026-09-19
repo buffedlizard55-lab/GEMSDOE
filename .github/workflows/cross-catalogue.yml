@@ -239,19 +239,56 @@ jobs:
       - name: Record how much of catalogue B the training labels already contain
         run: |
           set -euo pipefail
+          # The keys are build_proxy_catalogue.py's OWN stats schema (nested under "proxy."), read
+          # from the committed SGMC build rather than guessed: the first fire of this workflow
+          # (run 35411164502) failed here because it looked for top-level "only_px", found nothing,
+          # and reported a healthy 61k-pixel-class catalogue as empty.  Schema drift and a genuinely
+          # empty population are different failures and are now reported differently.
           python - <<'PY' | tee data/evidence/xcat/overlap_summary.log
           import json, pathlib
-          s = json.loads(pathlib.Path("data/evidence/xcat/qfaults_stats.json").read_text())
-          keys = [k for k in ("near_label_px", "only_px", "coverage_of_labels",
-                              "in_footprint_px", "outside_footprint_px") if k in s]
+          p = pathlib.Path("data/evidence/xcat/qfaults_stats.json")
+          s = json.loads(p.read_text())
+          px = s.get("proxy")
+          if not isinstance(px, dict):
+              raise SystemExit(f"{p} has no 'proxy' section (found: {sorted(s)}) - the stats schema "
+                               "of scripts/build_proxy_catalogue.py changed; update this step "
+                               "instead of reporting an empty catalogue")
+          want = ("mask_px", "near_label_px", "proxy_only_px", "near_label_km", "proxy_only_km",
+                  "catalogue_already_covers_fraction",
+                  "catalogue_already_covers_fraction_including_outside_footprint",
+                  "outside_footprint_px")
+          missing = [k for k in want if k not in px]
+          if missing:
+              raise SystemExit(f"{p} is missing proxy.{missing} - schema drift, not an empty "
+                               f"catalogue (keys present: {sorted(px)})")
           print("catalogue B (QFaults) on the competition grid:")
-          for k in keys:
-              print(f"  {k}: {s[k]}")
-          if not s.get("only_px"):
-              raise SystemExit("catalogue B has NO code-2 pixels: every QFaults trace in the "
-                               "footprint is already within R of a training label, so there is no "
-                               "independent population to score against - the transfer "
-                               "measurement cannot run (this is a finding, not a bug)")
+          for k in want:
+              print(f"  proxy.{k}: {px[k]}")
+          comp = px.get("proxy_only_components") or {}
+          if comp:
+              print(f"  proxy.proxy_only_components: {comp['components']} components, largest "
+                    f"{comp.get('largest_px')} px ({comp.get('largest_km')} km), median "
+                    f"{comp.get('median_px')} px")
+          per_rule = px.get("per_rule_id") or {}
+          print(f"  classes rasterised: {len(per_rule)}")
+          for rid, row in sorted(per_rule.items(), key=lambda kv: -(kv[1].get("proxy_only_px") or 0))[:8]:
+              print(f"    RuleID {rid}: {row.get('features')} features, "
+                    f"{row.get('proxy_only_px')} code-2 px - {row.get('class')}")
+          # A zero or near-zero code-2 population is a FINDING about the two catalogues, not a job
+          # failure: the transfer job runs anyway and writes a REFUSED report (with the overlap that
+          # establishes it) and exits 0.  Failing here would hide the result that matters.
+          if not px["proxy_only_px"]:
+              print("\n::warning::catalogue B has NO code-2 pixels - every QFaults trace in the "
+                    "footprint is already within R of a training label.  The transfer job will "
+                    "report REFUSED with this overlap as the evidence.")
+          elif px["proxy_only_px"] < 100:
+              print(f"\n::warning::catalogue B has only {px['proxy_only_px']:,} code-2 px, below the "
+                    "100 px minimum population in scripts/measure_cross_catalogue_transfer.py - the "
+                    "transfer job will report REFUSED rather than score a meaningless number.")
+          cov = px["catalogue_already_covers_fraction"]
+          print(f"\nthe training labels already contain {cov * 100:.1f} % of catalogue B's "
+                f"in-footprint traces; the scored population is the remaining "
+                f"{px['proxy_only_px']:,} px ({px['proxy_only_km']:,.1f} km)")
           PY
 
       - name: Commit the catalogue-B evidence (small files only)
@@ -363,7 +400,32 @@ jobs:
           if not p.exists():
               print("### cross-catalogue transfer\n\nno report was written - see the job log"); raise SystemExit(0)
           r = json.loads(p.read_text())
-          v, o, c = r["verdict"], r["overlap"], r["controls"]
+          v = r["verdict"]
+          if "population" in r:
+              pop = r["population"]
+              print("### Cross-catalogue transfer: REFUSED (catalogue B is not independent of the labels)\n")
+              print(f"**{v['conclusion']}**\n")
+              print(f"- catalogue B in the scored footprint: **{pop['B_in_footprint_px']:,} px "
+                      f"= {pop['B_in_footprint_km']:,} km**")
+              print(f"- already within R = {r['metric']['R_pixels']} px of a training label (code 1): "
+                      f"**{pop['B_code1_near_a_label_px']:,} px ({pop['B_code1_fraction'] * 100:.2f} %)**")
+              print(f"- left as a 'new fault' population (code 2): **{pop['B_only_px']:,} px "
+                      f"({pop['B_only_fraction'] * 100:.4f} %)** - below the pre-registered minimum "
+                      f"{pop['thresholds']}")
+              print(f"- label fault px {pop['label_fault_px']:,}; label px within R of B "
+                      f"{pop['labels_within_R_of_B_px']:,} ({100.0 * pop['labels_within_R_of_B_px'] / max(1, pop['label_fault_px']):.2f} % "
+                      "of the labels) - the two line sets are the same lines here")
+              print("\nno DTI, recall or union gain is reported: with a truth population of "
+                      f"{pop['B_only_px']:,} px any such number would be noise, and reporting it "
+                      "would be the kind of unsupported claim this repo refuses to make.")
+              print("\n**Consequence:** the SGMC proxy population "
+                      "(data/evidence/proxy/proxy_catalogue.tif, 61,664 code-2 px, 24.94 % already "
+                      "covered by the labels) remains the only available surrogate for 'faults the "
+                      "labels lack'.  No free second Quaternary catalogue exists for this footprint.")
+              for i, cav in enumerate(r.get("caveats") or [], 1):
+                  print(f"{i}. {cav}")
+              raise SystemExit(0)
+          o, c = r["overlap"], r["controls"]
           print("### Cross-catalogue transfer: catalogue A (SGMC) -> catalogue B (QFaults)\n")
           print(f"**{v['conclusion']}**\n")
           print(f"- B-only truth (QFaults traces with no training label within R): "

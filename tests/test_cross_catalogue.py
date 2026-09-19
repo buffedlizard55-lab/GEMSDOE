@@ -99,6 +99,12 @@ def _argv(files, out, **kw):
             "--bootstraps", str(kw.pop("bootstraps", 200)),
             "--min-union-gain", str(kw.pop("min_gain", 0.01)),
             "--min-bootstrap-prob", str(kw.pop("min_prob", 0.95)),
+            # the population guards default to sizes that make sense on the real 3292x3730 grid
+            # (100 px = 10 km of new-fault-like trace); a synthetic world is ~340 px total, so the
+            # tests scale the thresholds down and one test pins the production defaults instead.
+            "--min-b-only-px", str(kw.pop("min_b_only_px", 10)),
+            "--min-b-only-fraction", str(kw.pop("min_b_only_fraction", 0.0)),
+            "--min-b-all-px", str(kw.pop("min_b_all_px", 10)),
             "--out", str(out), "--quiet", *[x for kv in kw.items() for x in (f"--{kv[0]}", str(kv[1]))]]
 
 
@@ -238,15 +244,92 @@ def test_grid_mismatch_is_refused(tmp_path):
     assert "not on the prediction grid" in str(exc.value)
 
 
-def test_empty_b_only_population_is_refused(tmp_path):
+def _all_code1(files: dict) -> None:
+    """Turn every B trace into code 1: B is now the training labels re-drawn, the real QFaults case."""
+    with rasterio.open(files["b"]) as src:
+        b = src.read(1)
+    _write(files["b"], np.where(b == 2, 1, b).astype(np.uint8), "uint8")
+
+
+def test_degenerate_b_only_population_is_reported_as_a_finding_not_a_crash(tmp_path):
+    """The real QFaults result: B is not independent of the labels, so the run REFUSES - and that
+    refusal is itself the measurement, so it is written to the report path and exits 0."""
+    m = _mod()
+    files = _base(tmp_path, a_covers_b=True)
+    _all_code1(files)
+    out = tmp_path / "report.json"
+    assert m.main(_argv(files, out, min_b_only_px=1)) == 0, \
+        "a degenerate population is a finding about two catalogues, not a broken input"
+    rep = json.loads(out.read_text())
+    assert rep["exit_code"] == 0
+    assert "population" in rep and not rep["measurements"], \
+        "no DTI may be reported for a population that cannot support one"
+    assert rep["controls_pass"] is False
+    assert rep["verdict"]["conclusion"].startswith("REFUSED")
+    assert rep["verdict"]["best_union_dti"] is None and rep["verdict"]["model_dti"] is None
+    pop = rep["population"]
+    assert pop["B_only_px"] == 0 and pop["B_code1_fraction"] == pytest.approx(1.0)
+    assert pop["B_in_footprint_px"] == 80 + 2 * 120 + 10 * 2
+    assert pop["labels_within_R_of_B_px"] > 0
+    assert pop["thresholds"] == dict(min_b_only_px=1, min_b_only_fraction=0.0, min_b_all_px=10)
+    # the report must name the inputs it refused on, reproducibly
+    assert rep["sources"]["catalogue_B"]["grid"]["sha256"]
+    assert rep["purpose"].lower().startswith("refused") and "independent" in rep["purpose"].lower()
+
+
+def test_population_guards_fire_on_either_the_absolute_or_the_fractional_threshold(tmp_path):
+    m = _mod()
+    files = _base(tmp_path, a_covers_b=True)          # 260 code-2 px of 340 in-footprint B px
+    # absolute floor: 260 < 1000 -> refuse
+    out = tmp_path / "abs.json"
+    assert m.main(_argv(files, out, min_b_only_px=1000)) == 0
+    assert json.loads(out.read_text())["verdict"]["conclusion"].startswith("REFUSED")
+    # fractional floor: 260/340 = 0.765 < 0.9 -> refuse
+    out = tmp_path / "frac.json"
+    assert m.main(_argv(files, out, min_b_only_px=1, min_b_only_fraction=0.9)) == 0
+    assert json.loads(out.read_text())["verdict"]["conclusion"].startswith("REFUSED")
+    # both satisfied -> a real measurement, not a refusal
+    out = tmp_path / "ok.json"
+    assert m.main(_argv(files, out, min_b_only_px=100, min_b_only_fraction=0.5)) == 0
+    rep = json.loads(out.read_text())
+    assert "overlap" in rep and rep["measurements"] and not rep["verdict"]["conclusion"].startswith("REFUSED")
+
+
+def test_a_nearly_empty_b_raster_is_a_data_problem_that_fails_loudly(tmp_path):
+    """Distinguish 'B is the labels' (finding, exit 0) from 'B did not rasterise' (bug, non-zero)."""
     m = _mod()
     files = _base(tmp_path, a_covers_b=True)
     with rasterio.open(files["b"]) as src:
         b = src.read(1)
-    _write(files["b"], np.where(b == 2, 1, b).astype(np.uint8), "uint8")   # every trace is code 1
+    _write(files["b"], np.where(b == 2, 0, b).astype(np.uint8), "uint8")   # keep only 80 code-1 px
     with pytest.raises(SystemExit) as exc:
-        m.main(_argv(files, tmp_path / "never.json"))
-    assert "no code-2 pixels" in str(exc.value)
+        m.main(_argv(files, tmp_path / "never.json", min_b_all_px=1000))
+    msg = str(exc.value)
+    assert "in-footprint pixels" in msg and "build_proxy_catalogue.py" in msg
+    assert not (tmp_path / "never.json").exists(), "a broken input must not write a report"
+
+
+def test_the_committed_qfaults_refusal_is_the_documented_finding():
+    """Pin the real result: the training labels ARE QFaults in this footprint (99.9 % overlap),
+    so no free independent second Quaternary catalogue exists here and the SGMC proxy stays the
+    only surrogate.  Skips when the runner-fetched rasters are absent (they are committed, so a
+    skip means someone deleted evidence)."""
+    rep_path = ROOT / "data/evidence/xcat/transfer_report.json"
+    stats_path = ROOT / "data/evidence/xcat/qfaults_stats.json"
+    if not (rep_path.exists() and stats_path.exists()):
+        pytest.skip("cross-catalogue evidence not present")
+    rep = json.loads(rep_path.read_text())
+    stats = json.loads(stats_path.read_text())["proxy"]
+    assert rep["exit_code"] == 0 and not rep["measurements"]
+    assert rep["verdict"]["conclusion"].startswith("REFUSED")
+    pop = rep["population"]
+    assert pop["B_only_px"] == stats["proxy_only_px"]
+    assert pop["B_code1_near_a_label_px"] == stats["near_label_px"]
+    assert pop["B_in_footprint_px"] == stats["mask_px"] - stats["outside_footprint_px"]
+    assert stats["catalogue_already_covers_fraction"] == pytest.approx(1.0)
+    assert pop["B_code1_fraction"] > 0.999
+    # the shipped submission is the prediction the refusal was measured against
+    assert rep["sources"]["prediction"]["grid"]["sha256"].startswith("a3dcd6d5")
 
 
 # --------------------------------------------------------------------------------------

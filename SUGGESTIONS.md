@@ -1,5 +1,28 @@
 # Suggestions and Improvements — Implemented for Top Leaderboard
 
+## Session 17 (2026-09-19) — the dispatched measurements landed: one reproduced exactly, one refused itself with a finding
+
+| Area | What changed | Why it matters | Evidence |
+|---|---|---|---|
+| **Runner reproduction of the headline number** | `data/evidence/block_holdout/sandbox_vs_runner.json` compares ten quantities between the sandbox and an independent GitHub-hosted environment | Agreement across environments is what makes 0.0999 a property of the committed bytes rather than of one machine | **`agree: true` on all ten**; DTI **0.099859** and CI95 **[0.088338, 0.111886]** identical to the sandbox |
+| **Cross-catalogue transfer measured — and refused** | The runner fetched QFaults layer 21 (14,481 features, `fetched == service_reported`), rasterised it on the competition grid, and the overlap with the training labels came out total | The prior on hidden-expert-set recall that EXEC §11 item 1 asked for **cannot** come from a second Quaternary catalogue: none is independent of these labels. That closes a strategy branch with data instead of argument | **60,938 of 60,939** in-footprint B px within R = 3 px of a label (**1** code-2 px); **60,986 of 60,988** label px within R of B; `data/evidence/xcat/qfaults_stats.json`, `transfer_report.json` |
+| **A refusal is a report, not a crash** | `--min-b-only-px 100` / `--min-b-only-fraction 0.005` raise `PopulationDegenerate`; `main` catches it, writes the report **with the overlap that establishes it**, and exits 0 | Scoring a 1-pixel truth population would produce a number with no meaning; committing the refusal keeps the finding auditable instead of leaving a red ❌ that looks like a bug | `data/evidence/xcat/transfer_report.json` (`controls_pass: false`, `measurements: []`, `exit_code: 0`, input sha256s recorded) |
+| **…and a broken raster still fails loudly** | `--min-b-all-px 1000`: an empty, misaligned or miscoded B exits non-zero and writes no report | The two cases must not be conflated — "B is the labels" is a finding, "B did not rasterise" is a defect | `tests/test_cross_catalogue.py::test_a_nearly_empty_b_raster_is_a_data_problem_that_fails_loudly` |
+| **Workflow hardened** | `cross-catalogue.yml` read stats keys that do not exist (the schema nests under `proxy.`); it now reads `s["proxy"]`, separates **schema drift** from a **genuinely empty population**, and downgrades zero/near-zero code-2 to `::warning::` so the transfer job still commits the REFUSED report; the summary step renders both schemas | A failed job hides the result; the point of the run was the overlap, and the overlap is now the headline | run 35411164502 failed at "Record overlap"; all 13 embedded Python blocks in all 12 workflows parse, every YAML validates |
+| **Ensemble 4 deferred on evidence** | Not fired | At matched emission support the 11-fold shipped mean scores **0.0999** vs **0.0850** for the 16-fold blend, and the ranking is stable in all three windows — more folds did not help | `data/evidence/emission_field_axis.json`, `ranking_stable_across_windows: true` |
+| **PR opened** | [PR #23](https://github.com/buffedlizard55-lab/GEMSDOE/pull/23) `arena/01a0b6b1-gemsdoe` → `main` | Session 16's work + runner evidence + this session's guard, in one reviewable unit | Tests ✓ and Pages ✓ on the PR; 285 torch-free tests pass locally (the sandbox `.venv` lost torch between sessions; the runner suite with torch is green) |
+
+**Next session queue (priority order):**
+1. **First leaderboard upload** — 3/week, 1 final before Dec 3, 2026 11:59 PM UTC (human-only). This is now the *only* remaining source of unbiased signal: both machine-measurable questions the repository could ask have been answered.
+2. **1 m DEM derivatives** (EXEC §11 item 3) — the highest-upside detection idea left, and the one that does not depend on any external fault catalogue. Code ready (`src/external_data.py`, `scripts/download_dem_tiles.py`); needs unrestricted egress + ~50 GB.
+3. **Commit a FIELD-selection rule before any re-blend** — the policy axis is ruled (worst-case contrast across sweeps) but the field axis is not; `emission_field_axis.json` favours the shipped field, and a rule committed *before* the next re-blend is what keeps that honest.
+4. **GPU full-config** — EfficientNet-B5, 10 splits, 60 epochs (`configs/config.yaml`); block-holdout folds 0–3 for a real generalisation gap.
+5. **Pseudo-labels from the SGMC proxy** — now the *only* external-catalogue route, since QFaults turned out to be the labels. Must be measured under spatial holdout so a gain is not label leakage.
+6. **Selection signal** — proxy-based early stopping / fold weighting.
+7. **Finalist package** — Winning Model Documentation, code assets, GenAI disclosure, W-9/ACH.
+
+---
+
 ## Session 16 (2026-09-18) — error bars, the field axis, and the cross-catalogue measurement
 
 | Area | What changed | Why it matters | Evidence |

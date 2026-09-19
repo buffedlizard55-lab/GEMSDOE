@@ -1,6 +1,74 @@
-# Project status — 2026-09-18 (sessions 11–16)
+# Project status — 2026-09-19 (sessions 11–17)
 
-## Session 16 (current session, 2026-09-18) — error bars on every emission number, the field axis settled, and the cross-catalogue measurement built end to end
+## Session 17 (current session, 2026-09-19) — the two dispatched measurements landed: one reproduced bit-for-bit, one refused itself with a finding
+
+Session 16 ended with two measurements running on GitHub-hosted runners because the sandbox cannot
+reach `earthquake.usgs.gov`. Both came back, and they came back with opposite kinds of answer.
+
+1. **Block-holdout: an independent environment reproduced the sandbox numbers exactly.**
+   `data/evidence/block_holdout/sandbox_vs_runner.json` compares ten quantities between the sandbox
+   computation and the runner's own — global DTI, weighted TP/FP/FN, emitted pixels, block counts,
+   footprint pixels and both bootstrap CI bounds. **`agree: true` on all ten**; DTI **0.099859** to six
+   decimals and CI95 **[0.088338, 0.111886]** identical. This is the strongest reproducibility result
+   in the repository: the headline emission number is not a sandbox artifact.
+
+2. **Cross-catalogue transfer: `REFUSED`, and the refusal is the scientific result.** The runner
+   fetched QFaults layer 21 for the footprint — **14,481 features**, `fetched == service_reported`,
+   provenance sidecar with every request URL — and rasterised it on the competition grid with the same
+   script that rasterises catalogue A (SGMC). The overlap with the training labels is **total**:
+
+   | quantity | value |
+   |---|---|
+   | catalogue B (QFaults) pixels, whole grid | 169,115 |
+   | …of which outside the scored footprint (NaN in the submission) | 108,176 |
+   | **B pixels inside the scored footprint** | **60,939** |
+   | already within R = 3 px of a training label (code 1) | **60,938 — 100.00 %** |
+   | left as a "new fault" population (code 2) | **1 px (0.0016 %)** |
+   | label fault pixels within R of a QFaults trace | **60,986 of 60,988 — 99.997 %** |
+
+   **The training labels in this footprint are QFaults.** That was anticipated as a possibility in the
+   code and in LIMITATIONS (rules §3.3 — the labels come from the INGENIOUS Great Basin compilation,
+   which distributes Quaternary fault layers), and it is now measured rather than assumed. A DTI
+   computed against a 1-pixel truth population would be pure noise, so nothing is reported.
+
+3. **The refusal is now a pre-registered guard, not an ad-hoc crash.**
+   `scripts/measure_cross_catalogue_transfer.py` takes `--min-b-only-px 100` /
+   `--min-b-only-fraction 0.005`: below either, it raises `PopulationDegenerate`, which `main` catches,
+   writes the report **with the overlap that establishes it** (population table, thresholds, input
+   sha256s, the caveat naming the SGMC proxy as the surviving surrogate) and **exits 0** — because
+   "these two catalogues are the same lines" is a measurement worth committing. A genuinely broken
+   B raster (under `--min-b-all-px 1000` in-footprint pixels: empty, misaligned or miscoded) still
+   exits non-zero, so a data bug can never masquerade as a finding. Both paths are pinned by tests
+   (`tests/test_cross_catalogue.py`, now 15 tests, including one that asserts the committed QFaults
+   report agrees with `qfaults_stats.json`).
+
+4. **The real refusal report is committed**: `data/evidence/xcat/transfer_report.json` (4.5 KB),
+   computed locally from the runner-fetched raster against the shipped submission
+   (sha256 `a3dcd6d5…`). Verdict string: `REFUSED - catalogue B is NOT independent of the training
+   labels …`. `controls_pass: false`, `measurements: []`, `exit_code: 0`.
+
+5. **Workflow hardened.** `.github/workflows/cross-catalogue.yml` had failed on its "Record overlap"
+   step by reading top-level stats keys that do not exist (the real schema nests under `proxy.`). It now
+   reads `s["proxy"]`, distinguishes **schema drift** from a **genuinely empty population**, prints the
+   per-class breakdown, and downgrades a zero/near-zero code-2 population to a `::warning::` instead of
+   failing the job — so the transfer job runs and commits the REFUSED report. The job-summary step
+   renders both report schemas (REFUSED and full). All 13 embedded Python blocks in all 12 workflows
+   parse; every workflow YAML validates.
+
+6. **Consequence for strategy.** The prior on hidden-expert-set recall that EXECUTIVE_SUMMARY §11
+   item 1 asked for **cannot come from a second Quaternary catalogue** — none is independent of these
+   labels. Detection upside must come from 1 m DEM derivatives (§11 item 3) or model capacity (item 6),
+   and the first unbiased signal remains the public leaderboard (item 8, human-gated). Item 5
+   (ensemble 4) is **deferred on evidence**: at matched support the 11-fold shipped mean scores 0.0999
+   against 0.0850 for the 16-fold blend, so more folds did not help.
+
+7. **PR #23 opened**: <https://github.com/buffedlizard55-lab/GEMSDOE/pull/23> (`arena/01a0b6b1-gemsdoe`
+   → `main`), carrying session 16's work plus the runner evidence and this session's guard.
+   **Local test status:** 285 passed, 2 skipped, and 4 torch-dependent tests that cannot collect because
+   the sandbox `.venv` no longer has torch (`.venv` is not persisted between sessions); the runner suite
+   with torch is green on the PR.
+
+## Session 16 (2026-09-18) — error bars on every emission number, the field axis settled, and the cross-catalogue measurement built end to end
 
 Until this session every quality number in the repository was **one global DTI with no error bar**,
 so a 0.012 difference between two emission policies carried no way to ask whether it was larger than

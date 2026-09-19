@@ -191,11 +191,27 @@ def score_field(field: np.ndarray, ctx: GtContext, blocks: np.ndarray, n_blocks:
                 blocks=per_block)
 
 
+class PopulationDegenerate(Exception):
+    """Catalogue B is not independent of the training labels - a finding, not a failure.
+
+    Raised when B has a substantial in-footprint population but essentially all of it is code 1
+    (already within R of a training label).  `main` catches it, writes the report with a REFUSED
+    verdict and exits 0, because "these two catalogues are the same lines" is a measurement worth
+    committing; an empty or misaligned B raster is a data problem and still exits non-zero.
+    """
+
+    def __init__(self, payload: dict):
+        super().__init__(payload.get("verdict", {}).get("conclusion", "population degenerate"))
+        self.payload = payload
+
+
 def build_report(truth_b_path: Path, catalogue_a_path: Path, pred_path: Optional[Path],
                  labels_path: Path, template_path: Optional[Path], widths: Sequence[int],
                  a_codes: Sequence[int], block_px: int, n_folds: int, n_boot: int, seed: int,
                  R: int, alpha: float, beta: float, eps: float,
-                 min_union_gain: float, min_bootstrap_prob: float) -> dict:
+                 min_union_gain: float, min_bootstrap_prob: float,
+                 min_b_only_px: int = 100, min_b_only_fraction: float = 0.005,
+                 min_b_all_px: int = 1000) -> dict:
     truth_b_raw, grid_b = read_band(truth_b_path)
     a_raw, grid_a = read_band(catalogue_a_path)
     labels_raw, grid_l = read_band(labels_path)
@@ -217,11 +233,78 @@ def build_report(truth_b_path: Path, catalogue_a_path: Path, pred_path: Optional
     a_only = decode_catalogue(a_raw, footprint, (CODE_ONLY,))
     a_all = decode_catalogue(a_raw, footprint, tuple(a_codes))
 
-    if not b_only.any():
-        raise SystemExit("catalogue B contributes no code-2 pixels inside the footprint: every B "
-                         "trace is already within R of a training label, so B is not an "
-                         "independent 'new fault' population and no transfer claim is possible "
-                         "(see data/evidence/xcat/qfaults_stats.json for the overlap fraction)")
+    n_b_all, n_b_only = int(b_all.sum()), int(b_only.sum())
+    if n_b_all < min_b_all_px:
+        # Nothing to do with independence: B barely exists on this grid, which is a data problem
+        # (wrong raster, wrong codes, misaligned grid) rather than a scientific finding.
+        raise SystemExit(f"catalogue B contributes only {n_b_all:,} in-footprint pixels "
+                         f"(< --min-b-all-px {min_b_all_px}): the raster is empty, misaligned or "
+                         "coded unexpectedly - fix the input before drawing any conclusion "
+                         f"(built by scripts/build_proxy_catalogue.py from {truth_b_path})")
+    b_only_fraction = n_b_only / max(1, n_b_all)
+    if n_b_only < min_b_only_px or b_only_fraction < min_b_only_fraction:
+        labels_px = int(labels.sum())
+        near_px = int(b_near.sum())
+        raise PopulationDegenerate(dict(
+            generated_utc=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+            generated_by="scripts/measure_cross_catalogue_transfer.py",
+            purpose=("REFUSED cross-catalogue transfer measurement: catalogue B turned out not to be "
+                     "independent of the training labels, so there is no 'new fault' population to "
+                     "score against and no transfer claim is possible"),
+            sources=dict(
+                catalogue_A=dict(path=str(catalogue_a_path), grid=grid_a,
+                                 provenance="USGS SGMC structure, DOI 10.3133/ds1052 "
+                                            "(scripts/fetch_proxy_faults.py -> build_proxy_catalogue.py)"),
+                catalogue_B=dict(path=str(truth_b_path), grid=grid_b,
+                                 provenance="USGS Quaternary Fault and Fold Database, "
+                                            "DOI 10.5066/P9BCVRCK (scripts/fetch_qfaults.py -> "
+                                            "build_proxy_catalogue.py)"),
+                labels=dict(path=str(labels_path), grid=grid_l),
+                prediction=(dict(path=str(pred_path), grid=grid_p) if pred_path else None),
+            ),
+            footprint_px=int(footprint.sum()),
+            metric=dict(R_pixels=R, R_meters=R * 100.0, alpha=alpha, beta=beta, eps=eps),
+            population=dict(
+                B_in_footprint_px=n_b_all, B_in_footprint_km=round(n_b_all * KM_PER_PIXEL, 1),
+                B_code1_near_a_label_px=near_px,
+                B_code1_fraction=round(near_px / max(1, n_b_all), 6),
+                B_only_px=n_b_only, B_only_km=round(n_b_only * KM_PER_PIXEL, 3),
+                B_only_fraction=round(b_only_fraction, 6),
+                label_fault_px=labels_px,
+                labels_within_R_of_B_px=int(np.count_nonzero(
+                    labels & (distance_transform_edt(~b_all) <= R))) if n_b_all else 0,
+                thresholds=dict(min_b_only_px=min_b_only_px,
+                                min_b_only_fraction=min_b_only_fraction,
+                                min_b_all_px=min_b_all_px)),
+            controls_pass=False,
+            measurements=[],
+            verdict=dict(
+                best_union_candidate=None, best_union_dti=None, model_dti=None, union_gain=None,
+                criterion=dict(min_union_gain=min_union_gain,
+                               min_bootstrap_prob=min_bootstrap_prob, controls_pass=False,
+                               union_gain=None, bootstrap_prob_beats_model=None),
+                conclusion=(
+                    f"REFUSED - catalogue B is NOT independent of the training labels: "
+                    f"{near_px:,} of its {n_b_all:,} in-footprint pixels "
+                    f"({100.0 * near_px / max(1, n_b_all):.2f} %) are already within R = {R} px of a "
+                    f"label, leaving {n_b_only:,} px ({100.0 * b_only_fraction:.4f} %) as a "
+                    f"'new fault' population - below the pre-registered minimum of "
+                    f"{min_b_only_px:,} px and {min_b_only_fraction * 100:.2f} %. Scoring against "
+                    f"{n_b_only:,} pixel(s) would produce a number with no meaning, so none is "
+                    "reported. This is a FINDING about the two catalogues, not a bug: it means the "
+                    "training labels and catalogue B are the same lines in this footprint, and it is "
+                    "recorded with the overlap that establishes it.")),
+            caveats=[
+                "the refusal is quantitative: the overlap fraction above is the evidence, and it is "
+                "reproducible from the committed rasters with scripts/build_proxy_catalogue.py",
+                "a REFUSED verdict says nothing about whether a POLICY transfers - it says this pair "
+                "of catalogues cannot answer the question",
+                "the new-fault-like SGMC population (data/evidence/proxy/proxy_catalogue.tif, "
+                "61,664 code-2 px, 24.94 % already covered by the labels) remains the only "
+                "available surrogate, with the limitation that it is pre-Quaternary bedrock "
+                "structure rather than an expert interpretation of the geophysics",
+            ],
+        ))
     if not a_all.any():
         raise SystemExit(f"catalogue A emission is empty for codes {list(a_codes)} - nothing to transfer")
 
@@ -393,6 +476,18 @@ def build_report(truth_b_path: Path, catalogue_a_path: Path, pred_path: Optional
 
 
 def print_report(rep: dict) -> None:
+    if "population" in rep:
+        pop, v = rep["population"], rep["verdict"]
+        print(f"\nREFUSED: catalogue B has {pop['B_in_footprint_px']:,} px in the footprint but only "
+              f"{pop['B_only_px']:,} px ({pop['B_only_fraction'] * 100:.4f} %) are code 2 - "
+              f"{pop['B_code1_near_a_label_px']:,} px ({pop['B_code1_fraction'] * 100:.2f} %) are "
+              f"already within R = {rep['metric']['R_pixels']} px of a training label")
+        print(f"  label fault px {pop['label_fault_px']:,}; label px within R of B "
+              f"{pop['labels_within_R_of_B_px']:,}")
+        print(f"  thresholds: {pop['thresholds']}")
+        print(f"\nverdict: {v['conclusion']}")
+        print("\nno DTI is reported: a 1-pixel truth population cannot support a transfer claim.")
+        return
     o, v = rep["overlap"], rep["verdict"]
     print(f"\ncatalogue B (QFaults) new-fault-like truth: {o['B_only_px']:,} px "
           f"({o['B_only_km']:,.1f} km); B already within R of a label: "
@@ -439,6 +534,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--eps", type=float, default=EPS)
     ap.add_argument("--min-union-gain", type=float, default=0.01,
                     help="pre-registered margin the union must beat the model alone by")
+    ap.add_argument("--min-b-only-px", type=int, default=100,
+                    help="below this many code-2 pixels in catalogue B the population is "
+                         "degenerate: the report is written with a REFUSED verdict and the run "
+                         "exits 0, because 'these two catalogues are the same lines' is a finding")
+    ap.add_argument("--min-b-only-fraction", type=float, default=0.005,
+                    help="...or below this fraction of B's in-footprint traces")
+    ap.add_argument("--min-b-all-px", type=int, default=1000,
+                    help="below this many in-footprint B pixels the raster itself is suspect "
+                         "(empty/misaligned/miscoded) and the run fails instead of reporting")
     ap.add_argument("--min-bootstrap-prob", type=float, default=0.95,
                     help="pre-registered paired block-bootstrap probability required")
     ap.add_argument("--out", default="data/evidence/xcat/transfer_report.json")
@@ -464,11 +568,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if CODE_ONLY not in a_codes:
         raise SystemExit(f"--a-codes {a_codes} excludes code {CODE_ONLY} (A traces the labels "
                          "lack), which is the only part of A that can transfer to new faults")
-    rep = build_report(Path(a.truth_b), Path(a.catalogue_a),
-                       Path(a.pred) if a.pred else None, Path(a.labels),
-                       Path(a.template) if a.template else None,
-                       widths, a_codes, a.block_px, a.folds, a.bootstraps, a.seed,
-                       a.R, a.alpha, a.beta, a.eps, a.min_union_gain, a.min_bootstrap_prob)
+    try:
+        rep = build_report(Path(a.truth_b), Path(a.catalogue_a),
+                           Path(a.pred) if a.pred else None, Path(a.labels),
+                           Path(a.template) if a.template else None,
+                           widths, a_codes, a.block_px, a.folds, a.bootstraps, a.seed,
+                           a.R, a.alpha, a.beta, a.eps, a.min_union_gain, a.min_bootstrap_prob,
+                           a.min_b_only_px, a.min_b_only_fraction, a.min_b_all_px)
+    except PopulationDegenerate as exc:
+        # A degenerate population is a FINDING (catalogue B is not independent of the labels), so it
+        # is committed as a report and the run exits 0 - only broken inputs exit non-zero.
+        rep = exc.payload
+        rep["exit_code"] = 0
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(rep, indent=1))
