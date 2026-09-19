@@ -58,3 +58,16 @@ cross-catalogue
 # `REFUSED` with that overlap as the evidence, written to data/evidence/xcat/transfer_report.json, and
 # the job GREEN - a DTI on a 1-pixel truth population would be noise, and the refusal is the finding.
 # A runner-side refusal also independently reproduces the one already committed from the sandbox.
+
+# 2026-09-19 (session 17): THIRD FIRE, after the params-job defect that killed the transfer job in
+# 28 s.  `[ -n "$(v BOOTSTRAPS)" ] && BOOT="$(v BOOT)"` tested one key and read another; `BOOT` is not
+# a key in cross-catalogue-params, so the good `|| '1000'` fallback was clobbered with an empty string
+# and argparse rejected it (`argument --bootstraps: invalid int value: ''`, see the committed
+# data/evidence/xcat/transfer.log).  Fixed, and three static lints in tests/test_workflow_yaml.py now
+# fail on that class of defect without needing a runner (mutation-checked against the original line).
+#
+# Expected: qfaults job re-fetches and reproduces 14,481 features and the same overlap (the second
+# fire already produced a byte-identical raster, sha256 3fb2ca73...), the overlap step warns about the
+# 1-pixel code-2 population, and the transfer job writes data/evidence/xcat/transfer_report.json with
+# verdict REFUSED and exit 0 - GREEN, because "the training labels are QFaults in this footprint" is
+# the result, not an error.
