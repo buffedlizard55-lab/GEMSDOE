@@ -1,5 +1,28 @@
 # Suggestions and Improvements — Implemented for Top Leaderboard
 
+## Session 16 (2026-09-18) — error bars, the field axis, and the cross-catalogue measurement
+
+| Area | What changed | Why it matters | Evidence |
+|---|---|---|---|
+| **Error bars on the emission decision** | Per-block DTI + paired block bootstrap over 51.2 km blocks (`scripts/block_holdout_eval.py`, `src/metrics.block_aggregate`, `bootstrap_from_blocks`) | Every emission number before this was one global point estimate; a 0.012 difference had no way to be judged against regional noise | Proxy DTI **0.0999, CI95 [0.0883, 0.1119]**; best different alternative (1 px) 0.0878, **P(beats reference) = 0.008**; `data/evidence/block_holdout/block_stratified.json` |
+| **Degenerate axes reported, not hidden** | Duplicate emissions detected by sha1 of the emission; `verdict.n_distinct_emissions` / `floor_axis_degenerate` | A hard-band raster has two values, so 5 floors × 10 widths produced only **10 distinct** emissions — quoting "50 candidates" would overstate the sweep | same report, `prediction.hard_band = true` |
+| **Reproduction gate** | `--crosscheck-sweep` compares the local score with the runner's committed sweep row and **exits 2** on mismatch | The sandbox and the runner are different environments; agreement is what makes the committed numbers a property of the bytes, not of one machine | dti 0.099859 both sides; components agree to ≤ 4.4e-4; `reproduction.status = "reproduced"` inside the report; `.github/workflows/block-holdout.yml` re-runs it on a runner |
+| **The field axis, settled** | `scripts/compare_emission_fields.py` compares ensemble fields at **matched support** (±15/25/40 % windows, same rule per field) | A floor is a threshold on a field whose scale changes with the number of averaged folds (464,736 px at floor 0.1 on 6 folds vs 144,738 px on 16), so a fixed-floor comparison measures the floor, not the field | mean12 **0.0999** > ens123 0.0850 > ensemble2 0.0777 > ensemble1 0.0644, **stable in all three windows**; `data/evidence/emission_field_axis.json` |
+| **Cross-catalogue transfer (EXEC §11 item 1)** | `scripts/fetch_qfaults.py` (QFaults layer 21, runtime metadata, renderer-derived class vocabulary, integrity gate, provenance sidecar) + `scripts/measure_cross_catalogue_transfer.py` (controls first, A-emission at widths, `union(model, A)` as a probability maximum, pre-registered verdict) + `.github/workflows/cross-catalogue.yml` | The proxy population **is** catalogue A, so it cannot say whether a policy travels between independently compiled catalogues — the one measurement that stands in for hidden-expert-set recall | 14,482 features verified live 2026-09-18; DOI 10.5066/P9BCVRCK, public domain; verdict is derived (`ADOPT`/`DO NOT ADOPT`/`REFUSED`/`NOT MEASURABLE`) |
+| **Block-holdout training path** | `configs/config_block_holdout.yaml` (`training.holdout: spatial_blocks`) + `--score-fold K [--complement]`; the scoring partition is **cross-checked against the training partition** at runtime | A score computed on a partition the model was not trained against is not a holdout score; the generalisation gap becomes a measured pair with CIs | disagreement exits 2 (`block_holdout_eval.block_px` vs `training.block_px`); `restriction.note` states when a number is a reshaping measurement instead |
+| **Two defects found in review** | Conflict counter required both signs (`blocks_labels_lose` vs `blocks_conflict_labels_lose_proxy_gains`); `build_proxy_catalogue.py` reads `classes.rule_id_to_class` as well as `query.rule_id_to_class` | The first overstated a population conflict 32 blocks where the true both-signs conflict is **9**; the second silently produced unnamed per-class rows for QFaults | `tests/test_block_holdout_eval.py::test_conflict_counters_require_both_signs`; `class_vocabulary_key` recorded in `qfaults_stats.json` |
+
+**Next session queue (priority order):**
+1. **First leaderboard upload** — 3/week, 1 final before Dec 3, 2026 11:59 PM UTC (human-only)
+2. **Read the two dispatched measurements** — `data/evidence/xcat/transfer_report.json` (cross-catalogue verdict) and `data/evidence/block_holdout/runner_block_stratified.json` + `fold0_generalisation_gap.json` (runner reproduction + the memorisation gap). Neither changes the shipped artifact unless the pre-registered criteria say so.
+3. **Commit a FIELD-selection rule before any re-blend** — the policy axis is ruled (worst-case contrast across sweeps) but the field axis is not; `emission_field_axis.json` currently favours the shipped field, and a rule committed *before* the next re-blend is what keeps that honest.
+4. **GPU full-config** — EfficientNet-B5, 10 splits, 60 epochs (`configs/config.yaml`)
+5. **Detection** — DEM derivatives, pseudo-labels from the external catalogue (only if the transfer verdict is `ADOPT`), block-holdout folds 1–3
+6. **Selection signal** — proxy-based early stopping / fold weighting
+7. **Finalist package** — Winning Model Documentation, code assets, GenAI disclosure, W-9/ACH
+
+---
+
 ## Session 15 (2026-09-18) — executive summary polished for submission, 3-pass review, data re-verified
 
 | Area | What changed | Why it matters | Evidence |

@@ -1,3 +1,54 @@
+## Session 16 (2026-09-18) — what the new error bars do and do not license
+
+1. **The emission decision now has an error bar, and the bar does not move the decision.** Block-stratified
+   scoring of the shipped artifact gives proxy DTI **0.0999 with CI95 [0.0883, 0.1119]** over 56 blocks
+   (34 scoreable). The best genuinely different candidate in the recoverable sweep (width 1 px, 0.0878)
+   beats the reference with probability **0.008** over paired block resamples. So "keep floor 0.1, width 0"
+   is now a statement with a confidence interval behind it, not a point estimate. **Limitation:** the
+   interval is over *blocks of one survey*, i.e. it quantifies spatial sampling noise in this footprint —
+   it is not an interval over competitions, over truth definitions, or over the hidden expert set.
+2. **DTI is not decomposable over blocks, so per-block winners are not policy winners.** TP_w sums over
+   truth pixels while the FP penalty is a global mass term; a candidate can win in most blocks and lose
+   globally. `block_holdout_eval.py` now derives whether that happened (`interpretation.n_conflicts`, **0**
+   in the committed run) instead of asserting it. **Limitation:** blocks are therefore used for *variance*
+   and for locating where a score comes from; the **global DTI remains the selection statistic**. Anyone
+   tempted to select per block (e.g. widen only in sparse blocks) is outside what this evidence supports.
+3. **The floor axis is degenerate for the shipped raster, and that is reported rather than hidden.** The
+   artifact is a hard band (two distinct values), so 5 floors × 10 widths produced only **10 distinct
+   emissions** — 40 candidates are duplicates detected by sha1 of the emission and pruned from the
+   committed per-block rows after every consumer has run. **Limitation:** sweeping floors requires the
+   *pre-shaping* ensemble field, which only the runner has (`proxy-eval.yml` re-blends the saved fold
+   artifacts); the sandbox cannot re-open the floor question on the shipped bytes.
+4. **The field axis was unruled, and one free parameter remains.** At a fixed floor, fields are not
+   comparable: floor 0.1 emits 464,736 px on the 6-fold field and 144,738 px on the 16-fold one.
+   Comparing at matched support (±15/25/40 % windows, same rule per field) puts the shipped 11-fold mean
+   first — 0.0999 vs 0.0850 / 0.0777 / 0.0644 — **stable across all three windows**, so ensemble 1's
+   higher 0.1365 was a support effect. **Limitation:** the window width is a free parameter of the
+   comparison, which is why all three are reported and the verdict requires stability; and **no
+   pre-registered rule covers the field axis** (`data/evidence/emission_field_axis.json` says so). A rule
+   must be committed *before* the next re-blend, or the choice stays an unruled judgement call.
+5. **Cross-catalogue transfer is built and dispatched, not yet measured.** `earthquake.usgs.gov` is
+   unreachable from the development sandbox (curl exit 35, verified 2026-09-18), so QFaults is fetched on a
+   runner. Everything downstream is written and unit-tested against a synthetic service (15 tests), but
+   **no transfer number exists yet**: until `data/evidence/xcat/transfer_report.json` lands, the prior on
+   hidden-expert-set recall that EXECUTIVE_SUMMARY §11 item 1 asks for is *unmeasured*, and any claim
+   otherwise would be a hallucination. Two structural limits are already known and recorded: QFaults is
+   independent of catalogue A but **not** of the training labels (rules §3.3 — the labels come from the
+   INGENIOUS Great Basin compilation, which distributes Quaternary fault layers), so only its **code-2**
+   pixels (no label within R) are scored; and if QFaults and the labels turned out to be the same lines,
+   that population would be empty and the measurement would refuse to run rather than report 0.
+6. **Block-holdout *training* is wired but not yet run.** `configs/config_block_holdout.yaml` +
+   `--score-fold K [--complement]` can produce a genuine generalisation gap, and the scoring partition is
+   cross-checked against the training partition at runtime (disagreement exits 2). **Limitation:** the
+   per-block numbers committed today are a **reshaping** measurement on a model that saw every block —
+   the report states this in `restriction.note`, and it must not be quoted as transfer to unseen geography
+   until a fold trained with `training.holdout: spatial_blocks` is scored on the blocks it never saw.
+7. **Unchanged blockers:** human-only (DrivenData account/enrolment, eligibility §1.3, GenAI disclosure,
+   final submission selection), infrastructure (no GPU here; 2 vCPU / 3.9 GB RAM), and the private test
+   labels. See the table below and `EXECUTIVE_SUMMARY.md` §8d.
+
+---
+
 ## Session 15 (2026-09-18) — executive summary polished for submission, 3-pass review, data bridge re-verified
 
 1. **Executive summary ready to submit:** `EXECUTIVE_SUMMARY.md` now opens with a TL;DR 5-command path (`git pull` → `assemble_data_bridge.py` → `prepare_data.py` → `validate_submission.py` → upload) pointing at `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif` (sha256 `a3dcd6d5…`, 569.5 KB, 11-fold ensemble, floor 0.1/thin/w0, rank 1 of 132). Added **Common Pitfalls** table (6 measured failures), **Data Placement Resolved** proof, **Limitations** table, and **Next Steps** queue — all line-by-line verified. Companion `docs/executive_summary.html` rebuilt with matching TL;DR banner.

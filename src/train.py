@@ -252,12 +252,41 @@ def main():
     for kk in range(n_splits):
         mc = mc0 + kk
         print(f"\n=== MC split {mc + 1} (fold {kk + 1}/{n_splits}) ===")
+        # ---- hold-out design --------------------------------------------------------
+        # training.holdout: "random" (reference MC split, scattered windows) or
+        # "spatial_blocks" (docs/DISCOVERY_PLAN.md 3a: whole 51 km blocks held out, training
+        # pushed back by a collar of at least the metric's R).  The block partition is seeded
+        # by training.block_seed - NOT by the fold seed - so every fold of an experiment agrees
+        # on which geography belongs to which fold.
+        tr = cfg["training"]
+        holdout = str(tr.get("holdout", "random"))
+        block_folds = int(tr.get("block_folds", 4))
+        block_fold = tr.get("block_fold", None)
+        block_fold = (mc % block_folds) if block_fold is None else int(block_fold)
+        if not 0 <= block_fold < block_folds:
+            raise SystemExit(f"training.block_fold={block_fold} outside [0,{block_folds}) - "
+                             "a fold that holds out nothing would train on its own test set")
         res = make_patches(
-            Xn, y, patch_size=cfg["training"]["patch_size"], train_step=cfg["training"]["train_step"],
-            test_proportion=cfg["training"]["test_proportion"], seed=mc * 10 + int(cfg["training"].get("seed", 42)),
-            neg_fraction=cfg["training"].get("neg_fraction", 0.35), R_pixels=R_px,
+            Xn, y, patch_size=tr["patch_size"], train_step=tr["train_step"],
+            test_proportion=tr["test_proportion"], seed=mc * 10 + int(tr.get("seed", 42)),
+            neg_fraction=tr.get("neg_fraction", 0.35), R_pixels=R_px,
+            holdout=holdout,
+            block_px=int(tr.get("block_px", 512)),
+            block_folds=block_folds,
+            block_fold=block_fold,
+            block_buffer_px=tr.get("block_buffer_px", None),
+            block_mode=str(tr.get("block_mode", "balanced")),
+            block_seed=int(tr.get("block_seed", 0)),
         )
         print("patches:", {k: v for k, v in res["summary"].items() if not k.endswith("_windows")})
+        ho = res["summary"].get("holdout") or {}
+        if ho.get("mode") == "spatial_blocks":
+            f = ho.get("fold", {})
+            print(f"holdout: spatial_blocks fold {ho.get('block_fold')} of {ho.get('block_folds')} "
+                  f"({ho.get('block_mode')}, block {ho.get('block_px')} px = "
+                  f"{ho.get('partition', {}).get('block_km', 0)} km, buffer {ho.get('buffer_px')} px) "
+                  f"-> scored {f.get('scored_px', 0):,} px, training excluded {f.get('excluded_px', 0):,} px, "
+                  f"held-out fault px {f.get('fault_px', 0):,}")
 
         good = cfg["training"].get("good_channels")
         if good:
@@ -362,6 +391,7 @@ def main():
                                        patch_size=cfg["training"]["patch_size"],
                                        minutes_used=round((time.time() - job_t0) / 60.0, 1),
                                        budget_hit=aborted_by_budget,
+                                       holdout=ho,
                                        test_windows=res["summary"]["test_windows"]))
         print(f"saved {ck} (best DTI {best['dti']:.4f} @ epoch {best['epoch']})")
 

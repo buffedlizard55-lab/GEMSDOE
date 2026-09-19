@@ -35,6 +35,9 @@ from scipy.ndimage import distance_transform_edt
 
 __all__ = [
     "kernel_offsets",
+    "score_within_mask",
+    "block_aggregate",
+    "bootstrap_from_blocks",
     "compute_distance_weighted_tversky",
     "score_arrays_blocked",
     "evaluate_geotiff",
@@ -92,6 +95,22 @@ def _credit_map(pred: np.ndarray, offsets) -> np.ndarray:
 # --------------------------------------------------------------------------------------
 # core metric
 # --------------------------------------------------------------------------------------
+def _sanitise(pred, shape) -> np.ndarray:
+    """The spec's input contract, applied in exactly one place.
+
+    "values between 0 and 1" plus "data outside bounds is null or NaN" (problem page,
+    #submission-format): NaN/Inf become 0 credit and 0 penalty, and anything out of range is
+    clipped rather than trusted.  Shared by GtContext.score / .credit_vector so a per-block
+    decomposition can never disagree with the global score about what the input meant.
+    """
+    arr = np.asarray(pred, dtype=np.float64)
+    if arr.shape != tuple(shape):
+        raise ValueError(f"shape mismatch: pred {arr.shape} vs gt {tuple(shape)}")
+    arr = np.nan_to_num(arr, nan=0.0, posinf=1.0, neginf=0.0)
+    np.clip(arr, 0.0, 1.0, out=arr)
+    return arr
+
+
 class GtContext:
     """Ground-truth geometry, computed once and reused for every candidate prediction.
 
@@ -136,19 +155,17 @@ class GtContext:
             self.gy = self.gx = None
             self.k_to_gt = None
 
-    def score(self, pred, alpha: float = DEFAULT_ALPHA, beta: float = DEFAULT_BETA,
-              eps: float = EPS, return_components: bool = False):
-        pred = np.asarray(pred, dtype=np.float64)
-        if pred.shape != self.shape:
-            raise ValueError(f"shape mismatch: pred {pred.shape} vs gt {self.shape}")
-        pred = np.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=0.0)
-        np.clip(pred, 0.0, 1.0, out=pred)
+    def credit_vector(self, pred) -> np.ndarray:
+        """credit(g) for every ground-truth pixel, in the order of (self.gy, self.gx).
 
+        Split out of `score` (2026-09-18) so a caller can aggregate the SAME per-pixel terms
+        over a spatial partition without re-deriving them: TP_w/FN_w are sums over ground-truth
+        pixels and FP_w is a sum over prediction pixels, so any disjoint partition of the grid
+        reproduces the global score exactly (tests/test_block_decomposition.py pins that).
+        """
+        pred = _sanitise(pred, self.shape)
         if self.n_gt == 0:
-            FP_w = float(pred.sum())
-            dti = 0.0 if FP_w > 0 else 1.0
-            return (dti, (0.0, FP_w, 0.0)) if return_components else dti
-
+            return np.zeros(0, dtype=np.float64)
         H, W = self.shape
         credit = np.zeros(self.n_gt, dtype=np.float64)
         for dy, dx, k in self.offsets:
@@ -161,7 +178,24 @@ class GtContext:
             vals[inside] = pred[yy[inside], xx[inside]]
             vals *= k
             np.maximum(credit, vals, out=credit)
+        return credit
 
+    def fp_weight(self) -> np.ndarray:
+        """1 - max_g k(d(x,g)) for every pixel: the per-pixel false-positive penalty weight."""
+        if self.k_to_gt is None:
+            return np.ones(self.shape, dtype=np.float64)
+        return 1.0 - self.k_to_gt
+
+    def score(self, pred, alpha: float = DEFAULT_ALPHA, beta: float = DEFAULT_BETA,
+              eps: float = EPS, return_components: bool = False):
+        pred = _sanitise(pred, self.shape)
+
+        if self.n_gt == 0:
+            FP_w = float(pred.sum())
+            dti = 0.0 if FP_w > 0 else 1.0
+            return (dti, (0.0, FP_w, 0.0)) if return_components else dti
+
+        credit = self.credit_vector(pred)
         TP_w = float(credit.sum())
         FN_w = float(self.n_gt - TP_w)                 # == sum_g (1 - credit_g) exactly
         pos = pred > 0
@@ -284,6 +318,137 @@ def score_arrays_blocked(
     FN = float(n_gt - TP)
     dti = TP / (TP + alpha * FP + beta * FN + EPS) if (n_gt or FP) else 1.0
     return dti, (TP, FP, FN)
+
+
+def score_within_mask(pred, ctx: "GtContext", mask, alpha: float = DEFAULT_ALPHA,
+                      beta: float = DEFAULT_BETA, eps: float = EPS, credit=None) -> dict:
+    """The metric's three sums restricted to `mask`, computed with GLOBAL context.
+
+    WHY NOT JUST CROP.  Scoring a cropped block as if it were the whole raster is wrong in both
+    directions: a prediction one pixel outside the block still earns credit for a truth pixel
+    inside it (the kernel reaches R = 3 px), and a truth pixel outside the block still reduces
+    the penalty on predictions inside it (FP weight is an EDT over ALL truth).  Cropping
+    therefore both under-credits and over-penalises, and the error is largest exactly at the
+    block boundaries a spatial hold-out is supposed to measure.
+
+    This function keeps the global geometry and only restricts the SUMS:
+
+        TP_w(mask) = sum_{g in G & mask} credit(g)          credit from the global prediction
+        FN_w(mask) = |G & mask| - TP_w(mask)                (the TP+FN=|G| identity, per block)
+        FP_w(mask) = sum_{x in mask, p(x)>0} p(x) * (1 - max_g k(d(x,g)))
+
+    so summing over any disjoint partition of the grid reproduces `ctx.score(pred)` exactly -
+    pinned by tests/test_block_decomposition.py.  `dti` is `None` when the block holds no truth
+    pixels: a block with |G & mask| = 0 has no defined index, and reporting 0.0 there would
+    drag a mean down for a reason that has nothing to do with the prediction.
+    """
+    pred = _sanitise(pred, ctx.shape)
+    mask = np.asarray(mask, dtype=bool)
+    if mask.shape != tuple(ctx.shape):
+        raise ValueError(f"mask {mask.shape} != grid {tuple(ctx.shape)}")
+    if credit is None:
+        credit = ctx.credit_vector(pred)
+    if ctx.n_gt == 0:
+        gt_sel = np.zeros(0, dtype=bool)
+    else:
+        gt_sel = mask[ctx.gy, ctx.gx]
+    n_gt = int(gt_sel.sum())
+    TP_w = float(credit[gt_sel].sum()) if n_gt else 0.0
+    FN_w = float(n_gt) - TP_w
+    pos = (pred > 0) & mask
+    FP_w = float((pred[pos] * ctx.fp_weight()[pos]).sum())
+    denom = TP_w + alpha * FP_w + beta * FN_w + eps
+    return dict(dti=(TP_w / denom) if n_gt else None,
+                TP_w=TP_w, FP_w=FP_w, FN_w=FN_w, n_gt=n_gt,
+                pred_px=int(pos.sum()), pred_mass=float(pred[pos].sum()),
+                scoreable=bool(n_gt > 0))
+
+
+def block_aggregate(ctx: "GtContext", pred, blocks, n_blocks: int, fp_weight=None,
+                    credit=None) -> dict:
+    """Per-block TP_w / FP_w / n_gt / prediction-pixel counts, vectorised over the whole grid.
+
+    Equivalent to calling `score_within_mask` once per block, but with two full-grid passes
+    instead of `n_blocks` of them: TP_w/FN_w are sums over ground-truth pixels (so they group by
+    the block each truth pixel falls in) and FP_w is a sum over prediction pixels weighted by
+    `1 - max_g k(d(x,g))` (so it groups by the block the prediction pixel falls in).  Both use
+    the GLOBAL context, so a block's numbers still see predictions and truth just outside it -
+    which is the whole point (see `score_within_mask`).
+
+    `blocks` is an integer array of the same shape as the grid giving each pixel's block id in
+    [0, n_blocks).  The identity that makes per-block tables trustworthy is asserted by the
+    caller and tested in tests/test_block_decomposition.py:
+
+        sum_b TP_w(b) == TP_w(global), and the same for FP_w, FN_w and |G|.
+    """
+    pred = _sanitise(pred, ctx.shape)
+    blocks = np.asarray(blocks)
+    if blocks.shape != tuple(ctx.shape):
+        raise ValueError(f"blocks {blocks.shape} != grid {tuple(ctx.shape)}")
+    if credit is None:
+        credit = ctx.credit_vector(pred)
+    gt_blocks = blocks[ctx.gy, ctx.gx] if ctx.n_gt else np.zeros(0, dtype=np.int64)
+    TP = np.bincount(gt_blocks, weights=credit, minlength=n_blocks)[:n_blocks]
+    NGT = np.bincount(gt_blocks, minlength=n_blocks)[:n_blocks]
+    FN = NGT.astype(np.float64) - TP
+    if fp_weight is None:
+        fp_weight = ctx.fp_weight()
+    pos = pred > 0
+    flat = blocks.ravel()
+    FP = np.bincount(flat, weights=np.where(pos, pred * fp_weight, 0.0).ravel(),
+                     minlength=n_blocks)[:n_blocks]
+    PXP = np.bincount(flat, weights=pos.astype(np.float64).ravel(), minlength=n_blocks)[:n_blocks]
+    return dict(TP=TP, FP=FP, FN=FN, n_gt=NGT.astype(np.int64), pred_px=PXP.astype(np.int64),
+                credit=credit)
+
+
+def bootstrap_from_blocks(rows, alpha: float = DEFAULT_ALPHA, beta: float = DEFAULT_BETA,
+                          eps: float = EPS, n_boot: int = 2000, seed: int = 0) -> dict:
+    """Percentile bootstrap over SPATIAL BLOCKS, recomposed from the additive metric components.
+
+    `rows` is a list of per-candidate dicts, each with a `blocks` list of
+    {TP_w, FP_w, FN_w, n_gt, scoreable} in a common block order; row 0 is the reference every
+    contrast is paired against.  Returns per-candidate DTI intervals, the paired contrast
+    interval, and `prob_beats_reference` - the bootstrap probability that the candidate exceeds
+    the reference on the SAME resample.
+
+    Blocks and not pixels are the resampling unit: fault traces run for kilometres, so
+    neighbouring pixels are not independent draws, and a pixel bootstrap would understate the
+    interval by roughly the trace length.  Recomposition is exact because TP_w/FP_w/FN_w are
+    sums (see `block_aggregate`), so no re-scoring and no approximation is involved.
+    """
+    if not rows or not rows[0].get("blocks"):
+        return {}
+    rng = np.random.default_rng(seed)
+    n_blocks = len(rows[0]["blocks"])
+    if any(len(r["blocks"]) != n_blocks for r in rows):
+        raise ValueError("every candidate must be scored on the same block partition")
+    idx = rng.integers(0, n_blocks, size=(n_boot, n_blocks))
+    TP = np.array([[b["TP_w"] for b in r["blocks"]] for r in rows])
+    FP = np.array([[b["FP_w"] for b in r["blocks"]] for r in rows])
+    FN = np.array([[b["FN_w"] for b in r["blocks"]] for r in rows])
+    boots = np.empty((len(rows), n_boot))
+    for ci in range(len(rows)):
+        tp, fp, fn = TP[ci][idx].sum(axis=1), FP[ci][idx].sum(axis=1), FN[ci][idx].sum(axis=1)
+        boots[ci] = tp / (tp + alpha * fp + beta * fn + eps)
+    ref = boots[0]
+    out: dict = {}
+    for ci, r in enumerate(rows):
+        sample = boots[ci]
+        contrast = sample - ref
+        label = r.get("label", f"candidate_{ci}")
+        out[label] = dict(
+            dti_p50=round(float(np.percentile(sample, 50)), 6),
+            dti_ci95=[round(float(np.percentile(sample, 2.5)), 6),
+                      round(float(np.percentile(sample, 97.5)), 6)],
+            contrast_vs_reference_p50=round(float(np.percentile(contrast, 50)), 6),
+            contrast_vs_reference_ci95=[round(float(np.percentile(contrast, 2.5)), 6),
+                                        round(float(np.percentile(contrast, 97.5)), 6)],
+            prob_beats_reference=(None if ci == 0 else round(float((contrast > 0).mean()), 4)),
+            n_blocks=int(n_blocks),
+            n_scoreable_blocks=int(sum(1 for b in r["blocks"] if b.get("scoreable"))),
+        )
+    return out
 
 
 def dti_bounds(TP_w: float, FP_w: float, n_gt: int, alpha=DEFAULT_ALPHA, beta=DEFAULT_BETA):

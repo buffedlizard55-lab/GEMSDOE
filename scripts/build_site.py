@@ -1631,6 +1631,285 @@ all three run by the <em>Proxy catalogue</em> workflow.</p>
     return head + table + warn_note + sweep_html + ok_note
 
 
+def _cross_catalogue(ev: dict) -> str:
+    """Does a policy TRAVEL between independently compiled catalogues?
+
+    The proxy population cannot answer this: it IS catalogue A, so a submission that copies catalogue
+    A scores 0.0 there by construction.  A second catalogue (USGS QFaults) can, and the measurement
+    is pre-registered before the first run so a near-margin result cannot be re-argued afterwards.
+    """
+    d = ev.get("xcat_transfer")
+    if not d:
+        return """<h2 id="xcat">Cross-catalogue transfer &mdash; built, awaiting runner egress</h2>
+<p>The one measurement that stands in for hidden-expert-set recall: emit catalogue A (USGS SGMC
+structure, DOI 10.3133/ds1052) and score it against an <b>independently compiled</b> catalogue B
+(USGS Quaternary Fault and Fold Database, layer 21 &ldquo;National Database&rdquo;, DOI
+10.5066/P9BCVRCK, public domain), on B&rsquo;s <b>code-2</b> pixels only &mdash; the traces with no
+training label within R, because rules &sect;3.3 says the labels come from the INGENIOUS Great Basin
+compilation, which itself distributes Quaternary fault layers.</p>
+""" + note("warn",
+    "<b>No transfer number exists yet.</b> <code>earthquake.usgs.gov</code> is not reachable from the "
+    "development sandbox (curl exit 35, verified 2026-09-18), so the fetch and the measurement run on "
+    "a GitHub-hosted runner. Everything downstream is written and unit-tested against a synthetic "
+    "service, and the service itself was verified live: <b>14,482 features</b> intersect the footprint "
+    "envelope computed from <code>data/labels.tif</code>. Until "
+    "<code>data/evidence/xcat/transfer_report.json</code> is committed, any transfer claim would be a "
+    "hallucination.<br>Produce it with: <code>git commit --allow-empty "
+    ".github/triggers/cross-catalogue &amp;&amp; git push</code> "
+    "(<code>.github/workflows/cross-catalogue.yml</code>).") + """
+<p><b>What the run will decide, pre-registered.</b> Controls first &mdash; a copy of the training
+labels must score &asymp; 0 against B-only (otherwise B-only is not &ldquo;new&rdquo; and the claim is
+circular), a copy of B must score 1.0 (otherwise the scorer is broken on that population), and
+blanket-ones gives the trivial floor. Then the union test: does
+<code>union(model, A)</code> &mdash; a probability maximum, not a mask OR &mdash; beat the model alone
+by more than <b>0.01 DTI</b> with <b>P(union &gt; model) &ge; 0.95</b> over paired block resamples?
+The verdict is derived, so <code>ADOPT</code> is unreachable if a control fails, and
+<code>REFUSED</code> is printed instead of a number nobody may act on.</p>"""
+
+    v, o, c = d["verdict"], d["overlap"], d["controls"]
+    kind = "ok" if v["conclusion"].startswith("ADOPT") else (
+        "bad" if v["conclusion"].startswith("REFUSED") else "warn")
+    rows = ""
+    bs = d.get("bootstrap") or {}
+    boot = dict(bs.get("catalogue_a_vs_model") or {}, **(bs.get("union_vs_model") or {}))
+    for m in d["measurements"]:
+        ci = (boot.get(m["label"]) or {}).get("dti_ci95")
+        cis = f"[{ci[0]:.4f}, {ci[1]:.4f}]" if ci else "&ndash;"
+        dti = m["global_dti"]
+        rows += ('<tr><td>%s <code>%s</code></td><td class="num">%s</td><td class="num">%s</td>'
+                 '<td class="num">%s</td></tr>'
+                 % (e(m["kind"]), e(m["label"]),
+                    (f"{dti:.4f}" if dti is not None else "&ndash;"), cis,
+                    f'{m["emitted_px"]:,}'))
+    return f"""<h2 id="xcat">Cross-catalogue transfer &mdash; measured</h2>
+<p>Catalogue A (SGMC structure, DOI 10.3133/ds1052) emitted and scored against catalogue B
+(QFaults layer 21, DOI 10.5066/P9BCVRCK) on B&rsquo;s code-2 pixels only &mdash; the traces the
+training labels do not contain.</p>
+{note(kind, f"<b>Verdict: {e(v['conclusion'])}</b>")}
+<table class="kv"><tbody>
+<tr><th>B-only truth</th><td><b>{o['B_only_px']:,} px</b> = {o['B_only_km']:,.0f} km
+  ({o['B_near_label_fraction_of_all'] * 100:.1f}% of catalogue B is already within R of a training
+  label, i.e. code 1)</td></tr>
+<tr><th>A reaches B-only</th><td>{o['B_only_recall_by_A_at_R'] * 100:.1f}% of B-only has an A pixel
+  within R (recall-like), while {o['A_emitted_precision_on_B_only'] * 100:.1f}% of what A emits lands
+  on B-only (precision-like) &mdash; reported as a pair, because high recall with low precision is a
+  net loss under a metric that charges for mass</td></tr>
+<tr><th>Controls</th><td>labels-copy <b>{c['labels_copy_vs_B_only']['global_dti']:.4f}</b> (must be
+  &asymp; 0) &middot; B-copy <b>{c['B_copy_vs_B_only']['global_dti']:.4f}</b> (must be 1.0) &middot;
+  blanket-ones {c['blanket_ones_vs_B_only']['global_dti']:.4f} &mdash;
+  <b>controls_pass = {str(d['controls_pass']).lower()}</b></td></tr>
+<tr><th>Union test</th><td>model alone {(f"{v['model_dti']:.4f}" if v['model_dti'] is not None else '&ndash;')}
+  &rarr; best union {(f"{v['best_union_dti']:.4f}" if v['best_union_dti'] is not None else '&ndash;')}
+  (gain {(f"{v['union_gain']:+.4f}" if v['union_gain'] is not None else '&ndash;')}, required
+  &gt; {v['criterion']['min_union_gain']}); P(union &gt; model) =
+  {e(str(v['criterion']['bootstrap_prob_beats_model']))} (required &ge;
+  {v['criterion']['min_bootstrap_prob']})</td></tr>
+</tbody></table>
+<table><thead><tr><th>measurement</th><th>DTI vs B-only</th><th>CI95 (block bootstrap)</th>
+<th>emitted px</th></tr></thead><tbody>
+{rows}
+</tbody></table>"""
+
+
+def _block_holdout(ev: dict) -> str:
+    """Error bars on the emission decision: per-block DTI and a paired block bootstrap.
+
+    Every other number on this page is a single global ratio over 5.2 M valid pixels, which has no
+    natural standard error.  This section resamples the survey's own unit - 51.2 km blocks - so a
+    0.012 difference between two policies can finally be compared with the variability between
+    regions rather than asserted away.
+    """
+    d = ev.get("block_stratified")
+    if not d:
+        return missing("The block-stratified evaluation of the shipped submission (per-block DTI, "
+                       "paired block bootstrap, and the reproduction check against the runner's "
+                       "committed sweep).",
+                       "python scripts/block_holdout_eval.py --config configs/config_block_holdout.yaml")
+    v, b, boot = d["verdict"], d["blocks"], d["bootstrap"]["proxy_only"]
+    ref = v["reference_candidate"]
+    ci = boot[ref]["dti_ci95"]
+    pred = d["prediction"]
+    rc = d.get("reproduction") or {}
+    interp = d.get("interpretation") or {}
+    restr = d.get("restriction") or {}
+
+    rows = ""
+    for c in d["populations"]["proxy_only"]["candidates"][:12]:
+        lab = next(x for x in d["populations"]["labels"]["candidates"] if x["label"] == c["label"])
+        bi = boot[c["label"]]
+        prob = bi["prob_beats_reference"]
+        dup = c.get("duplicate_of")
+        rows += ('<tr%s><td><code>%s</code>%s</td><td class="num"><b>%.4f</b></td>'
+                 '<td class="num">[%.4f, %.4f]</td><td class="num">%s</td>'
+                 '<td class="num">%.4f</td></tr>'
+                 % (' class="hl"' if c["label"] == ref else "", e(c["label"]),
+                    (f' <span class="muted">= {e(dup)}</span>' if dup else ""),
+                    c["global_dti"], bi["dti_ci95"][0], bi["dti_ci95"][1],
+                    ("<b>reference</b>" if prob is None else f"{prob:.3f}"),
+                    (lab["global_dti"] if lab["global_dti"] is not None else float("nan"))))
+
+    repro = ""
+    if rc:
+        if rc.get("status") == "reproduced":
+            rr, sr = rc["runner_row"], rc["sandbox_row"]
+            repro = note("ok",
+                "<b>Reproduced on two environments.</b> The GitHub-hosted runner measured "
+                f"DTI {rr['dti']} (TP<sub>w</sub> {rr['TP_w']}, FP<sub>w</sub> {rr['FP_w']}, "
+                f"FN<sub>w</sub> {rr['FN_w']}, {rr['emission_px']:,} px) for this policy in "
+                f"<code>{e(rc['sweep_file'])}</code>; the development sandbox scores the shipped "
+                f"bytes at DTI {sr['dti']} (TP<sub>w</sub> {sr['TP_w']:.3f}, FP<sub>w</sub> "
+                f"{sr['FP_w']:.3f}, FN<sub>w</sub> {sr['FN_w']:.3f}, {sr['emission_px']:,} px). "
+                "The check is a gate, not a comment: <code>--crosscheck-sweep</code> exits 2 on a "
+                "mismatch.")
+        else:
+            repro = note("warn", f"<b>Reproduction {e(str(rc.get('status')))}.</b> "
+                                 f"{e(str(rc.get('reason', '')))}")
+
+    caveats = []
+    if v.get("floor_axis_degenerate"):
+        caveats.append(
+            f"<b>The floor axis is degenerate for this raster.</b> {v['n_candidates_swept']} "
+            f"candidates were swept but only <b>{v['n_distinct_emissions']}</b> distinct emissions "
+            "exist: a hard-band submission carries two values, so every floor above the applied one "
+            "selects the same support. Duplicates are detected by sha1 of the emission and labelled, "
+            "not silently counted.")
+    if interp.get("n_conflicts"):
+        caveats.append(
+            f"<b>Per-block and global rankings disagree for {interp['n_conflicts']} candidate(s).</b> "
+            "DTI is not decomposable - TP<sub>w</sub> sums over truth pixels while the FP penalty is a "
+            "global mass term - so a per-block argmax is not a policy selector. Blocks give variance; "
+            "the global DTI selects.")
+    else:
+        caveats.append(
+            "<b>No candidate won a majority of blocks while losing globally</b> in this run "
+            "(<code>interpretation.n_conflicts = 0</code>). The check is computed each run because "
+            "DTI is not decomposable over blocks, so it is a property of the data, not of the code.")
+    if restr.get("mode") and restr["mode"] != "all_blocks":
+        caveats.append(f"<b>Scope:</b> {e(restr.get('note', ''))}")
+    else:
+        caveats.append(
+            "<b>Scope:</b> this is a <em>reshaping</em> measurement on the shipped ensemble, which "
+            "trained on every block. It is not a generalisation reading - that needs a fold trained "
+            "with <code>training.holdout: spatial_blocks</code> and scored with "
+            "<code>--score-fold K</code> (<code>configs/config_block_holdout.yaml</code>).")
+
+    agree = [c["agreement_fraction"] for c in d["population_agreement"]["per_candidate"]
+             if c["agreement_fraction"] is not None]
+    agree_txt = (f"The two populations prefer the same candidate in the same block in "
+                 f"<b>{sum(agree) / len(agree):.3f}</b> of scoreable cases on average."
+                 if agree else "")
+
+    rel = (d.get("bootstrap") or {}).get("reliability") or {}
+    rel_note = ""
+    if rel:
+        if rel.get("interval_readable"):
+            rel_note = note("info",
+                f"<b>{rel['resampling_units']} independent resampling units</b> (of "
+                f"{rel['blocks_in_partition']} blocks in the partition, {d['bootstrap']['n']} "
+                f"resamples): the interval is readable. {e(rel.get('note', ''))}")
+        else:
+            rel_note = note("warn",
+                f"<b>Coarse interval: only {rel['resampling_units']} resampling units</b> "
+                f"(&lt; {rel['min_units_for_a_readable_ci']}). {e(rel.get('note', ''))}")
+
+    return f"""<h2 id="errorbars">Does the emission decision survive an error bar? &mdash; measured</h2>
+<p>The metric is one global ratio, so it has no standard error of its own. Resampling the survey's
+own unit &mdash; <b>{b['block_px']} px = {b['block_km']} km blocks</b>, {b['n_blocks_scoreable']} of
+{b['n_blocks']} scoreable &mdash; gives it one: per-block TP<sub>w</sub>/FP<sub>w</sub>/FN<sub>w</sub>
+are aggregated (<code>src/metrics.block_aggregate</code>, asserted to sum to the global score) and a
+<b>paired block bootstrap</b> redraws blocks with replacement, recomputing the global ratio for every
+candidate on the same draw (<code>bootstrap_from_blocks</code>, {d['bootstrap']['n']} resamples).</p>
+<table><thead><tr><th>candidate</th><th>proxy DTI</th><th>CI95 (block bootstrap)</th>
+<th>P(beats reference)</th><th>catalogue DTI</th></tr></thead><tbody>
+{rows}
+</tbody></table>
+{note('ok', f"<b>The adopted policy holds.</b> Reference <code>{e(ref)}</code> scores "
+            f"<b>{v['reference_proxy_dti']:.4f}</b> on the new-fault-like population, CI95 "
+            f"[{ci[0]:.4f}, {ci[1]:.4f}], against {v['reference_labels_dti']:.4f} on the catalogue "
+            f"population. The best genuinely different candidate in the sweep "
+            f"(<code>{e(str(v.get('best_alternative_candidate')))}</code>, "
+            f"{v['best_alternative_proxy_dti']:.4f}, {v['best_alternative_contrast']:+.4f}) beats it "
+            f"with probability <b>{v['best_alternative_prob_beats_reference']}</b>, and its worst "
+            f"single block is {v['best_alternative_worst_block_contrast']:+.4f}. Widening is monotone "
+            f"harmful on both populations.")}
+{repro}
+{rel_note}
+{note('info', f"<b>Field:</b> {pred['distinct_values']} distinct values, {pred['nonzero_px']:,} "
+              f"emitted px, hard band {str(pred['hard_band']).lower()}. {agree_txt}")}
+<ul>
+{''.join(f'<li>{c}</li>' for c in caveats)}
+</ul>"""
+
+
+def _field_axis(ev: dict) -> str:
+    """Which ensemble FIELD should carry the adopted policy - the axis no rule covered.
+
+    A floor is a threshold on a field whose scale changes with the number of averaged folds, so two
+    fields at "the same policy" do not emit the same pixels.  Comparing them at a fixed floor
+    measures the floor; this compares them at matched support.
+    """
+    d = ev.get("field_axis")
+    if not d:
+        return missing("The matched-support comparison of the ensemble fields behind the committed "
+                       "sweeps.", "python scripts/compare_emission_fields.py")
+    v, ship = d["verdict"], d["shipped_support"]
+    tol = str(d["primary_window"])
+    rows = ""
+    for f in d["fields"]:
+        ad, ms = f["adopted_policy"], f["matched_support"]
+        bw = (ms or {}).get("best_in_window", {}).get(tol)
+        cl = (ms or {}).get("closest")
+        rows += ('<tr%s><td><b>%s</b>%s</td><td><code>%s</code></td><td class="num">%s</td>'
+                 '<td class="num">%s</td><td class="num">%s</td><td class="num">%s</td>'
+                 '<td class="num">%s</td></tr>'
+                 % (' class="hl"' if f["is_shipped_field"] else "", e(f["field"]),
+                    " &larr; shipped" if f["is_shipped_field"] else "",
+                    e(str(f["run_ids"])),
+                    (f'{ad["dti"]:.4f}' if ad else "&ndash;"),
+                    (f'{ad["emission_px"]:,}' if ad else "&ndash;"),
+                    (f'{bw["dti"]:.4f}' if bw else "&ndash;"),
+                    (f'({bw["t0"]:g}, {bw["width_px"]} px)' if bw else "&ndash;"),
+                    (f'{cl["dti"]:.4f}' if cl else "&ndash;")))
+    pref = v.get("surrogate_prefers_a_different_field")
+    if pref:
+        verdict_note = note("warn",
+            f"<b>The surrogate prefers a different field.</b> {e(pref['field'])} "
+            f"(runs {e(str(pref['run_ids']))}) scores {pref['dti']:.4f} at matched support against the "
+            f"shipped field's {pref['shipped_dti_at_matched_support']:.4f} "
+            f"({pref['gain']:+.4f}). <b>No pre-registered rule covers the field axis</b>, so acting on "
+            "this needs a rule committed first.")
+    else:
+        verdict_note = note("ok",
+            f"<b>The shipped field is the best at matched support</b> "
+            f"({v['ranking_at_matched_support'][tol][0][1]:.4f} proxy DTI within "
+            f"&plusmn;{float(tol) * 100:.0f}% of {ship['support_px']:,} px), and the ranking is "
+            f"{'stable' if v['ranking_stable_across_windows'] else 'NOT stable'} across the windows "
+            f"tested ({e(json.dumps(v['top_field_by_window']))}).")
+    return f"""<h2 id="fieldaxis">Which field should carry the policy? &mdash; measured at matched support</h2>
+<p>The policy axis is ruled: <code>data/evidence/emission_decision.json</code> ranks candidates by
+their <b>worst-case contrast</b> across four independently measured sweeps, and floor 0.1 / thin /
+width 0 px is first of 132. The <b>field</b> axis was not ruled, and it is not a free parameter in
+disguise &mdash; a floor is a threshold on a field whose scale changes with the number of averaged
+folds, so at floor 0.1 the 6-fold field emits {d['fields'][-1]['adopted_policy']['emission_px'] if d['fields'][-1]['adopted_policy'] else 0:,}
+px while the 16-fold field emits far fewer. Comparing fields at a fixed floor therefore measures the
+floor. The fix is to compare them at <b>matched support</b>: for each field take the best hard
+candidate whose emission is within a window of the shipped support, the same rule for every field,
+and require the ranking to survive every window.</p>
+<table><thead><tr><th>field</th><th>run ids</th><th>DTI at the adopted floor</th>
+<th>support there</th><th>DTI at matched support</th><th>policy needed</th>
+<th>nearest-support DTI</th></tr></thead><tbody>
+{rows}
+</tbody></table>
+{verdict_note}
+{note('info', f"Shipped support <b>{ship['support_px']:,} px</b>, cross-checked against "
+              f"{len([x for x in ship['sources'].values() if isinstance(x, int)])} independent "
+              f"committed sources (agree: {str(ship['sources_agree']).lower()}). Windows tested: "
+              + ", ".join(f"&plusmn;{t * 100:.0f}%" for t in d["support_windows"]) + ".")}
+<ul>
+{''.join(f'<li>{e(c)}</li>' for c in d["caveats"])}
+</ul>"""
+
+
 def _miss_distance(ev: dict) -> str:
     """How far the misses actually are, and what a wider emitted band is worth.
 
@@ -1924,6 +2203,8 @@ coexist (%s): %s</p>
 
     body.append(_proxy_catalogue(ev))
     body.append(_emission_decision(ev))
+    body.append(_block_holdout(ev))
+    body.append(_field_axis(ev))
     body.append(_miss_distance(ev))
     body.append(_scoring_universe(ev))
     body.append(f"""<h2>Remaining caveats</h2>
@@ -2106,6 +2387,7 @@ means it is proposing candidates (what Phase 2 rewards if experts confirm them).
     else:
         body.append(missing("Training run reports.", "GitHub Actions → “Train and build submission”"))
 
+    body.append(_cross_catalogue(ev))
     body.append("""<h2>What the numbers mean</h2>
 <ul>
 <li><b>DTI shaped &gt; DTI raw</b> on every run so far — the floor-plus-thinning step consistently
@@ -2432,6 +2714,17 @@ def main() -> int:
         # The reconciliation of the three disagreeing emission-width measurements, and the decision
         # that follows from it (scripts/decide_emission_width.py).
         "emission_decision": load(ROOT / "data/evidence/emission_decision.json"),
+        # ERROR BARS on that decision: per-block DTI and a paired block bootstrap over 51.2 km
+        # blocks, plus the gate that reproduces the runner's committed sweep row in the sandbox
+        # (scripts/block_holdout_eval.py).
+        "block_stratified": load(ROOT / "data/evidence/block_holdout/block_stratified.json"),
+        # The FIELD axis at matched support: a floor is a threshold on a field whose scale changes
+        # with the number of averaged folds, so fields are compared at equal emission, not at a
+        # shared threshold (scripts/compare_emission_fields.py).
+        "field_axis": load(ROOT / "data/evidence/emission_field_axis.json"),
+        # Cross-catalogue transfer: emit catalogue A (SGMC), score against catalogue B (QFaults).
+        # Written on a runner - earthquake.usgs.gov is not reachable from the sandbox.
+        "xcat_transfer": load(ROOT / "data/evidence/xcat/transfer_report.json"),
         # The localization/detection split on the new-fault-like population: how far the unseen
         # faults actually are from the emitted set, and what each emitted band width is worth
         # (scripts/measure_miss_distance.py).

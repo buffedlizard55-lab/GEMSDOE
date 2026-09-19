@@ -72,10 +72,18 @@ def _plant_outputs(tmp: Path, mc_in_manifest: int, heldout_mc: int) -> None:
 
 
 def _run_staging(tmp: Path, env_extra: dict, matrix_fold: int = 0) -> subprocess.CompletedProcess:
-    import os
+    import sys
 
     script = _render(_step("fold", "Stage fold outputs")["run"], matrix_fold=matrix_fold)
     env = dict(os.environ)
+    # The staging script calls a bare `python`, so it inherits whatever is first on PATH.  On a
+    # runner that is the interpreter `pip install -r requirements.txt` populated; in a local
+    # venv it is the SYSTEM python, which has no numpy, and the step then failed for an
+    # environment reason instead of testing the contract (measured 2026-09-18: two red tests
+    # whose only output was "ModuleNotFoundError: No module named 'numpy'").  Pinning the
+    # interpreter's own bin directory to the front of PATH makes the executed contract test
+    # hermetic without changing the script under test.
+    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), env.get("PATH", "")])
     env.update(env_extra)
     return subprocess.run(["bash", "-c", script], cwd=tmp, env=env,
                           capture_output=True, text=True)

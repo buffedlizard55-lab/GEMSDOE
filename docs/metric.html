@@ -148,6 +148,44 @@ interpretation of GeoDAWN geophysics that the prize scores: these are policy com
 leaderboard predictions. Held-out-crop rows for reference, where the same widening costs:
 <table><thead><tr><th>in-domain policy</th><th>mean held-out DTI</th></tr></thead><tbody><tr><td>floor 0.469674, width 0 px</td><td class="num">0.1903</td></tr><tr><td>floor 0.469674, width 1 px</td><td class="num">0.1525</td></tr><tr><td>floor 0.469674, width 3 px</td><td class="num">0.1128</td></tr><tr><td>floor 0.469674, width 6 px</td><td class="num">0.0908</td></tr>
 </tbody></table></p>
+<h2 id="errorbars">Does the emission decision survive an error bar? &mdash; measured</h2>
+<p>The metric is one global ratio, so it has no standard error of its own. Resampling the survey's
+own unit &mdash; <b>512 px = 51.2 km blocks</b>, 34 of
+56 scoreable &mdash; gives it one: per-block TP<sub>w</sub>/FP<sub>w</sub>/FN<sub>w</sub>
+are aggregated (<code>src/metrics.block_aggregate</code>, asserted to sum to the global score) and a
+<b>paired block bootstrap</b> redraws blocks with replacement, recomputing the global ratio for every
+candidate on the same draw (<code>bootstrap_from_blocks</code>, 2000 resamples).</p>
+<table><thead><tr><th>candidate</th><th>proxy DTI</th><th>CI95 (block bootstrap)</th>
+<th>P(beats reference)</th><th>catalogue DTI</th></tr></thead><tbody>
+<tr class="hl"><td><code>floor0.1_w0px</code></td><td class="num"><b>0.0999</b></td><td class="num">[0.0883, 0.1119]</td><td class="num"><b>reference</b></td><td class="num">0.2298</td></tr><tr><td><code>floor0.1_w1px</code></td><td class="num"><b>0.0878</b></td><td class="num">[0.0744, 0.1016]</td><td class="num">0.008</td><td class="num">0.1913</td></tr><tr><td><code>floor0.1_w2px</code></td><td class="num"><b>0.0823</b></td><td class="num">[0.0678, 0.0982]</td><td class="num">0.007</td><td class="num">0.1647</td></tr><tr><td><code>floor0.1_w3px</code></td><td class="num"><b>0.0793</b></td><td class="num">[0.0638, 0.0965]</td><td class="num">0.009</td><td class="num">0.1414</td></tr><tr><td><code>floor0.1_w4px</code></td><td class="num"><b>0.0777</b></td><td class="num">[0.0618, 0.0956]</td><td class="num">0.009</td><td class="num">0.1259</td></tr><tr><td><code>floor0.1_w6px</code></td><td class="num"><b>0.0755</b></td><td class="num">[0.0590, 0.0938]</td><td class="num">0.009</td><td class="num">0.1021</td></tr><tr><td><code>floor0.1_w8px</code></td><td class="num"><b>0.0740</b></td><td class="num">[0.0574, 0.0926]</td><td class="num">0.006</td><td class="num">0.0895</td></tr><tr><td><code>floor0.1_w12px</code></td><td class="num"><b>0.0715</b></td><td class="num">[0.0549, 0.0902]</td><td class="num">0.003</td><td class="num">0.0767</td></tr><tr><td><code>floor0.1_w16px</code></td><td class="num"><b>0.0693</b></td><td class="num">[0.0525, 0.0876]</td><td class="num">0.001</td><td class="num">0.0697</td></tr><tr><td><code>floor0.1_w20px</code></td><td class="num"><b>0.0670</b></td><td class="num">[0.0508, 0.0848]</td><td class="num">0.000</td><td class="num">0.0652</td></tr><tr><td><code>floor0.15_w0px</code> <span class="muted">= floor0.1_w0px</span></td><td class="num"><b>0.0999</b></td><td class="num">[0.0883, 0.1119]</td><td class="num">0.000</td><td class="num">0.2298</td></tr><tr><td><code>floor0.15_w1px</code> <span class="muted">= floor0.1_w1px</span></td><td class="num"><b>0.0878</b></td><td class="num">[0.0744, 0.1016]</td><td class="num">0.008</td><td class="num">0.1913</td></tr>
+</tbody></table>
+<div class="note ok"><b>The adopted policy holds.</b> Reference <code>floor0.1_w0px</code> scores <b>0.0999</b> on the new-fault-like population, CI95 [0.0883, 0.1119], against 0.2298 on the catalogue population. The best genuinely different candidate in the sweep (<code>floor0.1_w1px</code>, 0.0878, -0.0121) beats it with probability <b>0.008</b>, and its worst single block is -0.0579. Widening is monotone harmful on both populations.</div>
+<div class="note ok"><b>Reproduced on two environments.</b> The GitHub-hosted runner measured DTI 0.099859 (TP<sub>w</sub> 8378.12, FP<sub>w</sub> 164461.741, FN<sub>w</sub> 53285.88, 172,974 px) for this policy in <code>data/evidence/proxy/eval_sweep-mean12.json</code>; the development sandbox scores the shipped bytes at DTI 0.099859 (TP<sub>w</sub> 8378.120, FP<sub>w</sub> 164461.741, FN<sub>w</sub> 53285.880, 172,974 px). The check is a gate, not a comment: <code>--crosscheck-sweep</code> exits 2 on a mismatch.</div>
+<div class="note info"><b>34 independent resampling units</b> (of 56 blocks in the partition, 2000 resamples): the interval is readable. 34 independent resampling units: the CI95 is readable and comparable with other runs of this script that score a similar number of blocks. It quantifies spatial sampling noise in this footprint, not uncertainty over truth definitions or over the hidden set.</div>
+<div class="note info"><b>Field:</b> 2 distinct values, 172,974 emitted px, hard band true. The two populations prefer the same candidate in the same block in <b>0.747</b> of scoreable cases on average.</div>
+<ul>
+<li><b>The floor axis is degenerate for this raster.</b> 50 candidates were swept but only <b>10</b> distinct emissions exist: a hard-band submission carries two values, so every floor above the applied one selects the same support. Duplicates are detected by sha1 of the emission and labelled, not silently counted.</li><li><b>No candidate won a majority of blocks while losing globally</b> in this run (<code>interpretation.n_conflicts = 0</code>). The check is computed each run because DTI is not decomposable over blocks, so it is a property of the data, not of the code.</li><li><b>Scope:</b> this is a <em>reshaping</em> measurement on the shipped ensemble, which trained on every block. It is not a generalisation reading - that needs a fold trained with <code>training.holdout: spatial_blocks</code> and scored with <code>--score-fold K</code> (<code>configs/config_block_holdout.yaml</code>).</li>
+</ul>
+<h2 id="fieldaxis">Which field should carry the policy? &mdash; measured at matched support</h2>
+<p>The policy axis is ruled: <code>data/evidence/emission_decision.json</code> ranks candidates by
+their <b>worst-case contrast</b> across four independently measured sweeps, and floor 0.1 / thin /
+width 0 px is first of 132. The <b>field</b> axis was not ruled, and it is not a free parameter in
+disguise &mdash; a floor is a threshold on a field whose scale changes with the number of averaged
+folds, so at floor 0.1 the 6-fold field emits 464,736
+px while the 16-fold field emits far fewer. Comparing fields at a fixed floor therefore measures the
+floor. The fix is to compare them at <b>matched support</b>: for each field take the best hard
+candidate whose emission is within a window of the shipped support, the same rule for every field,
+and require the ranking to survive every window.</p>
+<table><thead><tr><th>field</th><th>run ids</th><th>DTI at the adopted floor</th>
+<th>support there</th><th>DTI at matched support</th><th>policy needed</th>
+<th>nearest-support DTI</th></tr></thead><tbody>
+<tr><td><b>ens123</b></td><td><code>35042805806,35249562910,35263581931</code></td><td class="num">0.0850</td><td class="num">144,738</td><td class="num">0.0850</td><td class="num">(0.1, 0 px)</td><td class="num">0.0440</td></tr><tr><td><b>ensemble2</b></td><td><code>35249562910</code></td><td class="num">0.0777</td><td class="num">131,117</td><td class="num">0.0777</td><td class="num">(0.1, 0 px)</td><td class="num">0.0433</td></tr><tr class="hl"><td><b>mean12</b> &larr; shipped</td><td><code>35042805806,35249562910</code></td><td class="num">0.0999</td><td class="num">172,974</td><td class="num">0.0999</td><td class="num">(0.1, 0 px)</td><td class="num">0.0999</td></tr><tr><td><b>ensemble1</b></td><td><code>35042805806</code></td><td class="num">0.1365</td><td class="num">464,736</td><td class="num">0.0644</td><td class="num">(0.3, 1 px)</td><td class="num">0.0644</td></tr>
+</tbody></table>
+<div class="note ok"><b>The shipped field is the best at matched support</b> (0.0999 proxy DTI within &plusmn;25% of 172,974 px), and the ranking is stable across the windows tested ({&quot;0.15&quot;: &quot;mean12&quot;, &quot;0.25&quot;: &quot;mean12&quot;, &quot;0.4&quot;: &quot;mean12&quot;}).</div>
+<div class="note info">Shipped support <b>172,974 px</b>, cross-checked against 2 independent committed sources (agree: true). Windows tested: &plusmn;15%, &plusmn;25%, &plusmn;40%.</div>
+<ul>
+<li>the new-fault-like proxy population (USGS SGMC structure absent from the labels) is a SURROGATE for the scored truth, not the scored truth; every ranking here inherits that limitation (data/evidence/emission_decision.json caveats)</li><li>matched support equalises the NUMBER of emitted pixels, not their spatial distribution: two fields at equal support can still differ in how much of that support is wrong mass</li><li>the unconstrained-best column is a maximum over ~130 candidates on the same population the comparison is judged by - it is upward biased and is reported for completeness, never as a shipping recommendation</li><li>no rule in this repository currently selects the field; this script reports the measurement and says so rather than deciding</li>
+</ul>
 
 <h2 id="miss">How far are the misses? Localization vs detection</h2>
 <p>Every width argument so far came from sweeping <i>floors</i> on the ensemble probability map.
@@ -262,7 +300,7 @@ the first honest signal; the private split and the Phase-2 revision are hidden.<
 </ul>
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-18 22:36 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-19 00:57 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>

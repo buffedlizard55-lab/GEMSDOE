@@ -33,7 +33,28 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import rasterio
-from torch.utils.data import Dataset
+
+# torch is a TRAINING dependency, not a data dependency.  The documented fast path
+# (EXECUTIVE_SUMMARY.md §0: assemble_data_bridge -> prepare_data -> validate_submission)
+# must run on a machine that only has numpy/scipy/rasterio/scikit-image installed - a 2.5 GB
+# torch install is not a prerequisite for placing or validating a GeoTIFF.  Measured defect
+# 2026-09-18: with torch absent, `python scripts/prepare_data.py` died on this import, so the
+# submission guide's own quickstart failed on a clean environment.  The stub keeps module
+# import cheap and turns the failure into a precise, actionable error at the point torch is
+# actually needed (constructing a FaultDataset).
+try:
+    from torch.utils.data import Dataset as _TorchDataset
+except ModuleNotFoundError:                                   # pragma: no cover - env dependent
+    class _TorchDataset:
+        """Placeholder base so this module imports without torch."""
+
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError(
+                "FaultDataset requires torch. Install the training dependencies "
+                "(`pip install -r requirements.txt`) - or, if you only need to place and "
+                "validate competition data, use scripts/assemble_data_bridge.py, "
+                "scripts/prepare_data.py and scripts/validate_submission.py, which do not."
+            )
 
 FEATURE_NAME_CANDIDATES = (
     "training_features.tif",              # problem page
@@ -191,8 +212,15 @@ def make_patches(
     neg_fraction: float = 0.35,
     R_pixels: int = 3,
     min_px_per_patch: int = 3,
+    holdout: str = "random",
+    block_px: int = 512,
+    block_folds: int = 4,
+    block_fold: int = 0,
+    block_buffer_px: Optional[int] = None,
+    block_mode: str = "balanced",
+    block_seed: int = 0,
 ):
-    """Reference-style leakage-free split + overlapping training windows.
+    """Leakage-free split + overlapping training windows.
 
     Returns dict with:
       X_tr, y_tr, fpw_tr (lists of arrays), X_te, y_te, test_origin (row, col of each test
@@ -204,7 +232,34 @@ def make_patches(
       3. keep windows that contain >= min_px_per_patch fault pixels, plus `neg_fraction`
          of empty windows (hard negatives make the model calibrate, unlike the reference,
          which trains only on fault-containing windows)
+
+    TWO HOLD-OUT DESIGNS (`holdout=`)
+    ---------------------------------
+    ``"random"`` (default, unchanged behaviour) - the reference solution's Monte-Carlo split:
+      `test_proportion` of the valid non-overlapping windows are drawn with the fold's RNG.
+      Reproducible, but the held-out windows are *scattered*, so every one of them is
+      surrounded by training windows that saw the same fault traces (adjacency leak).
+
+    ``"spatial_blocks"`` - `docs/DISCOVERY_PLAN.md` §3(a): the grid is cut into `block_px`
+      blocks (512 px = 51.2 km at the official 100 m resolution) and whole blocks are held
+      out (`src/blocks.py`).  Differences from the random path, each deliberate:
+
+      * test windows are the grid windows **fully inside** the held-out blocks - never a
+        partial window, so no scored pixel is also a training pixel;
+      * training windows are dropped if they touch the held-out blocks **or their
+        `block_buffer_px` collar** (default = `R_pixels` = 3, the metric's own kernel reach),
+        which is stricter than the random path's 25 % overlap rule.  Without the collar a
+        training window one pixel from the boundary could read a label whose fault continues
+        into the held-out block;
+      * the block partition is seeded by `block_seed` (default 0), **not** by the fold's
+        `seed`: fold identity is its geography, and every fold of one experiment must agree on
+        which blocks belong to which fold (Official Rules §3.5 reproducibility).
+
+    `block_mode` selects "balanced" (scattered blocks, mass-balanced - lowest-variance model
+    selection) or "contiguous" (one whole super-region per fold - geographic extrapolation).
     """
+    if holdout not in ("random", "spatial_blocks"):
+        raise ValueError(f"holdout must be 'random' or 'spatial_blocks', got {holdout!r}")
     rng = np.random.default_rng(seed)
     H, W, C = X.shape
     pad_h = (patch_size - H % patch_size) % patch_size
@@ -215,13 +270,49 @@ def make_patches(
 
     # ---- 1. test windows on a non-overlapping grid --------------------------------
     grid = _windows((Hp, Wp), patch_size, patch_size)
-    valid = [(i, j) for (i, j) in grid if np.isfinite(Xp[i:i + patch_size, j:j + patch_size]).any()]
-    n_test = int(round(test_proportion * len(valid)))
-    test_windows = sorted(rng.choice(len(valid), size=n_test, replace=False).tolist())
-    test_windows = [valid[i] for i in test_windows]
-    test_mask = np.zeros((Hp, Wp), bool)
-    for (i, j) in test_windows:
-        test_mask[i:i + patch_size, j:j + patch_size] = True
+    holdout_info = None
+    exclude_mask = None
+    if holdout == "spatial_blocks":
+        from .blocks import (DEFAULT_BUFFER_PX, assign_folds, block_table, describe_partition,
+                             held_out_mask, scored_mask)
+        buf = int(R_pixels if block_buffer_px is None else block_buffer_px)
+        valid_orig = np.isfinite(X).any(axis=-1)
+        labels_orig = y > 0.5
+        tab = block_table((H, W), block_px, valid=valid_orig, labels=labels_orig)
+        fold_of = assign_folds(tab, block_folds, seed=block_seed, mode=block_mode)
+        scored = scored_mask((H, W), block_px, fold_of, block_fold)
+        excluded = held_out_mask((H, W), block_px, fold_of, block_fold, buffer_px=buf)
+        pad_bool = ((0, pad_h), (0, pad_w))
+        scored_p = np.pad(scored, pad_bool, constant_values=False)
+        exclude_mask = np.pad(excluded, pad_bool, constant_values=False)
+        test_windows = [(i, j) for (i, j) in grid
+                        if scored_p[i:i + patch_size, j:j + patch_size].all()
+                        and np.isfinite(Xp[i:i + patch_size, j:j + patch_size]).any()]
+        test_windows = sorted(test_windows)
+        test_mask = scored_p
+        fold_rows = [t for t in tab if fold_of.get(t["block_id"]) == block_fold]
+        holdout_info = dict(
+            mode="spatial_blocks", block_px=int(block_px), block_folds=int(block_folds),
+            block_fold=int(block_fold), block_seed=int(block_seed), block_mode=block_mode,
+            buffer_px=buf,
+            partition=describe_partition((H, W), block_px, block_folds, block_seed, tab,
+                                         fold_of, buffer_px=buf, mode=block_mode),
+            fold=dict(blocks=len(fold_rows),
+                      block_ids=[int(t["block_id"]) for t in fold_rows],
+                      fault_px=int(sum(t["fault_px"] for t in fold_rows)),
+                      valid_px=int(sum(t["valid_px"] for t in fold_rows)),
+                      scored_px=int(scored.sum()),
+                      excluded_px=int(excluded.sum()),
+                      collar_px=int(excluded.sum() - scored.sum())),
+        )
+    else:
+        valid = [(i, j) for (i, j) in grid if np.isfinite(Xp[i:i + patch_size, j:j + patch_size]).any()]
+        n_test = int(round(test_proportion * len(valid)))
+        test_windows = sorted(rng.choice(len(valid), size=n_test, replace=False).tolist())
+        test_windows = [valid[i] for i in test_windows]
+        test_mask = np.zeros((Hp, Wp), bool)
+        for (i, j) in test_windows:
+            test_mask[i:i + patch_size, j:j + patch_size] = True
 
     X_test = np.stack([Xp[i:i + patch_size, j:j + patch_size] for (i, j) in test_windows]) if test_windows \
         else np.zeros((0, patch_size, patch_size, C), np.float32)
@@ -264,8 +355,15 @@ def make_patches(
     cand = _windows((Hp, Wp), patch_size, train_step)
     pos, neg = [], []
     for (i, j) in cand:
-        if test_mask[i:i + patch_size, j:j + patch_size].mean() > 0.25:
-            continue                       # mostly-test window: skip outright
+        if exclude_mask is not None:
+            # SPATIAL BLOCKS: a training window may not touch the held-out blocks OR their
+            # buffer collar at all.  The collar exists because the metric's kernel reaches
+            # R px: a window one pixel from the boundary would otherwise be trained on labels
+            # whose fault trace continues into the scored geography.
+            if exclude_mask[i:i + patch_size, j:j + patch_size].any():
+                continue
+        elif test_mask[i:i + patch_size, j:j + patch_size].mean() > 0.25:
+            continue                       # mostly-test window: skip outright (random hold-out)
         n_fault = int((ytr_src[i:i + patch_size, j:j + patch_size] > 0.5).sum())
         (pos if n_fault >= min_px_per_patch else neg).append((i, j))
     keep = list(pos)
@@ -287,6 +385,13 @@ def make_patches(
         patch=patch_size, train_step=train_step, seed=int(seed), H=Hp, W=Wp, C=C,
         test_windows=[(int(i), int(j)) for (i, j) in test_windows],
         train_windows=[(int(i), int(j)) for (i, j) in keep],
+        # Which geography was held out is part of a fold's IDENTITY, so it is recorded rather
+        # than implied (Official Rules 3.5: assets must reproduce the result).  For the random
+        # hold-out the window list already pins it; for spatial blocks the partition is derived
+        # from (block_px, block_folds, block_fold, block_seed, block_mode) and echoed here so a
+        # reader cannot confuse a block fold with a random split of the same seed.
+        holdout=holdout_info if holdout_info is not None else dict(
+            mode="random", test_proportion=float(test_proportion)),
     )
     return dict(X_train=X_train, y_train=y_train, fpw_train=fpw_train,
                 X_test=X_test, y_test=y_test, summary=summary)
@@ -295,7 +400,7 @@ def make_patches(
 # --------------------------------------------------------------------------------------
 # torch dataset
 # --------------------------------------------------------------------------------------
-class FaultDataset(Dataset):
+class FaultDataset(_TorchDataset):
     """X: (N,H,W,C) normalised, y: (N,H,W), fpw: (N,H,W).  Augment = flips/rot90/noise.
 
     Augmentation is geometry-preserving-with-label (90-degree rotations and flips keep

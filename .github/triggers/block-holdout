@@ -1,0 +1,27 @@
+block-holdout
+
+# 2026-09-18 (session 16): first fire of the block-holdout workflow.
+#
+# WHY: every quality number committed before today was ONE global DTI with no error bar, so
+# "candidate A 0.0878 vs candidate B 0.0999" carried no way to ask whether 0.012 is larger than the
+# noise between 51 km regions of the survey.  scripts/block_holdout_eval.py now scores the shipped
+# submission per 51.2 km block (the partition src/blocks.py already uses) and bootstraps over
+# blocks.  Measured in the development sandbox on the committed bytes:
+#
+#   reference (floor 0.1, width 0) proxy DTI 0.0999, block-bootstrap CI95 [0.0883, 0.1119]
+#   best genuinely different alternative (width 1 px) 0.0878, P(beats reference) = 0.008
+#   50 candidates swept -> only 10 DISTINCT emissions (the shipped raster is a hard band, so the
+#   floor axis is degenerate - reported, not hidden)
+#   the sandbox reproduces the runner's committed sweep row digit for digit
+#   (dti 0.099859, TP_w 8378.12, FP_w 164461.741, FN_w 53285.88, 172,974 px)
+#
+# WHAT THIS FIRE DOES: re-runs the same measurement on a GitHub-hosted runner (independent
+# numpy/rasterio build, independent host) and compares it with the report the sandbox committed -
+# the `measure` job fails if the reference DTI, its three metric components, the support size or the
+# bootstrap interval move.  TRAIN_FOLDS is set to ONE fold (0) so the generalisation reading is
+# measured without spending four 300-minute jobs on a first look: fold 0 trains with whole 51 km
+# blocks held out (configs/config_block_holdout.yaml) and is then scored twice - on the blocks it
+# never saw and on the blocks it trained on - which is the memorisation-vs-transfer gap the
+# scattered-window holdout cannot produce.
+#
+# Parameters: .github/triggers/block-holdout-params

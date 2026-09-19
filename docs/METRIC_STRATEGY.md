@@ -98,6 +98,39 @@ consistently selects `thin=True`.
   trivial baseline, which is exactly what a 2-epoch MobileNetV2 should do and is recorded
   here as an honest negative result, not a success.
 
+## 3b. Error bars: the metric is a global ratio, so its uncertainty comes from blocks
+
+Every number above is one global DTI. A ratio of three sums over 5.2 M valid pixels has no natural
+standard error, and "candidate A 0.0878 vs candidate B 0.0999" is not a decision until the 0.012 can
+be compared with the variability *between regions of the survey*. The fix is not a new metric — it is
+a resampling unit that matches how the survey is structured:
+
+- **Unit.** 512 px blocks = **51.2 km squares** (`src/blocks.py`), the same partition training holds
+  out. 3292×3730 gives 7×8 = 56 blocks, of which **34 are scoreable** (the rest are footprint-empty:
+  no truth and no legal emission).
+- **Statistic.** Per block, `src/metrics.block_aggregate` computes TP_w / FP_w / FN_w / n_gt with a
+  vectorised `bincount` over the block-id map; the per-block components are asserted to sum to the
+  global score (TP/FP/FN to 1e-8), so the decomposition cannot drift from the metric it decomposes.
+- **Resampling.** `src/metrics.bootstrap_from_blocks` draws blocks with replacement and recomputes the
+  *global* ratio from the resampled components — a paired block bootstrap. Every candidate is
+  resampled on the **same** draw, so contrasts are paired rather than two independent intervals.
+- **Measured (2026-09-18, shipped artifact, new-fault-like population).** Reference policy
+  (floor 0.1, thin, width 0): DTI **0.0999, CI95 [0.0883, 0.1119]**. Best genuinely different
+  alternative (width 1 px): 0.0878, **P(beats reference) = 0.008**, worst single block −0.0579.
+  Widening is monotone harmful: 0.0999 → 0.0878 (1 px) → 0.0670 (20 px); on the catalogue population
+  0.2298 → 0.0652. So the adopted policy survives its first error bar with 99.2 % bootstrap support.
+
+**The trap this section exists to prevent.** DTI is *not* decomposable: TP_w is a sum over truth
+pixels while the FP penalty is a global mass term, so a candidate can win in most blocks and lose
+globally. `scripts/block_holdout_eval.py` therefore derives the check
+(`interpretation.n_conflicts`, **0** in the committed run) instead of asserting it, and per-block
+argmax is **not** a policy selector. Blocks buy variance and locality; the global DTI still selects.
+
+Two further honest limits: a shipped hard-band raster has two distinct values, so five floors select
+one support and 50 swept candidates collapse to **10 distinct emissions** (reported as
+`verdict.floor_axis_degenerate`, duplicates detected by sha1); and the interval quantifies spatial
+sampling noise in *this* footprint — not uncertainty over truth definitions or over the hidden set.
+
 ## 4. Caveats (flagged, not hidden)
 
 - These numbers are computed against the **public/known** fault labels. The competition
