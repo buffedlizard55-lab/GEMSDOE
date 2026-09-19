@@ -1,0 +1,37 @@
+config configs/config_pseudo_labels.yaml: block_holdout_eval={"R": 3, "alpha": 0.2, "beta": 0.8, "block_px": 512, "bootstraps": 2000, "crosscheck_sweep": "data/evidence/proxy/eval_sweep-mean12.json", "eps": 1e-07, "floors": "0.1,0.15,0.2,0.3,0.5", "folds": 4, "out": "data/evidence/block_holdout/block_stratified.json", "reference_floor": 0.1, "reference_width": 0, "seed": 0, "widths": "0,1,2,3,4,6,8,12,16,20"}
+
+blocks: 512 px = 51.2 km; 8 of 56 scoreable (22 footprint-empty)
+footprint: 1,352,377 px (11.01 % of the grid)
+populations: catalogue 14,442 px (1,444.2 km) | proxy-only 20,191 px (2,019.1 km)
+
+reference candidate floor0.1_w0px:
+  proxy-only DTI 0.1841  block-bootstrap CI95 [0.0993, 0.2624]
+  catalogue  DTI 0.1239  (in-domain - see the note in the JSON)
+  worst single-block contrast +0.0000; 0 of 7 scoreable blocks gain
+  best of the recoverable sweep: floor0.2_w0px 0.2576 (+0.0734); reference is best: False
+  candidates swept 50, DISTINCT emissions 50 (floor axis degenerate: False)
+  best genuinely different alternative: floor0.2_w0px 0.2576 (+0.0734), P(beats reference over block resamples) = 0.999, worst single block +0.0427
+  prediction field: 1332326 distinct values, 1,352,301 emitted px, hard band False
+
+  candidate                  proxy DTI   CI95 (block bootstrap)     P(>ref)  catalogue DTI
+  floor0.1_w0px              0.1841      [0.0993, 0.2624]       ref    0.1239
+  floor0.1_w1px              0.1130      [0.0563, 0.1727]      0.00   0.0710
+  floor0.1_w2px              0.1044      [0.0515, 0.1607]      0.00   0.0642
+  floor0.1_w3px              0.1008      [0.0495, 0.1553]      0.00   0.0626
+  floor0.1_w4px              0.0984      [0.0481, 0.1515]      0.00   0.0616
+  floor0.1_w6px              0.0941      [0.0460, 0.1444]      0.00   0.0598
+  floor0.1_w8px              0.0906      [0.0444, 0.1385]      0.00   0.0584
+  floor0.1_w12px             0.0851      [0.0417, 0.1289]      0.00   0.0558
+  floor0.1_w16px             0.0807      [0.0399, 0.1199]      0.00   0.0534
+  floor0.1_w20px             0.0769      [0.0385, 0.1122]      0.00   0.0514
+  floor0.15_w0px             0.2490      [0.1477, 0.3272]      1.00   0.1870
+  floor0.15_w1px             0.1338      [0.0683, 0.1997]      0.00   0.0896
+  floor0.15_w2px             0.1111      [0.0556, 0.1688]      0.00   0.0701
+  floor0.15_w3px             0.1051      [0.0524, 0.1599]      0.00   0.0652
+  floor0.15_w4px             0.1022      [0.0507, 0.1556]      0.00   0.0635
+  floor0.15_w6px             0.0976      [0.0481, 0.1486]      0.00   0.0612
+
+  mean per-block sign agreement between the two populations: 0.951 (1.00 = they prefer the same candidate in the same block every time)
+  largest population conflict: floor0.3_w0px gains on the new-fault-like proxy population in 1 of 7 blocks where both populations are scoreable while the catalogue population loses in the same block
+
+wrote data/evidence/pseudo_labels/fold0_heldout.json (1,158,529 bytes)
