@@ -155,7 +155,7 @@ jobs:
             [ -n "$(v PAGE_SIZE)" ]         && PAGE="$(v PAGE_SIZE)" || true
             [ -n "$(v WIDTHS)" ]            && WIDTHS="$(v WIDTHS)" || true
             [ -n "$(v A_CODES)" ]           && CODES="$(v A_CODES)" || true
-            [ -n "$(v BOOTSTRAPS)" ]        && BOOT="$(v BOOT)"     || true
+            [ -n "$(v BOOTSTRAPS)" ]        && BOOT="$(v BOOTSTRAPS)" || true
             [ -n "$(v MIN_UNION_GAIN)" ]    && GAIN="$(v MIN_UNION_GAIN)" || true
             [ -n "$(v MIN_BOOTSTRAP_PROB)" ] && PROB="$(v MIN_BOOTSTRAP_PROB)" || true
             [ -n "$(v SUBMISSION)" ]        && SUB="$(v SUBMISSION)" || true
