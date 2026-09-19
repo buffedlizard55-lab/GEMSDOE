@@ -1,0 +1,13 @@
+# Parameters for .github/workflows/pseudo-label.yml (read by the `params` job).
+#
+# FOLD  0 = the fold whose NO-PSEUDO baseline is already committed
+#       (data/evidence/block_holdout/fold0_heldout.json, seed 46).  A paired reading needs
+#       both arms on the same fold; any other fold must be trained without pseudo first.
+# SEED  46 = the baseline's seed (required for the paired comparison to be honest: fold
+#       identity is its held-out blocks, so the seed must match, not just the partition).
+# PSEUDO_WEIGHT  1.0 = hard pseudo-labels (the pre-registered first measurement).  Must be
+#       >= 0.5 (FaultDataset binarises labels at 0.5).  A soft-weight arm is a follow-up
+#       experiment, not a re-tune.
+FOLD=0
+SEED=46
+PSEUDO_WEIGHT=1.0

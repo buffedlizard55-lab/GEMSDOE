@@ -1,5 +1,18 @@
 block-holdout
 
+# 2026-09-19 (session 18): second fire - folds 1,2,3.
+#
+# Fold 0 landed from the first fire: held-out DTI 0.0806 [0.0586, 0.1021] on 8 scoreable blocks
+# vs trained-on 0.0920 [0.0747, 0.1100] on 26 blocks -> generalisation gap +0.0114
+# (data/evidence/block_holdout/fold0_generalisation_gap.json).  The gap is a PER-FOLD quantity,
+# so one fold gives a point estimate with no spread.  This fire trains folds 1,2,3 (same config,
+# same seed 46 - the fold's identity is its held-out blocks, not the seed) so the committed
+# evidence carries the four-fold distribution of memorisation-vs-transfer.  Fold 0 is not
+# re-trained (its evidence is already committed).
+#
+# Parameters: .github/triggers/block-holdout-params (TRAIN_FOLDS=1,2,3)
+#
+# ---------------------------------------------------------------------------
 # 2026-09-18 (session 16): first fire of the block-holdout workflow.
 #
 # WHY: every quality number committed before today was ONE global DTI with no error bar, so

@@ -48,6 +48,15 @@ name: Re-blend existing fold artifacts -> submission
 #                                   with a width from another is not a measured policy)
 #     SHAPING_SOURCE=<path>         the evidence file the policy was measured in (recorded in the
 #                                   blend report and in the submission's TIFF tags)
+#
+# FIELD-SELECTION GATE (2026-09-19, session 18): the policy axis of the emission decision has
+# always been ruled (data/evidence/emission_decision.json); the FIELD axis now is too, by the
+# pre-registered rule in docs/FIELD_SELECTION_RULE.md (scripts/check_field_selection.py),
+# committed BEFORE this gate exists.  The blend job refuses to run when the RUN_ID set is not
+# the pinned re-blend (i.e. the blend would ship a NEW field) unless the committed
+# data/evidence/field_selection.json says ADOPT of exactly that field with the paired
+# block-bootstrap (R3) MEASURED on both fields' raw rasters.  Re-blending the shipped field
+# (RUN_IDs == the pinned RUN_ID) passes the gate without measurement.
 # =============================================================================
 on:
   workflow_dispatch:
@@ -101,6 +110,7 @@ jobs:
       run_id: ${{ steps.p.outputs.run_id }}
       run_id_2: ${{ steps.p.outputs.run_id_2 }}
       run_id_3: ${{ steps.p.outputs.run_id_3 }}
+      run_id_all: ${{ steps.p.outputs.run_id_all }}
       evidence_dir: ${{ steps.p.outputs.evidence_dir }}
       dilate_grid: ${{ steps.p.outputs.dilate_grid }}
       min_dilate: ${{ steps.p.outputs.min_dilate }}
@@ -165,6 +175,7 @@ jobs:
             echo "run_id=$RUN1"
             echo "run_id_2=$R2"
             echo "run_id_3=$R3"
+            echo "run_id_all=$RUN_ID"
             echo "evidence_dir=$ED"
             echo "dilate_grid=$DIL"
             echo "min_dilate=$MIND"
@@ -195,6 +206,21 @@ jobs:
           set -euo pipefail
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet numpy scipy rasterio scikit-image pyyaml
+
+      - name: FIELD-selection rule gate (docs/FIELD_SELECTION_RULE.md, registered 2026-09-19)
+        run: |
+          set -uo pipefail
+          # The re-blend's field is its RUN_ID set.  Re-blending the PINNED re-blend (the shipped
+          # field) changes nothing about which field ships and passes without measurement.  Any
+          # other RUN_ID set ships a NEW field: docs/FIELD_SELECTION_RULE.md - committed BEFORE
+          # this gate existed - requires a committed field_selection.json whose verdict ADOPTs
+          # exactly that field with the paired block-bootstrap (R3) MEASURED on both fields' raw
+          # rasters.  The gate re-derives the verdict from the committed sweeps; it cannot be
+          # waved through with an environment variable.
+          python scripts/check_field_selection.py --gate \
+              --runs "${{ needs.params.outputs.run_id_all }}" \
+              --out data/evidence/field_selection.json \
+              || { echo "::error:: re-blend refused by the FIELD-selection rule" >&2; exit 1; }
 
       - name: Download fold artifacts from run ${{ needs.params.outputs.run_id }}
         uses: actions/download-artifact@v4

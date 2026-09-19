@@ -128,6 +128,29 @@ def load_labels(path: str) -> Tuple[np.ndarray, dict]:
     return y, meta
 
 
+def load_pseudo_mask(path: str, code: int = 2) -> np.ndarray:
+    """Coded fault raster -> binary mask of the pixels carrying `code`.
+
+    The standard input is `data/evidence/proxy/proxy_catalogue.tif` (0 = no trace,
+    1 = trace within R px of a training label, 2 = trace the labels do NOT contain -
+    the 61,664 px SGMC proxy population).  Pseudo-labels are external-catalogue
+    information the competition explicitly allows (problem page #external-datasets,
+    rules PDF 3.2); the leakage safety is enforced in `make_patches`, not here: only
+    TRAINING windows receive pseudo pixels as label mass, the block partition and the
+    window selection keep using the original labels alone, so a pseudo run and its
+    baseline run train on exactly the same windows and the measured difference is the
+    pseudo signal, nothing else.
+    """
+    with rasterio.open(path) as src:
+        if src.count != 1:
+            raise ValueError(f"{path}: expected a single-band coded raster, got {src.count} bands")
+        a = src.read(1)
+    mask = (a == int(code))
+    if not mask.any():
+        raise ValueError(f"{path}: no pixels with code {code} - nothing to pseudo-label")
+    return mask
+
+
 def band_names(tags: List[dict], n: int) -> List[str]:
     out = []
     for i in range(n):
@@ -219,6 +242,8 @@ def make_patches(
     block_buffer_px: Optional[int] = None,
     block_mode: str = "balanced",
     block_seed: int = 0,
+    pseudo: Optional[np.ndarray] = None,
+    pseudo_weight: float = 1.0,
 ):
     """Leakage-free split + overlapping training windows.
 
@@ -257,6 +282,23 @@ def make_patches(
 
     `block_mode` selects "balanced" (scattered blocks, mass-balanced - lowest-variance model
     selection) or "contiguous" (one whole super-region per fold - geographic extrapolation).
+
+    ``pseudo`` (2026-09-19) - an optional binary mask of pseudo-label pixels (external
+    catalogue, e.g. the SGMC proxy population, `load_pseudo_mask`).  With
+    ``pseudo_weight > 0`` those pixels become positives (value ``pseudo_weight``) in the
+    training labels.  Deliberately narrow, each for a measured reason:
+
+      * the block partition (`block_table` -> `assign_folds`) and the pos/neg WINDOW
+        SELECTION keep using the original labels only: the pseudo run and its baseline
+        run train on exactly the same windows, so the measured DTI difference is the
+        pseudo signal and not a different training set;
+      * the global FP-weight map is computed on original labels UNION pseudo, both
+        already zeroed in the test region (the same leakage fix as the labels): a
+        prediction on a pseudo pixel is a true positive the loss should credit, not a
+        full-weight false positive - but a pseudo pixel inside the held-out region must
+        not reduce the FP weight of training geography;
+      * test windows are untouched: the held-out measurement (and with it the leakage
+        reading) is against the labels, exactly as in the baseline.
     """
     if holdout not in ("random", "spatial_blocks"):
         raise ValueError(f"holdout must be 'random' or 'spatial_blocks', got {holdout!r}")
@@ -329,7 +371,29 @@ def make_patches(
     Xtr_src[test_mask] = 0.0
     ytr_src[test_mask] = 0.0
 
-    # global FP weight map = 1 - max_g k(d(x,g)), computed on the TRAINING labels ONLY.
+    # ---- pseudo-labels (external catalogue, e.g. the SGMC proxy population) ----------
+    # Applied to training windows ONLY, and never to the partition or the window
+    # selection (see the docstring).  `pseudo_src` is the padded, test-region-zeroed
+    # mask; None means the experiment is off and the function is byte-identical to the
+    # baseline path (pinned by tests/test_pseudo_labels.py).
+    pseudo_src = None
+    if pseudo is not None:
+        if pseudo.shape != (H, W):
+            raise ValueError(f"pseudo mask {pseudo.shape} != grid {(H, W)}")
+        if pseudo_weight > 0:
+            if pseudo_weight < 0.5:
+                raise ValueError(
+                    f"pseudo_weight {pseudo_weight} < 0.5 would be silently dropped by the "
+                    f"label binarisation in FaultDataset - use >= 0.5 (1.0 = hard pseudo-label)")
+            if not (pseudo > 0.5).any():
+                pseudo_src = None     # mask provided but empty: nothing to do, pure baseline
+            else:
+                pseudo_p = np.pad(pseudo > 0.5, ((0, pad_h), (0, pad_w)), constant_values=False)
+                pseudo_src = pseudo_p & ~test_mask
+
+    # global FP weight map = 1 - max_g k(d(x,g)), computed on the TRAINING labels ONLY
+    # (UNION the training-region pseudo pixels: a prediction on them is a fault the loss
+    # should credit, not a full-weight false positive).
     #
     # LEAKAGE FIX (2026-09-15): this EDT used to run on `yp`, i.e. *before* the held-out
     # windows were zeroed.  fpw is handed to the loss as "how much a prediction here counts
@@ -342,6 +406,8 @@ def make_patches(
     # carried fpw < 1 before the fix, 0 after.  Held-out DTI was consequently optimistic.
     from scipy.ndimage import distance_transform_edt
     fp_src = (ytr_src > 0.5)
+    if pseudo_src is not None:
+        fp_src = fp_src | pseudo_src
     if fp_src.any():
         d2gt = distance_transform_edt(~fp_src)
         fpw_global = 1.0 - np.maximum(1.0 - d2gt / float(R_pixels), 0.0)
@@ -373,6 +439,19 @@ def make_patches(
         keep += [neg[a] for a in rng.choice(len(neg), size=n_keep, replace=False)]
     keep = sorted(keep)
 
+    # PSEUDO LABELS APPLIED HERE - after selection, so the training set is identical to the
+    # baseline run's: the pos/neg split above used the original labels alone, and only the
+    # label VALUES inside the selected windows change.
+    pseudo_train_px, pseudo_windows = 0, 0
+    if pseudo_src is not None:
+        added = pseudo_src & (ytr_src <= 0.5)
+        pseudo_train_px = int(added.sum())
+        if pseudo_train_px:
+            ytr_src = ytr_src.copy()
+            ytr_src[added] = pseudo_weight
+        pseudo_windows = int(sum(1 for (i, j) in keep
+                                 if (pseudo_src[i:i + patch_size, j:j + patch_size]).any()))
+
     X_train = np.stack([Xtr_src[i:i + patch_size, j:j + patch_size] for (i, j) in keep]) if keep \
         else np.zeros((0, patch_size, patch_size, C), np.float32)
     y_train = np.stack([ytr_src[i:i + patch_size, j:j + patch_size] for (i, j) in keep]) if keep \
@@ -392,6 +471,14 @@ def make_patches(
         # reader cannot confuse a block fold with a random split of the same seed.
         holdout=holdout_info if holdout_info is not None else dict(
             mode="random", test_proportion=float(test_proportion)),
+        pseudo=(dict(enabled=False) if pseudo_src is None else
+                dict(enabled=True, weight=float(pseudo_weight),
+                     mask_px=int((pseudo > 0.5).sum()),
+                     train_px_added=pseudo_train_px,
+                     train_windows_affected=pseudo_windows,
+                     note=("pseudo pixels become label mass in training windows only; partition "
+                           "and window selection used the original labels alone, so this run is "
+                           "compared against the no-pseudo baseline on identical windows"))),
     )
     return dict(X_train=X_train, y_train=y_train, fpw_train=fpw_train,
                 X_test=X_test, y_test=y_test, summary=summary)

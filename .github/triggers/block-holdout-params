@@ -9,9 +9,11 @@
 #             generalisation reading (that ensemble trained on every block), and the report says so
 #             in restriction.note.  The fold-restricted numbers that DO mean something come from the
 #             `train` job below, which scores a model that never saw those blocks.
-# TRAIN_FOLDS 0 = one fold only.  Cost: a single ~150 min training job instead of four.  If the
-#             held-out/complement gap it produces is informative, extend to 0,1,2,3 - the gap is a
-#             per-fold quantity and four folds give its spread, which one fold cannot.
+# TRAIN_FOLDS 1,2,3 (2026-09-19, session 18) - fold 0 landed (gap +0.0114, held-out 0.0806
+#             [0.0586, 0.1021] vs trained-on 0.0920 [0.0747, 0.1100], 8/26 scoreable blocks) and
+#             one fold cannot show a SPREAD: the generalisation gap is a per-fold quantity, and
+#             four folds (0-3) give its distribution.  Fold 0's evidence is already committed
+#             (data/evidence/block_holdout/fold0_*.json), so only 1,2,3 are trained here.
 # BLOCK_PX/FOLDS must equal training.block_px / training.block_folds in
 #             configs/config_block_holdout.yaml: block_holdout_eval.py --config refuses to run when
 #             they disagree, because a score computed on a partition the model was not trained
@@ -26,7 +28,7 @@
 #             a fold's identity is its held-out crop and a reused seed would blur two experiments.
 SUBMISSION=data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif
 SCORE_FOLD=
-TRAIN_FOLDS=0
+TRAIN_FOLDS=1,2,3
 BLOCK_PX=512
 FOLDS=4
 FLOORS=0.1,0.15,0.2,0.3,0.5
