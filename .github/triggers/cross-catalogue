@@ -42,3 +42,19 @@ cross-catalogue
 # fetch and the competition-data bridge on runners.
 #
 # Parameters: .github/triggers/cross-catalogue-params
+
+# 2026-09-19 (session 17): SECOND FIRE, after the first run's failure and after the population guard.
+#
+# The first run (35411164502) fetched and rasterised catalogue B successfully and then died on its
+# "Record overlap" step for a boring reason: it read top-level stats keys, but build_proxy_catalogue.py
+# nests them under `proxy.`.  The step now reads `s["proxy"]`, tells SCHEMA DRIFT apart from a
+# GENUINELY EMPTY population, and downgrades a zero/near-zero code-2 population to ::warning:: so the
+# transfer job still runs and commits its report.
+#
+# What the first run measured, and what this fire is expected to reproduce: of 60,939 catalogue-B
+# pixels inside the scored footprint, 60,938 (100.00 %) are already within R = 3 px of a training label
+# and exactly 1 is code 2; reciprocally 60,986 of the 60,988 label fault pixels lie within R of a
+# QFaults trace.  THE TRAINING LABELS IN THIS FOOTPRINT ARE QFAULTS.  So the expected verdict is
+# `REFUSED` with that overlap as the evidence, written to data/evidence/xcat/transfer_report.json, and
+# the job GREEN - a DTI on a 1-pixel truth population would be noise, and the refusal is the finding.
+# A runner-side refusal also independently reproduces the one already committed from the sandbox.
