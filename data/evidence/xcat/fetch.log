@@ -16,8 +16,8 @@ service reports 14,481 features intersecting the footprint
   offset   12000: +1000 (total 13,000/14,481) exceededTransferLimit
   offset   13000: +1000 (total 14,000/14,481) exceededTransferLimit
   offset   14000: +481 (total 14,481/14,481)
-  link UNREACHABLE: HTTPError: HTTP Error 503: Service Unavailable https://doi.org/10.5066/P9BCVRCK
-  link UNREACHABLE: HTTPError: HTTP Error 503: Service Unavailable https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23
+  link OK_200 (doi)                 https://doi.org/10.5066/P9BCVRCK
+  link OK_200 (sciencebase)         https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23
   link OK_200 (portal)              https://www.usgs.gov/programs/earthquake-hazards/faults
   link OK_200 (service)             https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer?f=json
 
