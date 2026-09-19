@@ -207,6 +207,21 @@ def main():
     names = band_names(tags, X.shape[-1])
     print(f"features {X.shape} labels {y.shape}  bands={names[:4]}{'...' if len(names) > 4 else ''}")
 
+    # PSEUDO-LABELS (external catalogue, allowed by the problem page #external-datasets).
+    # Leakage safety lives in make_patches: training windows only, partition and window
+    # selection on the original labels alone - see the config header for the experiment.
+    pseudo_mask = None
+    pl = cfg["data"].get("pseudo_label_path")
+    if pl:
+        from .dataset import load_pseudo_mask
+        pseudo_code = int(cfg["data"].get("pseudo_code", 2))
+        pseudo_mask = load_pseudo_mask(pl, pseudo_code)
+        if pseudo_mask.shape != y.shape:
+            raise ValueError(f"pseudo mask grid {pseudo_mask.shape} != label grid {y.shape} - "
+                             f"the coded raster must be on the competition grid")
+        print(f"pseudo-labels: {int(pseudo_mask.sum()):,} px (code {pseudo_code}) from {pl} "
+              f"- training windows only; held-out measurement is against the labels")
+
     stats_path = out_dir / "norm_stats.json"
     if stats_path.exists():
         nstats = load_norm_stats(stats_path)
@@ -232,6 +247,14 @@ def main():
         cuda=torch.cuda.is_available(), torch=torch.__version__,
         feature_file=str(cfg["data"].get("feature_path")), models=[],
     )
+    if pseudo_mask is not None:
+        manifest["pseudo"] = dict(
+            path=str(pl), code=int(cfg["data"].get("pseudo_code", 2)),
+            weight=float(cfg["training"].get("pseudo_weight", 1.0)),
+            mask_px=int(pseudo_mask.sum()),
+            leakage_note=("training windows only; block partition and window selection use the "
+                          "original labels alone, so the held-out measurement against the labels "
+                          "cannot be a restatement of the pseudo pixels the model was shown"))
 
     loss_name = cfg["training"].get("loss", "combined_dw")
     criterion = (CombinedLoss(alpha=cfg["training"]["alpha"], beta=cfg["training"]["beta"], R=R_px)
@@ -277,8 +300,15 @@ def main():
             block_buffer_px=tr.get("block_buffer_px", None),
             block_mode=str(tr.get("block_mode", "balanced")),
             block_seed=int(tr.get("block_seed", 0)),
+            pseudo=pseudo_mask,
+            pseudo_weight=float(tr.get("pseudo_weight", 1.0)),
         )
         print("patches:", {k: v for k, v in res["summary"].items() if not k.endswith("_windows")})
+        ps = res["summary"].get("pseudo") or {}
+        if ps.get("enabled"):
+            print(f"pseudo: +{ps['train_px_added']:,} training-label px "
+                  f"(weight {ps['weight']}) across {ps['train_windows_affected']} windows; "
+                  f"partition and window selection unchanged (original labels alone)")
         ho = res["summary"].get("holdout") or {}
         if ho.get("mode") == "spatial_blocks":
             f = ho.get("fold", {})

@@ -1,6 +1,105 @@
-# Project status — 2026-09-19 (sessions 11–17)
+# Project status — 2026-09-19 (sessions 11–18)
 
-## Session 17 (current session, 2026-09-19) — the two dispatched measurements landed: one reproduced bit-for-bit, one refused itself with a finding
+## Session 18 (current session, 2026-09-19) — the field axis got a pre-registered rule and a machine gate; the block-holdout got its fold-0 gap; the pseudo-label route was built, proven leakage-safe, and dispatched
+
+Session 17 closed the cross-catalogue question (refused) and left three open work items from the
+plan: commit a FIELD-selection rule before any re-blend, dispatch block-holdout folds 1–3, and
+build the SGMC pseudo-label experiment under spatial holdout. All three are done; the first two
+are running on runners now.
+
+1. **FIELD-selection rule: pre-registered, machine-checked, gate-locked (new).**
+   The policy axis (floor/thin/width) was adopted by measurement in session 13, but the *field*
+   axis — which ensemble mean ships — had been changed by hand twice (16-fold ens123 in session 14,
+   reverted to 11-fold mean12 in session 16 after it scored 0.0850 vs 0.0999). That is a policy
+   decided without a rule, so this session commits one before any further re-blend:
+
+   * `docs/FIELD_SELECTION_RULE.md` pre-registers it: eligibility F1 (pinned re-blend provenance
+     chain: the field's RUN_ID set must equal the trigger file's, and the evidence dir's live-fold
+     count must equal both the blend report's n_folds and the trigger's MIN_FOLDS) and F2 (a
+     committed proxy sweep with a reference_t0 and an adopted row); adoption R1 (best-in-window
+     beats the shipped field by a fixed 0.010 margin), R2 (top of all three support windows), R4
+     (beats the current policy's measured DTI), R5 (≥ 3 independent candidates in the window) — and
+     R3, a paired 2,000-resample block bootstrap of the per-block DTI difference on **both fields'
+     raw probability rasters** with P(new > shipped) ≥ 0.95. R3 is deliberately *unmeasurable from
+     committed bytes*: until both raw rasters are supplied, every non-shipped field is refused, and
+     a synthetic field that passes F1/F2/R1/R2/R4/R5 with R3 unmeasured is refused by a test.
+   * `scripts/check_field_selection.py` is the rule's machine checker (constants are rule
+     constants in the file: margin 0.010, P threshold 0.95, 2000 bootstraps, 3 candidates). It
+     runs over all committed proxy sweeps + the shipped field and writes
+     `data/evidence/field_selection.json`. Verdict on the committed evidence: **KEEP mean12** —
+     mean12 passes F1 (11 live folds == n_folds == MIN_FOLDS), F2, R2, R4, R5; ens123 fails F1
+     (its second run dir is not committed → UNVERIFIED) and R1 (0.0850 < 0.0999 − 0.010); the
+     single ensembles fail R1 outright.
+   * The gate is wired into `reblend.yml` as the first data step of the blend job
+     (`--gate --runs <full RUN_ID set>`): the pinned re-blend (the shipped field) passes without
+     measurement; any other RUN_ID set passes only if the committed `field_selection.json` says
+     ADOPT of exactly that field with R3 measured, otherwise the job fails before downloading a
+     byte. The step's position (before any download) is pinned by a new test, and the trigger
+     file documents the four-step path to ship a new field.
+   * `tests/test_field_selection.py` (7 tests) pins the rule end to end, including a synthetic
+     field (real shipped raster + 0.45 mass on ~5,500 isolated proxy-truth pixels) whose sweep
+     rows are *measured from the raster* — it is refused while R3 is unmeasured and ADOPTs
+     end-to-end (gate rc 0) once R3 is measured with p ≥ 0.95; the margin is a rule constant
+     (patch it and the verdict flips).
+
+2. **Block-holdout: fold 0 landed with a +0.0114 gap; folds 1–3 are in flight.**
+   `data/evidence/block_holdout/fold0_generalisation_gap.json`: fold 0 (seed 46, 51 km blocks held
+   out) scores **0.0806 [0.0586, 0.1021]** on the 8 blocks it never saw vs **0.0920
+   [0.0747, 0.1100]** on the 26 blocks it trained on — a positive memorisation-vs-transfer gap,
+   i.e. the model does not fully transfer to unseen 51 km regions, and the gap is small enough
+   that the proxy policy reading survives. One fold is a point estimate with no spread, so
+   `TRAIN_FOLDS=1,2,3` is now in `.github/triggers/block-holdout-params` (fold 0 not re-trained;
+   same seed 46 — fold identity is its geography) and the trigger push dispatches the three 300-min
+   jobs. This session's push fires both it and the pseudo-label fire below.
+
+3. **SGMC pseudo-labels: built, leakage-proven by test, smoke-trained, dispatched (new).**
+   The scored faults are new, the labels are a lower bound, and external catalogues are allowed
+   (rules §3.2) — QFaults proved to be the labels themselves, so the SGMC proxy's code-2
+   population (61,664 px of mapped trace the labels do NOT contain) is the only remaining
+   external-catalogue route. What was added:
+
+   * `src/dataset.py`: `load_pseudo_mask()` and a `pseudo=`/`pseudo_weight=` path in
+     `make_patches`, designed for the paired comparison: the block partition and the pos/neg
+     **window selection use the original labels alone** (a pseudo run and its baseline run train
+     on exactly the same windows), the held-out region is zeroed out of the pseudo mask before it
+     touches the training signal (label mass *and* the FP-weight map, the same leakage rule as the
+     labels), and pseudo pixels become label mass in training windows only. Empty-mask and
+     `pseudo=None` are byte-identical (pinned).
+   * `configs/config_pseudo_labels.yaml` — the block-holdout config plus exactly three keys
+     (pseudo path/code/weight 1.0); a test pins that the two configs differ only there.
+   * `.github/workflows/pseudo-label.yml` + trigger + params: trains fold 0 (seed 46 = the
+     baseline's seed) with the pseudo config, scores the raw field with `--score-fold 0`
+     (held-out blocks) and `--score-fold 0 --complement`, then **paired-bootstraps** the held-out
+     arm against the committed no-pseudo baseline (0.0806 [0.0586, 0.1021]) and commits
+     `data/evidence/pseudo_labels/fold0_paired_vs_baseline.json`. The header states plainly that
+     no shipping decision is made there: a pseudo-labelled ensemble reaches the leaderboard only
+     through the field-selection gate as a new RUN_ID with measured R3.
+   * `tests/test_pseudo_labels.py` (7 tests) pins the leakage design on synthetic grids: baseline
+     invariance, pseudo mass in training windows only (test windows byte-identical), FP weight
+     credited at training-region pseudo pixels (fpw = 0) and unchanged beyond their R-px reach,
+     and no training window touching the held blocks' collar — the channel through which a
+     held-out pseudo pixel could otherwise leak.
+   * Verified end to end in the sandbox: the full torch stack is installed locally now
+     (torch 2.14.0+cu130, smp 0.5.0, timm 1.0.29 — PyPI, since download.pytorch.org is
+     egress-blocked), and a fixture-grid smoke run trained 1 epoch with the pseudo path
+     (`pseudo: +31 training-label px across 6 windows; partition and window selection unchanged`),
+     with the experiment pinned in `outputs/manifest.json`.
+
+**Verification.** Local suite **318 passed, 1 skipped** (the skip is the pre-existing
+evidence-dependent rules-quote extraction; the baseline was 301 passed before this session's 17
+new tests). The two new workflows parse and pass the static lints, including three new ones: the
+gate must sit before any data step in reblend.yml, the pseudo-label scoring must be
+`--score-fold`-restricted and must pair against the baseline's *held-out* (not complement)
+report, and the committed pseudo fire must target a fold whose baseline is committed. Site
+rebuilt from `scripts/build_site.py` (executive summary §6 + §12 rows 2/7 + final note; results
+page scope note and follow-up list).
+
+**Now running on runners (this session's push):** block-holdout folds 1–3 (3 × 300 min) and the
+pseudo-label fold 0 (1 × 300 min). **Next session:** read the four landed reports (the fold gap
+spread + the pseudo paired contrast), update the site and STATUS, and pick the next experiment —
+most likely 1 m DEM derivatives or the GPU full config, per the §12 ordering.
+
+## Session 17 (2026-09-19) — the two dispatched measurements landed: one reproduced bit-for-bit, one refused itself with a finding
 
 Session 16 ended with two measurements running on GitHub-hosted runners because the sandbox cannot
 reach `earthquake.usgs.gov`. Both came back, and they came back with opposite kinds of answer.

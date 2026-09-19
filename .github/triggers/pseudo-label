@@ -1,0 +1,25 @@
+pseudo-label
+
+# 2026-09-19 (session 18): first fire - fold 0 with SGMC pseudo labels, seed 46.
+#
+# WHY: the scored faults are NEW (rules 1.1/3.3), so the labels are a lower bound on the
+# truth and external fault catalogues are the only allowed extra signal (problem page
+# #external-datasets).  The QFaults transfer attempt was refused on a total overlap with the
+# labels; the SGMC proxy's code-2 population (61,664 px of mapped trace the labels do NOT
+# contain) is independent of the labels by construction, so this is the only remaining
+# external-catalogue route.
+#
+# WHAT THIS FIRE DOES: trains fold 0 (configs/config_pseudo_labels.yaml = the block-holdout
+# config plus the pseudo pixels as training-window label mass, weight 1.0, seed 46 = the
+# baseline's seed) and scores the raw probability field on fold 0's HELD-OUT blocks with the
+# same policy (floor 0.1, w0), then paired-bootstraps it against the committed no-pseudo
+# baseline (data/evidence/block_holdout/fold0_heldout.json: held-out proxy DTI 0.0806
+# [0.0586, 0.1021]).  The pseudo model never saw those blocks' pseudo pixels (training
+# windows only - src/dataset.py::make_patches), so a gain on the held-out blocks is
+# generalisation of the SGMC-mapped fault style, not label leakage.
+#
+# NO SHIPPING DECISION IS MADE HERE: a pseudo-labelled ensemble reaches the leaderboard only
+# through the field-selection gate (docs/FIELD_SELECTION_RULE.md) as a new reblend.yml
+# RUN_ID with measured R3.  This fire produces the measurement such an adoption would need.
+#
+# Parameters: .github/triggers/pseudo-label-params
