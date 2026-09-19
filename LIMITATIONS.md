@@ -1,3 +1,55 @@
+## Session 19 (2026-09-19) — what the third population and the four-fold gap do and do not license
+
+1. **The combined (union) population is a surrogate, not the private truth, and its DTI is not a
+   predicted score.** It is the disjoint union of two *local* catalogues — the competition's
+   `labels.tif` (60,988 px) and the SGMC proxy's code-2 pixels that the labels do not contain
+   (61,664 px) — so it contains **no expert-verified new faults**, which is what rules §3.6 scores
+   in both phases. The shipped artifact's **0.207431 CI95 [0.192924, 0.222879]** on that union is
+   therefore *not comparable* to the public leaderboard's top score of 0.1972 and must never be
+   quoted as a predicted standing. What it does license: a **third, differently-composed population
+   on which the adopted emission policy was re-tested and held** (the only better candidate is
+   +0.0054 at P = 0.815, below both pre-registered bars).
+2. **`FP_w` is not decomposable across truth populations.** `TP_w` and `FN_w` are sums over *truth*
+   pixels and the two populations are disjoint, so they add; `FP_w` is a sum over *prediction*
+   pixels (1 − max_g k(d(x,g))), so the union's `FP_w` is **not** the sum of the components'. Any
+   sentence of the form "the union DTI follows from the two component DTIs" is false — the union must
+   be scored from the rasters, which is why both workflows now pass `--combined-population`.
+3. **The four-fold generalisation gap is a spread of point readings, not a distribution with error
+   bars.** Folds have 8, 9, 9 and 8 scoreable blocks; a readable block-bootstrap interval needs ≥12,
+   so every per-fold interval is flagged `interval_readable: false` by the scorer itself. The gap's
+   **sign is not stable across folds** (+0.0114, −0.0070, +0.0139, +0.0093). Per-fold rankings are
+   not supported by this evidence, and the **full-grid DTI (0.099859, reproduced digit-for-digit on a
+   runner) remains the selection statistic**.
+4. **The first pseudo-label fire's raw field is unrecoverable.** Run 35451858126's artifact did not
+   carry `outputs/prob_raw.tif`, so that arm can never be scored on the union (or on any future
+   population). The re-fire is a **new training run** with the same seed, partition and config, i.e. a
+   *replicate*, not the same field: if its proxy-only contrast differs from +0.1036 within training
+   noise, that is expected, not a contradiction. The fixed artifact list (`outputs/prob_raw.tif` +
+   `outputs/manifest.json`) is what prevents this class of loss going forward.
+5. **The baseline arm's union numbers depend on an artifact retention window.** They come from
+   downloading run 35413207736's `block-holdout-fold-0` artifact (24.8 MB, `retention-days: 14`,
+   **expires 2026-10-03**) and re-scoring it after a sha256 gate. After that date the baseline's union
+   population can only be read from the committed sibling JSON this fire produces — or by retraining
+   fold 0. The committed JSON survives; the raster does not.
+6. **Artifact downloads are egress-blocked in this sandbox**, so the download-and-re-score step
+   cannot be exercised locally end to end: it is verified by static lint (the sha256 gate, the
+   `run-id` parameter plumbing, the `continue-on-error` path, the missing-file warning) and by the
+   API listing that proves the artifact exists and its size. The *scoring* it feeds is the same
+   `--combined-population` code path that produced `combined_truth_shipped.json` locally.
+7. **The union contrast for fold 0 does not exist yet.** `fold0_two_population_contrast.json` reports
+   `combined: NOT_SCORED` for both scopes on the committed evidence, and that is the correct state:
+   the reader refuses to invent a number for a population it has no rasters for. It becomes measured
+   only when the re-fired workflow lands both arms' sibling reports.
+8. **GitHub Pages is served by the legacy branch build, not by `pages.yml`.** Verified 2026-09-19:
+   `build_type: legacy`, `source: {branch: main, path: "/"}`; `/GEMSDOE/docs/executive_summary.html`
+   resolves while `/GEMSDOE/executive_summary.html` 404s, even though the Actions deploy job reports
+   success with a `docs/`-rooted artifact. **Limitation:** every README/site link is correct for the
+   legacy build only; switching Pages to the workflow build would break all of them at once, so the
+   mismatch is flagged here rather than "fixed" in one file.
+9. **Submitting is still human-only.** No DrivenData account or credentials exist in this sandbox
+   (the data tab redirects to login), so nothing here can enrol, upload, read a public score, or make
+   the single final selection. `docs/submission.html` is the handover checklist for the person who can.
+
 ## Session 16 (2026-09-18) — what the new error bars do and do not license
 
 1. **The emission decision now has an error bar, and the bar does not move the decision.** Block-stratified
