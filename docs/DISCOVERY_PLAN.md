@@ -86,15 +86,30 @@ About page; paywalled abstract only in this sandbox, cited here as the About pag
 The About page additionally lists the classical toolbox the sponsors had in mind — "edge detection,
 Hough transforms, and deep learning on seismic or topographic datasets" — as legitimate approaches.
 
-## 3. Measurement protocol we need (and do not have yet)
+## 3. Measurement protocol (a and b implemented; b2 built and dispatched)
 
 We cannot see the scored faults, so the honest options are:
 
-**(a) Spatial block hold-out as the selection signal.** Split the GeoDAWN grid into large blocks
-(e.g. 5×5), train with one block fully excluded, and measure the metric on that block. This is not the
-same problem as the competition (the block's faults are still *catalogue* faults, and the model has
-seen neighbouring terrain), but it is strictly harder than random-window CV and it removes the
-adjacency leak that random windows have. Use it to compare models, and report it next to catalogue DTI.
+**(a) Spatial block hold-out as the selection signal — IMPLEMENTED 2026-09-18.** Split the GeoDAWN
+grid into large blocks, train with one block fully excluded, and measure the metric on that block. This
+is not the same problem as the competition (the block's faults are still *catalogue* faults, and the
+model has seen neighbouring terrain), but it is strictly harder than random-window CV and it removes the
+adjacency leak that random windows have.
+
+What exists now:
+
+| piece | where | status |
+|---|---|---|
+| partition (512 px = **51.2 km** blocks, 4 folds, greedy normalised-load assignment, 3 px collar = the metric's R) | `src/blocks.py` | implemented; `tests/test_blocks.py` (22) pins the fold balance that an absolute-mass variant broke ([8192, 8192, 6144, 215552] valid px) |
+| training with whole blocks held out | `configs/config_block_holdout.yaml` (`training.holdout: spatial_blocks`) → `src/train.py` | wired; not yet run at scale (`.github/workflows/block-holdout.yml`, `TRAIN_FOLDS`) |
+| per-block scoring + paired block bootstrap | `scripts/block_holdout_eval.py`, `src/metrics.block_aggregate`, `bootstrap_from_blocks` | **measured**: proxy DTI 0.0999, CI95 [0.0883, 0.1119], P(width-1 px beats it) = 0.008 |
+| fold-restricted scoring (held-out vs trained-on blocks) | `--score-fold K [--complement]` | implemented; the generalisation gap is a pair of measured numbers with CIs, and the report says when a number is only a *reshaping* measurement |
+| partition cross-check | `--config` refuses to score on a partition the config does not train against (exit 2) | implemented |
+
+Reported next to catalogue DTI as promised: 0.0999 (new-fault-like) vs 0.2298 (catalogue, in-domain)
+for the same artifact, and the two populations agree in sign in 0.747 of blocks on average. **Caveat
+carried from `docs/METRIC_STRATEGY.md` §3b:** DTI is not decomposable over blocks, so per-block winners
+are not policy winners — blocks buy variance and locality, the global DTI still selects.
 
 **(b) A proxy catalogue for "faults missing from the catalogue".** Compile fault traces for the
 GeoDAWN region from sources that are *independent* of the INGENIOUS compilation used for the training
@@ -105,6 +120,58 @@ labels do not contain. The metric on that subset is a *defensible* surrogate for
 metric, and it is measurable today. Its weakness must be stated wherever it is reported: the proxy is
 built from published maps, whereas the scored faults were drawn by experts looking at the geophysics,
 so the proxy can be systematically easier or harder.
+
+*Status 2026-09-18:* the SGMC proxy is built, committed and scored
+(`data/evidence/proxy/proxy_catalogue.tif`, 61,664 code-2 px = 6,166 km; a catalogue-copy submission
+scores **0.0** there, which is the acceptance control proving the population is not a restatement of the
+labels). Its structural weakness is now explicit: **the proxy is only one catalogue**, so it cannot say
+whether a policy travels between independently compiled catalogues or merely fits that catalogue's
+mapping style. That is item **(b2)** below.
+
+**(b2) A SECOND independent catalogue, and the transfer measurement — MEASURED 2026-09-19, verdict
+`REFUSED`: the second catalogue is not independent of the labels.** Emit catalogue A (SGMC), score
+against catalogue B (USGS Quaternary Fault and Fold Database, QFaults layer 21 "National Database",
+DOI 10.5066/P9BCVRCK, public domain), and report transfer as a prior on hidden-expert-set recall.
+The measurement ran on a runner and answered a different question than intended — a more useful one:
+
+* `scripts/fetch_qfaults.py` reads the layer metadata and its renderer vocabulary at run time (nothing
+  hand-copied), computes the footprint envelope from `data/labels.tif` (never typed), pages until the
+  fetched count **equals** the count the service reports (14,482 verified live 2026-09-18), and writes a
+  provenance sidecar with every request URL and live link checks. A silent truncation fails the run —
+  a partial catalogue would understate transfer and look like a negative scientific result.
+* `scripts/measure_cross_catalogue_transfer.py` runs **controls first** (labels-copy ≈ 0 against B-only,
+  B-copy = 1.0, blanket-ones floor), then emits A's code-2 pixels at several widths, scores against B's
+  code-2 pixels, and tests `union(model, A)` — a probability maximum, not a mask OR — against a
+  **pre-registered** criterion: gain > 0.01 DTI **and** P(union > model) ≥ 0.95 over paired block
+  resamples. The verdict is derived: `ADOPT` / `DO NOT ADOPT` / `REFUSED` (controls failed) /
+  `NOT MEASURABLE` (no model field).
+* Known limits recorded in the code, not discovered later: QFaults is independent of A but **not** of the
+  training labels (rules §3.3 — INGENIOUS distributes Quaternary fault layers), so only B's **code-2**
+  pixels are scored, and the overlap fraction is measured rather than assumed; if that population is
+  empty the measurement refuses to run.
+
+**What the run found.** 14,481 features fetched (`fetched == service_reported`, integrity gate passed)
+and rasterised on the competition grid: **169,115** B pixels in total, **108,176** of them outside the
+scored footprint (NaN in the submission, therefore unscored), leaving **60,939** inside it. Of those,
+**60,938 (100.00 %)** are already within R = 3 px of a training label and exactly **1 pixel** is code 2.
+The reciprocal is just as tight: **60,986 of the 60,988** label fault pixels (99.997 %) lie within R of a
+QFaults trace. **In this footprint the training labels are QFaults.**
+
+So the population the transfer test needs — faults an expert compiled that the labels lack — is one
+pixel wide, and no statistic computed on it means anything. `measure_cross_catalogue_transfer.py`
+therefore refuses by pre-registered threshold (`--min-b-only-px 100`, `--min-b-only-fraction 0.005`),
+writes `data/evidence/xcat/transfer_report.json` **with the overlap that establishes the refusal**, and
+exits 0: a finding, not a failure. A near-empty B raster (< `--min-b-all-px 1000` in-footprint pixels —
+empty, misaligned or miscoded) still exits non-zero, so a data bug cannot masquerade as a result.
+
+**What this closes and what it leaves open.** Closed: the idea that a second *Quaternary* catalogue can
+supply a hidden-expert-set prior here — none is independent of these labels, and that is now measured
+rather than argued. Open: the SGMC proxy population (`data/evidence/proxy/proxy_catalogue.tif`, 61,664
+code-2 px, 24.94 % already covered by the labels) remains the only available surrogate for "faults the
+labels lack", with its structural weakness intact — pre-Quaternary bedrock structure digitised from
+state geologic maps, not an expert interpretation of the GeoDAWN geophysics. Any future candidate
+catalogue must be checked for disjointness with `build_proxy_catalogue.py` **before** a transfer number
+is quoted.
 
 **(c) Discovery diagnostics on any submission or probability map** — implemented, no extra data
 needed (`src/discovery.py`, tests in `tests/test_discovery.py`):

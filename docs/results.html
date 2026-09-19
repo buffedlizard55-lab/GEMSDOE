@@ -204,6 +204,41 @@ means it is proposing candidates (what Phase 2 rewards if experts confirm them).
 </tbody></table>
 <table><thead><tr><th>Epoch</th><th>Loss</th><th>DTI raw</th><th>DTI shaped</th><th>TP_w</th><th>FP_w</th></tr></thead><tbody><tr><td>1</td><td class="num">0.6209</td><td class="num">0.0102</td><td class="num">0.0496</td><td class="num">367</td><td class="num">108,169</td></tr><tr><td>2</td><td class="num">0.5771</td><td class="num">0.0249</td><td class="num">0.0588</td><td class="num">701</td><td class="num">69,375</td></tr></tbody></table>
 <p><b>Full-raster score vs public labels:</b> <code>DTI=0.08160  TP_w=6872.8  FP_w=170299.2  FN_w=54115.2  |G|=60988  (R=3px)</code></p>
+<h2 id="xcat">Cross-catalogue transfer &mdash; measured, and REFUSED</h2>
+<p>Catalogue A (SGMC structure, DOI 10.3133/ds1052) was to be emitted and scored against catalogue B
+(QFaults layer 21, DOI 10.5066/P9BCVRCK) on B&rsquo;s code-2 pixels &mdash; the traces the training
+labels do not contain. The runner fetched B and rasterised it on the competition grid, and that
+population turned out to be one pixel wide.</p>
+<div class="note bad"><b>Verdict: REFUSED - catalogue B is NOT independent of the training labels: 60,938 of its 60,939 in-footprint pixels (100.00 %) are already within R = 3 px of a label, leaving 1 px (0.0016 %) as a &#x27;new fault&#x27; population - below the pre-registered minimum of 100 px and 0.50 %. Scoring against 1 pixel(s) would produce a number with no meaning, so none is reported. This is a FINDING about the two catalogues, not a bug: it means the training labels and catalogue B are the same lines in this footprint, and it is recorded with the overlap that establishes it.</b></div>
+<table class="kv"><tbody>
+<tr><th>Features fetched</th><td><b>14,481</b> of 14,481 reported by the service &mdash; integrity gate <code>fetched == service_reported (else the run fails)</code> passed, so the catalogue is not silently truncated</td></tr><tr><th>Source links</th><td>4 of 4 reachable from the runner (https://doi.org/10.5066/P9BCVRCK, https://www.sciencebase.gov/catalog/item/589097b1e4b072a7ac0cae23, https://www.usgs.gov/programs/earthquake-hazards/faults, https://earthquake.usgs.gov/arcgis/rest/services/haz/Qfaults/MapServer?f=json)</td></tr><tr><th>B on the whole grid</th><td>169,115 px rasterised, of which <b>108,176</b> fall outside the scored footprint (NaN in the submission, therefore unscored)</td></tr>
+<tr><th>B inside the footprint</th><td><b>60,939 px</b> =
+  6,094 km of Quaternary fault trace</td></tr>
+<tr><th>&hellip;already in the labels</th><td><b>60,938 px
+  (100.00%)</b> lie within R = 3 px
+  (300 m) of a training label &mdash; code 1, unscored by construction</td></tr>
+<tr><th>&hellip;left as &ldquo;new&rdquo;</th><td><b>1 px
+  (0.0016%)</b> &mdash; below the pre-registered minimum of
+  100 px / 0.50%</td></tr>
+<tr><th>The reciprocal</th><td><b>60,986 of 60,988</b>
+  label fault pixels (99.997%) lie within R of a QFaults trace.
+  <b>In this footprint the training labels <i>are</i> QFaults.</b></td></tr>
+<tr><th>Reported numbers</th><td><b>none.</b> <code>measurements: []</code>,
+  <code>controls_pass: false</code>, <code>exit_code: 0</code> &mdash; a DTI computed against
+  1 truth pixel(s) would be noise, and publishing it would be exactly the kind of
+  unsupported number this repository refuses to produce</td></tr>
+</tbody></table>
+<div class="note warn"><b>Why this exits 0 and not 1.</b> &ldquo;These two catalogues are the same lines&rdquo; is a finding about the data, so it is committed as a report with the overlap that establishes it (<code>data/evidence/xcat/transfer_report.json</code>, input sha256s included). A genuinely broken B raster &mdash; under <code>--min-b-all-px</code> 1,000 in-footprint pixels, i.e. empty, misaligned or miscoded &mdash; still fails the run and writes nothing, so a defect can never masquerade as a result.</div>
+<p><b>What this closes.</b> Rules &sect;3.3 says the scored faults are a <i>new</i> expert set, and
+&sect;11 item 1 of the executive summary asked for a prior on recall against it. That prior cannot
+come from a second Quaternary catalogue: none is independent of these labels, and that is now
+measured rather than argued. The SGMC proxy population
+(<code>data/evidence/proxy/proxy_catalogue.tif</code>, 61,664 code-2 px, 24.94% already covered by
+the labels) remains the only available surrogate for &ldquo;faults the labels lack&rdquo;, with its
+structural weakness intact &mdash; pre-Quaternary bedrock structure digitised from state geologic
+maps, not an expert interpretation of the GeoDAWN geophysics. Any future candidate catalogue must be
+checked for disjointness with <code>scripts/build_proxy_catalogue.py</code> <b>before</b> a transfer
+number is quoted.</p>
 <h2>What the numbers mean</h2>
 <ul>
 <li><b>DTI shaped &gt; DTI raw</b> on every run so far — the floor-plus-thinning step consistently
@@ -235,7 +270,7 @@ means it is proposing candidates (what Phase 2 rewards if experts confirm them).
 </ol>
 </main>
 <footer><div class="wrap">
-  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-18 22:36 UTC</p>
+  <p>Generated by <code>scripts/build_site.py</code> from the evidence JSON in this repository · 2026-09-19 01:35 UTC</p>
   <p>Unofficial working notes. Authoritative sources: <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/">competition</a> ·
      <a href="https://www.drivendata.org/competitions/306/competition-doe-gems/page/967/">problem description</a> · <a href="https://docs.nlr.gov/docs/fy26osti/96647.pdf">official rules</a> ·
      <a href="https://github.com/buffedlizard55-lab/GEMSDOE">repository</a></p>

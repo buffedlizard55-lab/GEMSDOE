@@ -1,6 +1,170 @@
-# Project status — 2026-09-17 (sessions 11–14)
+# Project status — 2026-09-19 (sessions 11–17)
 
-## Session 15 (current session, 2026-09-18) — Executive summary subpage polished for submission, data bridge re-verified, 175 tests + audit pass
+## Session 17 (current session, 2026-09-19) — the two dispatched measurements landed: one reproduced bit-for-bit, one refused itself with a finding
+
+Session 16 ended with two measurements running on GitHub-hosted runners because the sandbox cannot
+reach `earthquake.usgs.gov`. Both came back, and they came back with opposite kinds of answer.
+
+1. **Block-holdout: an independent environment reproduced the sandbox numbers exactly.**
+   `data/evidence/block_holdout/sandbox_vs_runner.json` compares ten quantities between the sandbox
+   computation and the runner's own — global DTI, weighted TP/FP/FN, emitted pixels, block counts,
+   footprint pixels and both bootstrap CI bounds. **`agree: true` on all ten**; DTI **0.099859** to six
+   decimals and CI95 **[0.088338, 0.111886]** identical. This is the strongest reproducibility result
+   in the repository: the headline emission number is not a sandbox artifact.
+
+2. **Cross-catalogue transfer: `REFUSED`, and the refusal is the scientific result.** The runner
+   fetched QFaults layer 21 for the footprint — **14,481 features**, `fetched == service_reported`,
+   provenance sidecar with every request URL — and rasterised it on the competition grid with the same
+   script that rasterises catalogue A (SGMC). The overlap with the training labels is **total**:
+
+   | quantity | value |
+   |---|---|
+   | catalogue B (QFaults) pixels, whole grid | 169,115 |
+   | …of which outside the scored footprint (NaN in the submission) | 108,176 |
+   | **B pixels inside the scored footprint** | **60,939** |
+   | already within R = 3 px of a training label (code 1) | **60,938 — 100.00 %** |
+   | left as a "new fault" population (code 2) | **1 px (0.0016 %)** |
+   | label fault pixels within R of a QFaults trace | **60,986 of 60,988 — 99.997 %** |
+
+   **The training labels in this footprint are QFaults.** That was anticipated as a possibility in the
+   code and in LIMITATIONS (rules §3.3 — the labels come from the INGENIOUS Great Basin compilation,
+   which distributes Quaternary fault layers), and it is now measured rather than assumed. A DTI
+   computed against a 1-pixel truth population would be pure noise, so nothing is reported.
+
+3. **The refusal is now a pre-registered guard, not an ad-hoc crash.**
+   `scripts/measure_cross_catalogue_transfer.py` takes `--min-b-only-px 100` /
+   `--min-b-only-fraction 0.005`: below either, it raises `PopulationDegenerate`, which `main` catches,
+   writes the report **with the overlap that establishes it** (population table, thresholds, input
+   sha256s, the caveat naming the SGMC proxy as the surviving surrogate) and **exits 0** — because
+   "these two catalogues are the same lines" is a measurement worth committing. A genuinely broken
+   B raster (under `--min-b-all-px 1000` in-footprint pixels: empty, misaligned or miscoded) still
+   exits non-zero, so a data bug can never masquerade as a finding. Both paths are pinned by tests
+   (`tests/test_cross_catalogue.py`, now 15 tests, including one that asserts the committed QFaults
+   report agrees with `qfaults_stats.json`).
+
+4. **The real refusal report is committed**: `data/evidence/xcat/transfer_report.json` (4.5 KB),
+   computed locally from the runner-fetched raster against the shipped submission
+   (sha256 `a3dcd6d5…`). Verdict string: `REFUSED - catalogue B is NOT independent of the training
+   labels …`. `controls_pass: false`, `measurements: []`, `exit_code: 0`.
+
+5. **Workflow hardened.** `.github/workflows/cross-catalogue.yml` had failed on its "Record overlap"
+   step by reading top-level stats keys that do not exist (the real schema nests under `proxy.`). It now
+   reads `s["proxy"]`, distinguishes **schema drift** from a **genuinely empty population**, prints the
+   per-class breakdown, and downgrades a zero/near-zero code-2 population to a `::warning::` instead of
+   failing the job — so the transfer job runs and commits the REFUSED report. The job-summary step
+   renders both report schemas (REFUSED and full). All 13 embedded Python blocks in all 12 workflows
+   parse; every workflow YAML validates.
+
+6. **Consequence for strategy.** The prior on hidden-expert-set recall that EXECUTIVE_SUMMARY §11
+   item 1 asked for **cannot come from a second Quaternary catalogue** — none is independent of these
+   labels. Detection upside must come from 1 m DEM derivatives (§11 item 3) or model capacity (item 6),
+   and the first unbiased signal remains the public leaderboard (item 8, human-gated). Item 5
+   (ensemble 4) is **deferred on evidence**: at matched support the 11-fold shipped mean scores 0.0999
+   against 0.0850 for the 16-fold blend, so more folds did not help.
+
+7. **The workflow then failed for a second, unrelated reason — worth recording.** With the overlap
+   step fixed, the transfer job started and died in 28 s with `argument --bootstraps: invalid int
+   value: ''`. The params job contained `[ -n "$(v BOOTSTRAPS)" ] && BOOT="$(v BOOT)"` — it tested one
+   key and assigned from another, and `BOOT` is not a key in
+   `.github/triggers/cross-catalogue-params`, so the good `|| '1000'` fallback was clobbered with an
+   empty string. The defect had been invisible for a session because the first run failed *earlier*, in
+   the qfaults job, so the transfer job never started. Fixed, and three **static** lints added to
+   `tests/test_workflow_yaml.py` (3 → 6 tests) that fail on this class without a runner: the tested key
+   must equal the read key; a key read in an assignment must be set in the params file or documented in
+   the workflow header; and an output interpolated straight into a `--flag` must have a non-empty
+   fallback, because a push-triggered run has no `github.event.inputs` at all. Mutation-checked by
+   restoring the original line (lints 1 and 2 fail with the offending `file:line`).
+
+8. **Third fire: green, and the refusal reproduced on the runner.** All three jobs succeeded (run
+   35412827594). The runner re-fetched QFaults a third time — 14,481 features again, integrity gate
+   passed — and produced a **byte-identical** raster (sha256 `3fb2ca73…`) and an **identical REFUSED
+   report**: same 60,939 / 60,938 / 1 population, same label-side reciprocal (60,986 of 60,988), same
+   thresholds, `exit_code: 0`, scored against the shipped submission (`a3dcd6d5…`). The finding is now
+   reproduced across three fetches and two environments, and the job summary renders it instead of a
+   stack trace.
+
+9. **PR #23 opened**: <https://github.com/buffedlizard55-lab/GEMSDOE/pull/23> (`arena/01a0b6b1-gemsdoe`
+   → `main`), carrying session 16's work plus the runner evidence and this session's guard.
+   **Local test status:** 285 passed, 2 skipped, and 4 torch-dependent tests that cannot collect because
+   the sandbox `.venv` no longer has torch (`.venv` is not persisted between sessions); the runner suite
+   with torch is green on the PR.
+
+## Session 16 (2026-09-18) — error bars on every emission number, the field axis settled, and the cross-catalogue measurement built end to end
+
+Until this session every quality number in the repository was **one global DTI with no error bar**,
+so a 0.012 difference between two emission policies carried no way to ask whether it was larger than
+the noise between regions of the survey. Three things changed.
+
+1. **Block-stratified evaluation with a paired block bootstrap** — `scripts/block_holdout_eval.py`
+   (new) scores the shipped submission per 51.2 km block (the same partition `src/blocks.py` uses for
+   training) and bootstraps over blocks via the new `src/metrics.block_aggregate` /
+   `bootstrap_from_blocks`. Measured on the committed bytes, in the sandbox:
+
+   | quantity | value |
+   |---|---|
+   | reference policy (floor 0.1, thin, width 0) proxy DTI | **0.0999** |
+   | block-bootstrap CI95 (56 blocks, 34 scoreable) | **[0.0883, 0.1119]** |
+   | best genuinely different alternative (width 1 px) | 0.0878 (**−0.0121**) |
+   | P(alternative beats reference) over block resamples | **0.008** |
+   | catalogue (in-domain) DTI at the same policy | 0.2298 |
+   | written support | 172,974 px |
+   | candidates swept → **distinct** emissions | 50 → **10** (floor axis degenerate) |
+
+   The adopted policy is now the best of the recoverable sweep **with 99.2 % bootstrap support**, and
+   the degenerate floor axis (a hard-band raster has two values, so five floors select one support)
+   is reported as `verdict.floor_axis_degenerate` instead of implying 50 independent measurements.
+   Evidence: `data/evidence/block_holdout/block_stratified.json` (345 KB; per-block rows of duplicate
+   emissions are pruned after every consumer has run, with the twin named).
+2. **The sandbox reproduces the runner's committed evidence digit for digit.** The same reference row
+   the GitHub-hosted runner measured (`data/evidence/proxy/eval_sweep-mean12.json`: dti 0.099859,
+   TP_w 8378.12, FP_w 164461.741, FN_w 53285.88, 172,974 px) is reproduced locally to ≤ 4.4e-4 on the
+   components and exactly on DTI and support. `--crosscheck-sweep` makes that a **gate**: a mismatch
+   exits 2, and `reproduction.status` is committed inside the report. `.github/workflows/block-holdout.yml`
+   (new) runs the same measurement on a runner and fails if the two environments disagree.
+3. **The field axis is settled, and the shipped field is the right one.** A floor is a threshold on a
+   field whose scale changes with the number of averaged folds, so "the same policy" is not the same
+   emission: floor 0.1 / thin / width 0 emits 464,736 px on the 6-fold field and 144,738 px on the
+   16-fold one. `scripts/compare_emission_fields.py` (new) therefore compares fields at **matched
+   support** (best hard candidate within ±15/25/40 % of the shipped 172,974 px, same rule for every
+   field): mean12 **0.0999** > ens123 0.0850 > ensemble2 0.0777 > ensemble1 0.0644, and the ranking is
+   **stable in all three windows**. Ensemble 1's apparently superior 0.1365 was entirely a support
+   effect. Evidence: `data/evidence/emission_field_axis.json`; the record also states that **no
+   pre-registered rule covers the field axis**, which is the gap to close before any re-blend.
+4. **Cross-catalogue transfer built end to end** (EXECUTIVE_SUMMARY §11 item 1): `scripts/fetch_qfaults.py`
+   (new) fetches USGS QFaults layer 21 "National Database" for the footprint — service metadata read at
+   run time, class vocabulary taken from the layer's own renderer, **integrity gate** `fetched ==
+   service-reported` (14,482 features verified live 2026-09-18), full provenance sidecar with live link
+   checks. `scripts/measure_cross_catalogue_transfer.py` (new) runs the **controls first** (labels-copy
+   must score ≈ 0 against B-only, B-copy must score 1.0, blanket-ones gives the trivial floor), then
+   emits catalogue A at several widths, scores against QFaults code-2 pixels, and tests
+   `union(model, A)` — a probability maximum, not a mask OR — against a **pre-registered** criterion
+   (gain > 0.01 DTI and P(union > model) ≥ 0.95 over block resamples). The verdict is derived:
+   `ADOPT` / `DO NOT ADOPT` / `REFUSED` (controls failed) / `NOT MEASURABLE` (no model field).
+   `.github/workflows/cross-catalogue.yml` (new) runs both on a runner, where `earthquake.usgs.gov` is
+   reachable (it is not from the sandbox: curl exit 35).
+5. **Block-holdout training path wired**: `configs/config_block_holdout.yaml` (new) sets
+   `training.holdout: spatial_blocks` with `block_px`/`block_folds` that `block_holdout_eval.py --config`
+   **cross-checks against its own scoring partition** (disagreement exits 2 — a score computed on a
+   partition the model was not trained against is not a holdout score). `--score-fold K [--complement]`
+   restricts the measurement to the blocks fold K held out, or to the blocks it trained on, so the
+   generalisation gap is a measured pair of numbers with CIs rather than an assertion.
+6. **Two defects found and fixed while reviewing this work**: the population-conflict counter counted
+   the catalogue side alone and so overstated the conflict 32 blocks where the true both-signs conflict
+   is 9 (`blocks_labels_lose` vs `blocks_conflict_labels_lose_proxy_gains`, now both reported and
+   pinned by a test); and `build_proxy_catalogue.py` read the class vocabulary only from
+   `query.rule_id_to_class`, which silently produced unnamed per-class rows for QFaults (it nests under
+   `classes.rule_id_to_class`) — both keys are now accepted and the one used is recorded.
+7. **Tests: 291 passed, 2 skipped** (was 175) — new suites `test_block_decomposition.py`,
+   `test_block_holdout_eval.py` (28), `test_cross_catalogue.py` (12), `test_fetch_qfaults.py` (15),
+   `test_compare_emission_fields.py` (10), `test_blocks.py`, `test_spatial_holdout.py`.
+
+**Interpretation note that is now derived, not asserted:** DTI is *not* decomposable over blocks — TP_w
+sums over truth pixels while the FP penalty is a global mass term — so a candidate can win in most
+blocks and lose globally. Blocks are for **variance** (the bootstrap) and for locating where a score
+comes from; the **global DTI remains the selection statistic**. `block_holdout_eval.py` computes whether
+that conflict occurred (`interpretation.n_conflicts`, 0 in this run) instead of claiming it in prose.
+
+## Session 15 (2026-09-18) — Executive summary subpage polished for submission, data bridge re-verified, 175 tests + audit pass
 
 1. **Executive summary subpage polished for direct submission:** `docs/executive_summary.html` now opens with a **TL;DR 5-command box** (`git pull` → `assemble_data_bridge.py` → `prepare_data.py` → `validate_submission.py` → upload) pointing at the pre-computed, format-validated `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif` (sha256 `a3dcd6d5…`, 569.5 KB, 11-fold ensemble, floor 0.1/thin/w0, rank 1 of 132). Companion markdown `EXECUTIVE_SUMMARY.md` adds the same quickstart, a **Common Pitfalls** table (6 measured failures + prevention), a **Data Placement Resolved** section (35168924460 → bridge → re-verify), a **Limitations** table, and a **Next Steps** queue. Both cite official sources line-by-line with `docs/data_catalog.csv` (89 rows) and machine evidence.
 2. **Data placement re-verified in sandbox (2026-09-18):** `python scripts/assemble_data_bridge.py` (5 parts → 418,912,844 B, sha256 `4371c82e…`), `python scripts/prepare_data.py` (**PASS**, 3292×3730, 19 bands, EPSG:32611, 100 m), `python scripts/validate_submission.py` on shipped submission (**PASS**). Evidence: `data/evidence/data_placement.json` + fresh terminal output.

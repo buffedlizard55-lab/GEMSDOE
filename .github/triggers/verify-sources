@@ -13,3 +13,9 @@ docs/link_verification.json and docs/data_catalog.verified.csv.
 
 # 2026-09-16 (session 7): fire the rules-quote re-check for the 10 sentences added from an
 # independent extraction path, and re-verify every catalog URL including the six new SGMC rows.
+
+# 2026-09-19 (session 17): re-verify every catalog URL including the new row E39 (the QFaults
+# rasterisation and its measured overlap with labels.tif), and refresh docs/data_catalog.verified.csv
+# and docs/link_verification.json.  The runner-side fetch of 2026-09-19 recorded transient HTTP 503s
+# from doi.org and sciencebase.gov in data/evidence/xcat/fetch_meta.json; this run says whether they
+# were transient.

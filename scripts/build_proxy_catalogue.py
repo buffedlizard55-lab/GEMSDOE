@@ -199,7 +199,19 @@ def main() -> int:
         per_rule_px[str(rule)] = int(((drawn > 0) & (coded == CODE_ONLY)).sum())
 
     fetch_meta = json.loads(Path(a.fetch_meta).read_text()) if Path(a.fetch_meta).exists() else None
-    names = ((fetch_meta or {}).get("query", {}) or {}).get("rule_id_to_class", {}) or {}
+    # Two fetchers, two provenance layouts, ONE consumer.  scripts/fetch_proxy_faults.py (SGMC)
+    # nests the class vocabulary under `query.rule_id_to_class`; scripts/fetch_qfaults.py (QFaults,
+    # catalogue B for the cross-catalogue measurement) nests it under `classes.rule_id_to_class`.
+    # Reading only the first silently produced unnamed per-class rows for the second catalogue, so
+    # both are accepted and the key actually used is recorded in the stats.
+    names, names_key = {}, None
+    for key in ("query.rule_id_to_class", "classes.rule_id_to_class"):
+        cur = fetch_meta or {}
+        for part in key.split("."):
+            cur = (cur or {}).get(part) if isinstance(cur, dict) else None
+        if cur:
+            names, names_key = cur, key
+            break
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -238,6 +250,7 @@ def main() -> int:
             "dropped": proj["dropped"],
             "template": str(tmpl_path),
             "labels": str(labels_path),
+            "class_vocabulary_key": names_key,
             "R_pixels": a.R,
             "R_meters": a.R * px_m,
         },
