@@ -62,7 +62,28 @@ reach `earthquake.usgs.gov`. Both came back, and they came back with opposite ki
    (ensemble 4) is **deferred on evidence**: at matched support the 11-fold shipped mean scores 0.0999
    against 0.0850 for the 16-fold blend, so more folds did not help.
 
-7. **PR #23 opened**: <https://github.com/buffedlizard55-lab/GEMSDOE/pull/23> (`arena/01a0b6b1-gemsdoe`
+7. **The workflow then failed for a second, unrelated reason — worth recording.** With the overlap
+   step fixed, the transfer job started and died in 28 s with `argument --bootstraps: invalid int
+   value: ''`. The params job contained `[ -n "$(v BOOTSTRAPS)" ] && BOOT="$(v BOOT)"` — it tested one
+   key and assigned from another, and `BOOT` is not a key in
+   `.github/triggers/cross-catalogue-params`, so the good `|| '1000'` fallback was clobbered with an
+   empty string. The defect had been invisible for a session because the first run failed *earlier*, in
+   the qfaults job, so the transfer job never started. Fixed, and three **static** lints added to
+   `tests/test_workflow_yaml.py` (3 → 6 tests) that fail on this class without a runner: the tested key
+   must equal the read key; a key read in an assignment must be set in the params file or documented in
+   the workflow header; and an output interpolated straight into a `--flag` must have a non-empty
+   fallback, because a push-triggered run has no `github.event.inputs` at all. Mutation-checked by
+   restoring the original line (lints 1 and 2 fail with the offending `file:line`).
+
+8. **Third fire: green, and the refusal reproduced on the runner.** All three jobs succeeded (run
+   35412827594). The runner re-fetched QFaults a third time — 14,481 features again, integrity gate
+   passed — and produced a **byte-identical** raster (sha256 `3fb2ca73…`) and an **identical REFUSED
+   report**: same 60,939 / 60,938 / 1 population, same label-side reciprocal (60,986 of 60,988), same
+   thresholds, `exit_code: 0`, scored against the shipped submission (`a3dcd6d5…`). The finding is now
+   reproduced across three fetches and two environments, and the job summary renders it instead of a
+   stack trace.
+
+9. **PR #23 opened**: <https://github.com/buffedlizard55-lab/GEMSDOE/pull/23> (`arena/01a0b6b1-gemsdoe`
    → `main`), carrying session 16's work plus the runner evidence and this session's guard.
    **Local test status:** 285 passed, 2 skipped, and 4 torch-dependent tests that cannot collect because
    the sandbox `.venv` no longer has torch (`.venv` is not persisted between sessions); the runner suite

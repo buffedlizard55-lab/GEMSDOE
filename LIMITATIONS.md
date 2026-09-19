@@ -47,7 +47,9 @@
    with its known weakness: pre-Quaternary bedrock structure rather than an expert interpretation of the
    geophysics. This was anticipated in the code before the fetch ("if QFaults and the labels turned out
    to be the same lines, that population would be empty and the measurement would refuse to run rather
-   than report 0") and is now confirmed with data.
+   than report 0") and is now confirmed with data — **reproduced three times**: two runner fetches and
+   one sandbox computation all return 14,481 features, a byte-identical raster (sha256 `3fb2ca73…`) and
+   the same REFUSED report with `exit_code: 0`.
 6. **Block-holdout *training* is wired but not yet run.** `configs/config_block_holdout.yaml` +
    `--score-fold K [--complement]` can produce a genuine generalisation gap, and the scoring partition is
    cross-checked against the training partition at runtime (disagreement exits 2). **Limitation:** the

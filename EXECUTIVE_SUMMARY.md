@@ -335,9 +335,14 @@ Competition **explicitly permits external data** provided license allows challen
 > (`--min-b-only-px 100`), writes the refusal **with the overlap that establishes it**, and exits 0.
 > (2) **Runner reproduction is bit-for-bit**: an independent GitHub-hosted environment reproduced the
 > block-stratified evidence exactly — DTI **0.099859**, CI95 **[0.088338, 0.111886]**, `agree: true` on
-> all ten compared quantities (`data/evidence/block_holdout/sandbox_vs_runner.json`). Opened as
-> [PR #23](https://github.com/buffedlizard55-lab/GEMSDOE/pull/23). 285 torch-free tests pass locally;
-> the runner suite (with torch) is green on the PR.
+> all ten compared quantities (`data/evidence/block_holdout/sandbox_vs_runner.json`). Two workflow
+> defects were found and fixed on the way to a green run — a stats-key mismatch that hid the overlap
+> result, and a params job that tested `BOOTSTRAPS` while assigning from `BOOT`, handing `''` to a
+> typed argument — and three static lints (`tests/test_workflow_yaml.py`, 3 → 6 tests) now fail on that
+> class without a runner. The refusal itself is reproduced across **three fetches and two
+> environments**: byte-identical raster (sha256 `3fb2ca73…`), identical population, identical verdict.
+> Opened as [PR #23](https://github.com/buffedlizard55-lab/GEMSDOE/pull/23). 288 torch-free tests pass
+> locally; the runner suite (with torch) is green on the PR.
 >
 > **Completed 2026-09-18 (session 16):** error bars on the emission decision (block-stratified DTI + paired block bootstrap: **0.0999, CI95 [0.0883, 0.1119]**, alternative-beats-reference probability **0.008**); a digit-for-digit **reproduction gate** against the runner's committed sweep; the **field axis settled at matched support** (the shipped 11-fold mean is best — 0.0999 vs 0.0850 / 0.0777 / 0.0644 — stable across ±15/25/40 % windows, so ensemble 1's 0.1365 was a support effect); the **cross-catalogue transfer measurement built end to end** (QFaults fetch + controls + pre-registered union test) and dispatched to a runner; block-holdout **training** wired with a partition cross-check. 291 tests pass (was 175).
 >
