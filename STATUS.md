@@ -83,11 +83,24 @@ reach `earthquake.usgs.gov`. Both came back, and they came back with opposite ki
    reproduced across three fetches and two environments, and the job summary renders it instead of a
    stack trace.
 
-9. **PR #23 opened**: <https://github.com/buffedlizard55-lab/GEMSDOE/pull/23> (`arena/01a0b6b1-gemsdoe`
-   → `main`), carrying session 16's work plus the runner evidence and this session's guard.
-   **Local test status:** 285 passed, 2 skipped, and 4 torch-dependent tests that cannot collect because
+9. **Both PRs merged to `main`.** [PR #23](https://github.com/buffedlizard55-lab/GEMSDOE/pull/23)
+   (session 16's work + the runner evidence + this session's guard) merged as `1b97c61`; the merge
+   commit touched `.github/triggers/*`, so cross-catalogue, verify-sources and block-holdout all
+   re-fired **on main** and pushed their own evidence — a *fourth* QFaults fetch (all four source links
+   OK_200 this time, confirming the earlier 503s were transient), a fresh 29-sentence rules-quote check
+   and a main-branch block-stratified measurement. [PR #24](https://github.com/buffedlizard55-lab/GEMSDOE/pull/24)
+   then corrected catalog row E39's link status and rebuilt the site; its nine conflicts were all in
+   **generated** `docs/*.html` and were resolved by regenerating from the merged sources rather than
+   hand-picking hunks. Merged as `91c0473`. On `main`: Tests ✓, Pages ✓, Cross-catalogue ✓,
+   Verify sources ✓.
+   **Local test status:** 288 passed, 2 skipped, and 4 torch-dependent tests that cannot collect because
    the sandbox `.venv` no longer has torch (`.venv` is not persisted between sessions); the runner suite
-   with torch is green on the PR.
+   with torch is green (Tests ✓ on the PR and on `main`).
+
+10. **Still running at the time of writing:** two `fold 0` block-holdout **training** jobs (one from the
+   branch push, one re-fired on main), each with a 300-minute budget on CPU runners. They produce the
+   first genuine generalisation gap (`--score-fold 0 [--complement]`); they do not change the shipped
+   artifact, and their evidence will be committed by the workflow when they finish.
 
 ## Session 16 (2026-09-18) — error bars on every emission number, the field axis settled, and the cross-catalogue measurement built end to end
 
