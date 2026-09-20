@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-19T20:36:11+00:00",
+ "generated_utc": "2026-09-20T02:06:43+00:00",
  "generated_by": "scripts/read_landed_reports.py",
  "purpose": "the SGMC pseudo-label contrast on EVERY committed truth population, not only the one whose truth shares the pseudo-labels' source: derived from the committed per-block metric components of both arms (no re-scoring, no re-training)",
  "fold": 0,
@@ -39,10 +39,10 @@
      "reference": "baseline_no_pseudo",
      "candidate": "pseudo",
      "reference_dti": 0.080584,
-     "candidate_dti": 0.184141,
-     "contrast": 0.103557,
+     "candidate_dti": 0.148303,
+     "contrast": 0.06771899999999999,
      "reference_support_px": 90433,
-     "candidate_support_px": 338649,
+     "candidate_support_px": 471988,
      "reference_components": {
       "TP_w": 2737.078559760741,
       "FP_w": 86325.88904185468,
@@ -50,9 +50,9 @@
       "n_gt": 20191
      },
      "candidate_components": {
-      "TP_w": 15114.271321183141,
-      "FP_w": 314520.3480068963,
-      "FN_w": 5076.7286788168585,
+      "TP_w": 15983.057044117235,
+      "FP_w": 442118.2093473596,
+      "FN_w": 4207.942955882765,
       "n_gt": 20191
      },
      "bootstrap": {
@@ -63,15 +63,15 @@
        0.102072
       ],
       "candidate_ci95": [
-       0.099301,
-       0.262417
+       0.069679,
+       0.231483
       ],
-      "contrast_p50": 0.106095,
+      "contrast_p50": 0.070533,
       "contrast_ci95": [
-       0.035616,
-       0.161646
+       0.011044,
+       0.133105
       ],
-      "prob_candidate_beats_reference": 0.999
+      "prob_candidate_beats_reference": 0.988
      },
      "recomposition_exact": {
       "baseline_no_pseudo": true,
@@ -89,10 +89,10 @@
      "reference": "baseline_no_pseudo",
      "candidate": "pseudo",
      "reference_dti": 0.211259,
-     "candidate_dti": 0.123872,
-     "contrast": -0.087387,
+     "candidate_dti": 0.103369,
+     "contrast": -0.10789,
      "reference_support_px": 90433,
-     "candidate_support_px": 338649,
+     "candidate_support_px": 471988,
      "reference_components": {
       "TP_w": 6047.218314492827,
       "FP_w": 79308.02051873514,
@@ -100,9 +100,9 @@
       "n_gt": 14442
      },
      "candidate_components": {
-      "TP_w": 9593.106168809842,
-      "FP_w": 319856.2141094693,
-      "FN_w": 4848.893831190158,
+      "TP_w": 10666.232051319093,
+      "FP_w": 447497.08864086855,
+      "FN_w": 3775.7679486809066,
       "n_gt": 14442
      },
      "bootstrap": {
@@ -113,15 +113,15 @@
        0.248162
       ],
       "candidate_ci95": [
-       0.085663,
-       0.16373
+       0.073179,
+       0.129007
       ],
-      "contrast_p50": -0.089963,
+      "contrast_p50": -0.109838,
       "contrast_ci95": [
-       -0.138599,
-       -0.035458
+       -0.15506,
+       -0.068517
       ],
-      "prob_candidate_beats_reference": 0.001
+      "prob_candidate_beats_reference": 0.0
      },
      "recomposition_exact": {
       "baseline_no_pseudo": true,
@@ -131,8 +131,54 @@
      "resampling_units": 8
     },
     "combined": {
-     "status": "NOT_SCORED",
-     "note": "both arm(s) carry no 'combined' population; re-score with scripts/block_holdout_eval.py --combined-population"
+     "status": "MEASURED",
+     "sources": {
+      "baseline": "data/evidence/block_holdout/fold0_heldout_combined.json",
+      "pseudo": "data/evidence/pseudo_labels/fold0_heldout.json"
+     },
+     "reference": "baseline_no_pseudo",
+     "candidate": "pseudo",
+     "reference_dti": 0.197183,
+     "candidate_dti": 0.228463,
+     "contrast": 0.03128,
+     "reference_support_px": 90433,
+     "candidate_support_px": 471988,
+     "reference_components": {
+      "TP_w": 8784.296874253567,
+      "FP_w": 75428.43711991017,
+      "FN_w": 25848.703125746433,
+      "n_gt": 34633
+     },
+     "candidate_components": {
+      "TP_w": 26649.289095436325,
+      "FP_w": 418047.4785467944,
+      "FN_w": 7983.710904563675,
+      "n_gt": 34633
+     },
+     "bootstrap": {
+      "n_boot": 2000,
+      "seed": 0,
+      "reference_ci95": [
+       0.178506,
+       0.209709
+      ],
+      "candidate_ci95": [
+       0.175543,
+       0.28741
+      ],
+      "contrast_p50": 0.032385,
+      "contrast_ci95": [
+       -0.010237,
+       0.082188
+      ],
+      "prob_candidate_beats_reference": 0.916
+     },
+     "recomposition_exact": {
+      "baseline_no_pseudo": true,
+      "pseudo": true
+     },
+     "interval_readable": false,
+     "resampling_units": 8
     }
    }
   },
@@ -152,10 +198,10 @@
      "reference": "baseline_no_pseudo",
      "candidate": "pseudo",
      "reference_dti": 0.09202,
-     "candidate_dti": 0.142762,
-     "contrast": 0.050741999999999995,
+     "candidate_dti": 0.097677,
+     "contrast": 0.005656999999999995,
      "reference_support_px": 301789,
-     "candidate_support_px": 982756,
+     "candidate_support_px": 1614439,
      "reference_components": {
       "TP_w": 8528.793219483248,
       "FP_w": 288997.9021925151,
@@ -163,9 +209,9 @@
       "n_gt": 41473
      },
      "candidate_components": {
-      "TP_w": 32093.29622289523,
-      "FP_w": 926029.3616858121,
-      "FN_w": 9379.703777104769,
+      "TP_w": 34088.00220893034,
+      "FP_w": 1544952.048050852,
+      "FN_w": 7384.997791069662,
       "n_gt": 41473
      },
      "bootstrap": {
@@ -176,15 +222,15 @@
        0.109977
       ],
       "candidate_ci95": [
-       0.109577,
-       0.176159
+       0.071669,
+       0.126069
       ],
-      "contrast_p50": 0.049919,
+      "contrast_p50": 0.0051,
       "contrast_ci95": [
-       0.025579,
-       0.079375
+       -0.01321,
+       0.028078
       ],
-      "prob_candidate_beats_reference": 1.0
+      "prob_candidate_beats_reference": 0.7
      },
      "recomposition_exact": {
       "baseline_no_pseudo": true,
@@ -202,10 +248,10 @@
      "reference": "baseline_no_pseudo",
      "candidate": "pseudo",
      "reference_dti": 0.215206,
-     "candidate_dti": 0.138823,
-     "contrast": -0.076383,
+     "candidate_dti": 0.106995,
+     "contrast": -0.108211,
      "reference_support_px": 301789,
-     "candidate_support_px": 982756,
+     "candidate_support_px": 1614439,
      "reference_components": {
       "TP_w": 20399.76319979176,
       "FP_w": 267375.7259737138,
@@ -213,9 +259,9 @@
       "n_gt": 46546
      },
      "candidate_components": {
-      "TP_w": 31732.57850021276,
-      "FP_w": 924995.0499831528,
-      "FN_w": 14813.42149978724,
+      "TP_w": 37574.8811679012,
+      "FP_w": 1532157.1884764696,
+      "FN_w": 8971.1188320988,
       "n_gt": 46546
      },
      "bootstrap": {
@@ -226,13 +272,13 @@
        0.238184
       ],
       "candidate_ci95": [
-       0.123,
-       0.158529
+       0.09475,
+       0.123072
       ],
-      "contrast_p50": -0.07608,
+      "contrast_p50": -0.108153,
       "contrast_ci95": [
-       -0.091183,
-       -0.060152
+       -0.121993,
+       -0.094166
       ],
       "prob_candidate_beats_reference": 0.0
      },
@@ -244,14 +290,60 @@
      "resampling_units": 26
     },
     "combined": {
-     "status": "NOT_SCORED",
-     "note": "both arm(s) carry no 'combined' population; re-score with scripts/block_holdout_eval.py --combined-population"
+     "status": "MEASURED",
+     "sources": {
+      "baseline": "data/evidence/block_holdout/fold0_complement_combined.json",
+      "pseudo": "data/evidence/pseudo_labels/fold0_complement.json"
+     },
+     "reference": "baseline_no_pseudo",
+     "candidate": "pseudo",
+     "reference_dti": 0.227349,
+     "candidate_dti": 0.189818,
+     "contrast": -0.03753100000000001,
+     "reference_support_px": 301789,
+     "candidate_support_px": 1614439,
+     "reference_components": {
+      "TP_w": 28928.55641927501,
+      "FP_w": 255210.0334163485,
+      "FN_w": 59090.44358072499,
+      "n_gt": 88019
+     },
+     "candidate_components": {
+      "TP_w": 71662.88337683154,
+      "FP_w": 1463935.430743638,
+      "FN_w": 16356.116623168462,
+      "n_gt": 88019
+     },
+     "bootstrap": {
+      "n_boot": 2000,
+      "seed": 0,
+      "reference_ci95": [
+       0.208313,
+       0.248495
+      ],
+      "candidate_ci95": [
+       0.165719,
+       0.217384
+      ],
+      "contrast_p50": -0.037756,
+      "contrast_ci95": [
+       -0.064954,
+       -0.007951
+      ],
+      "prob_candidate_beats_reference": 0.0025
+     },
+     "recomposition_exact": {
+      "baseline_no_pseudo": true,
+      "pseudo": true
+     },
+     "interval_readable": true,
+     "resampling_units": 26
     }
    }
   }
  },
- "verdict": "TRADE_OFF_PROXY_GAINS_CATALOGUE_LOSSES",
- "verdict_reason": "proxy +0.103557 but catalogue -0.087387: the extra signal moves the model between the two fault kinds instead of adding detection",
+ "verdict": "GAIN_ON_THE_COMBINED_SURROGATE",
+ "verdict_reason": "the combined (Phase-2-like) population is the only committed population that contains BOTH fault kinds, and it moves +0.031280; proxy +0.067719, catalogue -0.107890",
  "shippable_evidence": false,
  "shipping_note": "no shipping decision is made here.  A pseudo-labelled field reaches the leaderboard only through docs/FIELD_SELECTION_RULE.md as a new reblend.yml RUN_ID with R3 measured on both fields' raw probability rasters, and the proxy arm of this contrast is source-circular (see pseudo_provenance.circular_source) so it cannot carry an adoption on its own.",
  "caveat": "fold-restricted bootstraps resample only that fold's scoreable blocks; below 12 units the scorer marks the interval COARSE, so P(candidate > reference) here is a spread indicator on a small number of 51 km regions, not a confidence statement (scripts/block_holdout_eval.py::bootstrap_reliability)"
