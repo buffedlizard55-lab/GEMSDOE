@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-20T02:06:43+00:00",
+ "generated_utc": "2026-09-20T05:06:52+00:00",
  "generated_by": "scripts/read_landed_reports.py",
  "purpose": "the SGMC pseudo-label contrast on EVERY committed truth population, not only the one whose truth shares the pseudo-labels' source: derived from the committed per-block metric components of both arms (no re-scoring, no re-training)",
  "fold": 0,
