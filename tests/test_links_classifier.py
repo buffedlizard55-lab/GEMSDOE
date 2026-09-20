@@ -82,3 +82,45 @@ def test_only_expected_results_are_counted_as_expected():
 def test_sciencebase_is_listed_as_bot_blocking():
     """Regression pin for the 2026-09-16 flip: this host must not be reported as broken."""
     assert "sciencebase.gov" in verify_links.BOT_BLOCKING_HOSTS
+
+
+# ------------------------------------------------------------------ degraded-egress guard
+def test_a_restricted_environment_must_not_overwrite_a_measured_record():
+    """The sandbox reaches github.com and pypi.org and nothing else.
+
+    A run there marks 77 of 84 catalog URLs UNREACHABLE - a statement about this machine, not about
+    the links. Writing that over a record in which 72 URLs answered would replace a measurement
+    with a falsehood, so `degraded_against` has to say so and `main()` has to refuse.
+    """
+    previous = dict(summary_counts={"OK_200": 61, "OK_REDIRECTED": 10, "OK_202": 1,
+                                    "BOT_BLOCKED_403": 10, "AUTH_REQUIRED": 1, "LOGIN_REQUIRED": 1},
+                    results=[dict(url="https://example.gov/a", result="OK_200"),
+                             dict(url="https://example.gov/b", result="BOT_BLOCKED_403")])
+    counts = {"UNREACHABLE": 77, "BROKEN_HTTP_400": 1, "OK_200": 6}
+    by_url = {"https://example.gov/a": {"result": "UNREACHABLE"}}
+    d = verify_links.degraded_against(counts, previous, by_url)
+    assert d["n_reached"] == 6 and d["n_before"] == 72 and d["degraded"] is True
+    assert d["flipped"] == ["https://example.gov/a"]
+
+
+def test_the_same_record_is_not_degraded_by_a_healthy_run():
+    previous = dict(summary_counts={"OK_200": 61}, results=[])
+    counts = {"OK_200": 60, "UNREACHABLE": 4}
+    assert verify_links.degraded_against(counts, previous, {})["degraded"] is False
+
+
+def test_reached_count_treats_the_result_classes_as_prefixes():
+    """`EXPECTED_OK` is ("OK",) while the keys are "OK_200"/"OK_REDIRECTED".
+
+    A membership test there is always False, which would read as "reached nothing", disable the
+    guard and mislabel the environment as having no egress.
+    """
+    assert verify_links.reached_count({"OK_200": 61, "OK_REDIRECTED": 10, "OK_202": 1,
+                                       "UNREACHABLE": 12}) == 72
+    assert verify_links.reached_count({"UNREACHABLE": 12}) == 0
+
+
+def test_a_first_run_has_nothing_to_degrade():
+    """With no committed record, the guard must not block the very first measurement."""
+    d = verify_links.degraded_against({"UNREACHABLE": 84}, None, {})
+    assert d["n_before"] == 0 and d["degraded"] is False

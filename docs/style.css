@@ -64,6 +64,7 @@ table.bands td:nth-child(4){font-size:.85rem;color:#44403c}
 .pill.ok{background:#dcfce7;color:#14532d}
 .pill.bad{background:#fee2e2;color:#7f1d1d}
 .pill.info{background:#e0f2fe;color:#075985}
+.pill.warn{background:#fef3c7;color:#78350f}
 ol.findings li{margin:9px 0}
 ul li,ol li{margin:5px 0}
 table.cmp td:nth-child(4){color:#44403c;font-size:.87rem}

@@ -148,6 +148,13 @@ $$k(d) = \max\left(1 - \frac{d}{R}, 0\right) = \max\left(1 - \frac{d}{300}, 0\ri
 
 ## 6. Step-by-Step Practical Submission Workflow
 
+> **Subpage (added session 20): [How to submit, exactly](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html)**
+> — the same procedure as a single actionable page, with a **gate table measured in this checkout**
+> (`python scripts/check_submission_readiness.py` → `data/evidence/submission_readiness.json`), the
+> artifact's sha256 re-hashed at build time, a CPU-only route that needs neither a GPU nor any runner
+> artifact, and the human-only steps labelled `HUMAN` instead of counted as done. The long-form
+> operational page is [submission details](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html).
+
 ### Step 1: Enroll on DrivenData
 1. Navigate to [https://www.drivendata.org/competitions/306/competition-doe-gems/](https://www.drivendata.org/competitions/306/competition-doe-gems/).
 2. Log in or create a DrivenData account.
@@ -187,6 +194,19 @@ python scripts/blend_submission.py \
     --shaping-source data/evidence/emission_decision.json \
     --out submission.tif
 ```
+
+#### Route D: CPU-only baseline, no GPU and no runner artifacts (added session 20)
+```bash
+python scripts/baseline_submission.py          # -> data/evidence/baseline/
+python scripts/validate_submission.py --pred data/evidence/baseline/submission.tif \
+    --sample data/sample_submission.tif --train data/training_features.tif
+```
+Histogram gradient boosting on the official feature stack, trained on folds ≠ 0 of the standard
+`src/blocks.py` partition; the emission policy (floor × thin × width) is chosen by the **union**
+population's DTI on the fold the model never saw, with a pre-registered support cap so the search
+cannot select the degenerate "emit the whole footprint" candidate. Its measured numbers are in
+`data/evidence/baseline/baseline_report.json`. This is a floor, not a contender — its own report
+says so — but it makes a valid entry possible from any machine.
 
 ### Step 4: Validate GeoTIFF Format (Mandatory Pre-Upload Gate)
 Run the automated validation check:

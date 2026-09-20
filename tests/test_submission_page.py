@@ -124,11 +124,16 @@ def test_lead_upper_does_not_lowercase_the_rest_of_the_sentence():
 
 # -------------------------------------------------------------------------------------- the page
 def test_the_page_is_in_the_nav_of_every_page():
+    """`submission.html` was retitled "Submission details" when the subpage was added; the nav
+    entry must exist under its new label, and the subpage must be reachable from every page."""
     mod = _site_mod()
     html = mod.page("Anywhere", "index.html", "<p>x</p>")
-    assert 'href="submission.html"' in html and "Make a submission" in html
-    active = mod.page("Make a submission", "submission.html", "<p>x</p>")
-    assert '<a href="submission.html" class="active">Make a submission</a>' in active
+    assert 'href="submission.html"' in html and "Submission details" in html
+    assert 'href="how_to_submit.html"' in html and "How to submit" in html
+    active = mod.page("Submission details", "submission.html", "<p>x</p>")
+    assert '<a href="submission.html" class="active">Submission details</a>' in active
+    sub = mod.page("How to submit, exactly", "how_to_submit.html", "<p>x</p>")
+    assert '<a href="how_to_submit.html" class="active">' in sub
 
 
 @pytest.mark.skipif(not (ROOT / SHIPPED).exists(), reason="the shipped artifact is not committed")

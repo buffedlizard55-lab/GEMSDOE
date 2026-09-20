@@ -1,6 +1,89 @@
-# Project status — 2026-09-19 (sessions 11–19)
+# Project status — 2026-09-20 (sessions 11–20)
 
-## Session 19 (current session, 2026-09-19) — every landed report read on every truth population, the submission path got its own page, and the third population is now measured on both arms
+## Session 20 (current session, 2026-09-20) — the submission path got its own page, the gate table is measured instead of described, and there is now a route to an uploadable file that needs no GPU and no runner
+
+Session 19's queue was: read the landed reports, update the site, pick the next experiment. It also
+left a written instruction this session executed first: *an executive-summary subpage that explains
+exactly how to make a submission into the contest*.
+
+1. **`docs/how_to_submit.html` — the recipe, as a subpage of the executive summary.** Nine sections:
+   the gate table (measured, not described), the exact artifact with its sha256 **re-hashed while the
+   page renders**, four routes to that file, the validator gate, click-by-click upload, what happens
+   after the upload, the rules sentences that bind it (quoted by id with their verification badge),
+   the CPU route's own caveat, and a sources table naming the evidence behind every claim class.
+   `docs/submission.html` stays the long-form operational page and is retitled **Submission details**;
+   the nav reads `Executive summary › ↳ How to submit`. 15 tests in
+   `tests/test_how_to_submit_page.py`.
+2. **The gate table is a measurement, and it is a new script.** `scripts/check_submission_readiness.py`
+   produces `data/evidence/submission_readiness.json` from eight checks that each re-derive their
+   claim: the three official rasters re-hashed against the bridge pins, `prepare_data.py` re-run
+   (exit code + the sha256 of its own output), the shipped artifact re-hashed against its committed
+   `.sha256` sidecar, the committed validator log re-parsed, the 29 rules quotations re-matched
+   verbatim against the PDF, the CPU route's report, the human-only steps, and the artifacts that
+   exist in this checkout. Current reading: **6 PASS, 0 FAIL, 1 HUMAN (`human_steps`), 1 measured
+   now PASS (`cpu_baseline`)**. `HUMAN` is deliberately not `PASS`: no program here can create an
+   account, upload a file or read a private leaderboard.
+3. **`scripts/baseline_submission.py` — a CPU-only, torch-free route to a valid submission.**
+   scikit-learn histogram gradient boosting on the official 19 bands (it handles the 57.9 % NaN
+   natively), memory-bounded by reading features in row chunks. It is the first generator in this
+   repository that can run end to end inside the 2 vCPU / 3 GB sandbox, which is what closes the
+   "regenerating a submission depends on machines we do not have" gap. Measured end to end:
+   **322 s**, artifact 545,798 B, `sha256 9f2577cf…`, 155,889 emitted px (3.0 % of the footprint),
+   `scripts/validate_submission.py` → **PASSED** (all 8 checks), same grid/CRS/dtype rules as the
+   shipped ensemble.
+4. **A degenerate optimum was found by measurement, and pre-registered out of the search.** An
+   unconstrained argmax of this metric over the shaping space selects *emit the whole footprint*:
+   `FN_w` carries β = 0.8 while `FP_w` carries α = 0.2, so on a weak field the recall term wins.
+   Measured on fold 0: the `floor 0, thin off` candidate emits 5,164,312 px and scores union DTI
+   **0.1229**, against **0.0207** for the best *localised* candidate. Candidate eligibility is now
+   pre-registered (support ≤ 5 % of the footprint, ≥ 1,000 px) and ineligible rows stay in the
+   report with their reason; the first run was stopped rather than allowed to ship the whole-grid
+   raster, and the second run's winner emits 3.0 % of the footprint.
+5. **Two folds are held out, not one: `--fold` selects the policy, `--eval-fold` measures it.**
+   `max()` over N candidates on fold A is not an estimate of fold A, so the report separates the
+   winner's value on the selection fold from the same field's value on a fold that neither trained
+   the model nor took part in the sweep. Measured: selection fold 0 union **0.160259**, untouched
+   fold 1 **combined 0.0788** (catalogue 0.0659, proxy-only 0.0709). The generalisation block names
+   the command that reproduces it and was **re-run to check that claim** — see the defect below.
+6. **Defects found and fixed this session, all by tests or by auditing a claim:**
+   * `scripts/build_site.py` did not parse (backslash inside an f-string expression in the new
+     builder) — the page could not be generated at all. Fixed by hoisting the escaped expressions
+     into variables computed before the f-string.
+   * **`docs/verification.html` was published as a bare fragment** — `build_verification()` returned
+     its body without ever calling `page()`, so the file had no doctype, no nav and no footer: a
+     dead end on a site built for walking from a claim to its evidence. Nothing failed, because the
+     only nav test asserted what `page()` does. Now wrapped, and `tests/test_site_pages.py` asserts
+     every generated page is a complete document with the whole nav, that no page links to an
+     unpublished page, and that **regenerating the site is a no-op**.
+   * **`scripts/verify_links.py` would overwrite a measured record with a false one.** Run in this
+     sandbox it marks 77 of 84 URLs `UNREACHABLE` — a statement about restricted egress, not about
+     the links — while labelling the file *"on a GitHub-hosted runner (live HTTP)"*. It now compares
+     against the committed record and **refuses** (exit 3) when fewer than half the URLs the record
+     reached answered, with `--allow-degraded` as the explicit override and a `generated_by` line
+     that reports how many URLs actually answered. The committed record was left intact.
+     A prefix bug found while testing it: `EXPECTED_OK` is `("OK",)` while the counts are keyed
+     `"OK_200"`, so a membership test read as "reached nothing" and would have disabled the guard.
+   * **The baseline's `reproduce` command did not reproduce.** It pointed `block_holdout_eval.py` at
+     `prob_raw.tif` with the winner's floor, but that script shapes by threshold + dilation and
+     cannot thin, so it measured the *un-thinned sibling* (combined 0.1259) instead of the field
+     that ships (0.0789). Corrected to score the shaped `submission.tif` (thresholding a binary
+     field at 0.5 is a no-op) with the runner crosscheck disabled, and the numbers were re-run to
+     confirm they come back digit for digit. The report now records the re-run as
+     `reproduce_verified`.
+   * `tests/test_submission_page.py` asserted the old nav label ("Make a submission") and would have
+     failed on the retitle; it now pins both entries, and the new subpage is checked to be reachable.
+   * **CI caught the new build-reproduction test disagreeing with itself**, and the disagreement was
+     real: `docs/submission.html` renders whether the three official rasters are present in the
+     working tree *right now*, and `data/*.tif` is gitignored by design — so the committed page
+     (built here, rasters present → "MATCHES THE PIN") could never match a fresh clone's build
+     (→ "ABSENT"). The test now strips exactly those live-state lines and nothing else before
+     comparing, states why in the test file, and gains a sibling that asserts two consecutive builds
+     are byte-identical — so drift is still caught, and the environment dependence is documented
+     instead of becoming an intermittent red check.
+
+**Session 20 test count: 431 passed, 1 skipped** (from 368 passed, 1 skipped at the merge).
+
+## Session 19 (2026-09-19) — every landed report read on every truth population, the submission path got its own page, and the third population is now measured on both arms
 
 Session 18's queue was: read the four landed reports, update the site and STATUS, pick the next
 experiment. All four reports are now read — but reading them exposed the real defect, which was not

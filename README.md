@@ -2,11 +2,14 @@
 
 > **Start here → [Executive summary: How to submit](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)** (markdown: [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md))
 >
-> **Just submitting? → [Make a submission](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html)** — the operational checklist: the exact artifact (sha256 re-hashed at build time), the format the platform enforces, the rules sentences that bind it, the known irregularities, and the pre-flight gate. Uploading is human-only; everything up to the upload is done and validated.
+> **Subpage of the executive summary → [How to submit, exactly](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html)** — the recipe: the file, its sha256 (re-hashed at build time), four routes to regenerate it (one of which is CPU-only and needs no GPU and no runner artifacts), the validation gate, the click-by-click upload path, and a **gate table measured in this checkout** (`data/evidence/submission_readiness.json`) in which the human-only steps are labelled `HUMAN` rather than counted as done.
+>
+> **Long-form detail → [Submission details](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html)** — the format the platform enforces, the rules sentences that bind it, the known irregularities, and the pre-flight gate. Uploading is human-only; everything up to the upload is done and validated.
 >
 > **Project Site:** [Overview](https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html) ·
 > [Executive summary](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html) ·
-> [Make a submission](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html) ·
+> [How to submit](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html) ·
+> [Submission details](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html) ·
 > [Data](https://buffedlizard55-lab.github.io/GEMSDOE/docs/data.html) ·
 > [Current review](REVIEW_2026-09-17.md) ·
 > [Metric](https://buffedlizard55-lab.github.io/GEMSDOE/docs/metric.html) ·

@@ -165,6 +165,36 @@ def check(url: str, timeout: int = 45) -> dict:
     return out
 
 
+def reached_count(counts: dict) -> int:
+    """How many URLs got a real answer in a run, from its summary counts.
+
+    `EXPECTED_OK` is a tuple of PREFIXES ("OK") while the keys are full result classes
+    ("OK_200", "OK_REDIRECTED"), so this has to be a prefix test: `k in EXPECTED_OK` is False for
+    every real key, which silently reads as "reached nothing" and would disable the guard below.
+    """
+    return sum(v for k, v in counts.items() if str(k).startswith(EXPECTED_OK))
+
+
+def degraded_against(counts: dict, previous: dict | None,
+                     by_url: dict | None = None) -> dict:
+    """Would writing this run replace a measured record with an unreachable one?
+
+    A restricted-egress environment marks every off-allowlist host UNREACHABLE, which is a claim
+    about this machine rather than about the links.  The test is deliberately blunt - fewer than
+    half the URLs the committed record reached - because the honest failure mode is "refuse and
+    say so", not "guess which subset is real".
+    """
+    n_reached = reached_count(counts)
+    n_before = reached_count((previous or {}).get("summary_counts", {}))
+    was_answered = {str(r.get("url")): str(r.get("result"))
+                    for r in (previous or {}).get("results", [])
+                    if str(r.get("result", "")).startswith(EXPECTED_OK + EXPECTED_NON_OK)}
+    flipped = sorted(u for u, res in was_answered.items()
+                     if (by_url or {}).get(u, {}).get("result") == "UNREACHABLE")
+    return dict(n_reached=n_reached, n_before=n_before, flipped=flipped,
+                degraded=bool(n_before) and n_reached < 0.5 * n_before)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--reclassify", nargs="?", const="docs/link_verification.json", default=None,
@@ -175,6 +205,9 @@ def main() -> int:
     ap.add_argument("--catalog", default="docs/data_catalog.csv")
     ap.add_argument("--json-out", default="docs/link_verification.json")
     ap.add_argument("--csv-out", default="docs/data_catalog.verified.csv")
+    ap.add_argument("--allow-degraded", action="store_true",
+                    help="write the outputs even though this run reached nothing (see the guard "
+                         "below). Use only when the degraded record IS the intended record")
     a = ap.parse_args()
 
     if a.reclassify:
@@ -208,6 +241,37 @@ def main() -> int:
         print(f"  {r['result']:34s} {r['url'][:95]}")
 
     stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+    # ---- refuse to replace a measured record with an unreachable one ----------------------
+    # A sandbox with no egress produces an all-UNREACHABLE run whose every row would then read
+    # as if the link had failed - which is a *worse* claim than the one it replaces, and a false
+    # one: nothing was measured about the link, only about this machine's network. The committed
+    # record is left alone unless the caller asks for the degraded one explicitly.
+    prev = Path(a.json_out)
+    before = None
+    if prev.exists():
+        try:
+            before = json.loads(prev.read_text(encoding="utf-8"))
+        except Exception:
+            before = None
+    d = degraded_against(counts, before, by_url)
+    n_reached, n_before, flipped = d["n_reached"], d["n_before"], d["flipped"]
+    # A wholesale flip to UNREACHABLE is a statement about THIS MACHINE, not about the links: the
+    # sandbox reaches github.com and pypi.org and nothing else, so 77 of 84 URLs "fail" on a
+    # perfectly healthy network of links. Writing that would replace a measured record with a false
+    # one, and would do it under a `generated_by` line that used to claim a live-HTTP runner.
+    if d["degraded"] and not a.allow_degraded:
+        print(f"REFUSING to overwrite {prev}: this run reached {n_reached} URLs where the "
+              f"committed record reached {n_before}, and {len(flipped)} URLs that previously "
+              f"responded are now UNREACHABLE. That pattern describes restricted egress, not "
+              f"broken links, so the measured record is left intact. Re-run where the network "
+              f"works, or pass --allow-degraded to record the failure explicitly.")
+        if flipped:
+            print("  example flipped URLs: " + ", ".join(flipped[:5]))
+        return 3
+    env_note = (f"on a host with live HTTP ({n_reached} of {len(uniq)} URLs answered)"
+                if n_reached else
+                f"in an environment that reached NO URL at all (0 of {len(uniq)}; no egress)")
     # The classification policy lives at module level so it can be asserted in tests
     # (tests/test_links_classifier.py) instead of being re-derived by hand each time a host
     # changes its mind about scripted clients.
@@ -232,7 +296,8 @@ def main() -> int:
 
     payload = {
         "generated_utc": stamp,
-        "generated_by": "scripts/verify_links.py on a GitHub-hosted runner (live HTTP)",
+        "generated_by": f"scripts/verify_links.py {env_note}",
+        "n_urls_reached": int(n_reached),
         "catalog": a.catalog,
         "n_rows": len(rows),
         "n_unique_urls": len(uniq),
