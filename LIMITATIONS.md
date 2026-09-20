@@ -1,4 +1,30 @@
-## Session 19 (2026-09-19) — what the third population and the four-fold gap do and do not license
+## Session 20 additions (2026-09-20)
+
+1. **The CPU baseline is a floor, not a contender, and it is the only field in this repository whose
+   honest number is small.** Generalisation on a fold nothing touched: **combined 0.0788**
+   (catalogue 0.0659, proxy-only 0.0709) against the shipped ensemble's committed **0.207431** on the
+   same surrogate population. A per-pixel classifier has no spatial context, which is the one thing a
+   fault-line detector needs. It exists to make an upload possible from any machine, and its report
+   says so in its own `caveats`.
+2. **The support cap is pre-registered, not derived.** 5 % of the footprint and ≥ 1,000 px are
+   judgement calls made before the search ran, defending against the degenerate *emit everything*
+   optimum (measured union DTI 0.1229 at 5,164,312 px). A different cap would select a different
+   policy; the report records the cap so the choice is auditable rather than hidden in a default.
+3. **Two folds held out instead of one costs real training data.** With the default 4-fold partition
+   the model trains on 29,519 positives instead of three quarters of them, so the baseline is
+   *weaker* than a single-holdout design would look — that is the price of separating selection from
+   measurement, and it is stated rather than traded away quietly.
+4. **`scripts/block_holdout_eval.py` still cannot thin**, so a thinned candidate cannot be audited
+   from its raw field; the generalisation audit works only because a shipped submission is binary.
+   Queued in `SUGGESTIONS.md`.
+5. **Link verification cannot be re-run from this sandbox.** 77 of 84 catalog URLs are unreachable
+   here, and `scripts/verify_links.py` now refuses to overwrite the measured record instead of
+   writing that as a finding. Any change to `docs/data_catalog.csv` therefore needs a networked
+   re-verification before its `verified_*` columns can be trusted.
+6. **The human gate is still the rate-limiting step.** Enrolment, the first upload, reading the
+   private score, the final selection and the generative-AI disclosure are all `HUMAN` in
+   `data/evidence/submission_readiness.json`; every machine-doable step up to that click is measured
+   and re-verified, and the first upload remains the highest-value next action on this project.
 
 1. **The combined (union) population is a surrogate, not the private truth, and its DTI is not a
    predicted score.** It is the disjoint union of two *local* catalogues — the competition's
@@ -555,3 +581,6 @@ DrivenData account + competition enrolment (eligibility: US citizen/permanent re
 submission upload (3/week), the Pages source setting, and — if the project reaches the finalist
 stage — the reproducibility assets and generative-AI disclosure required by the rules. None of these
 can be done autonomously; each is listed in `SUGGESTIONS.md` §7.1 item 7.
+
+## Session 19 (2026-09-19) — what the third population and the four-fold gap do and do not license
+

@@ -68,7 +68,10 @@ def page(title: str, active: str, body: str, subtitle: str = "") -> str:
     nav = [
         ("index.html", "Overview"),
         ("executive_summary.html", "Executive summary"),
-        ("submission.html", "Make a submission"),
+        # A subpage, and labelled as one: the executive summary is the parent document, this is
+        # the actionable half of it.  submission.html keeps the long-form evidence.
+        ("how_to_submit.html", "↳ How to submit"),
+        ("submission.html", "Submission details"),
         ("data.html", "Data"),
         ("metric.html", "Metric"),
         ("method.html", "Method"),
@@ -1297,11 +1300,21 @@ private score.</div>
 
 
 def build_verification(ev: dict) -> str:
+    """The verification page - and the one that has to go through `page()` like all the others.
+
+    This builder used to return its body only, so docs/verification.html was written as a bare
+    fragment: no doctype, no nav, no footer, and no route back to any other page.  It is a
+    standalone document in the site (it is linked from the nav of every page), so it has to be
+    wrapped; `tests/test_site_pages.py` now asserts that every generated page is a full document
+    rather than trusting each builder to remember.
+    """
     iv = ev.get("independent_verification")
     if not iv:
-        return (missing("The independent verification record.",
-                        "data/evidence/independent_verification.json") +
-                _leaderboard_panel(ev))
+        return page("Verification", "verification.html",
+                    missing("The independent verification record.",
+                            "data/evidence/independent_verification.json") +
+                    _leaderboard_panel(ev),
+                    "Independent re-checks of every load-bearing external claim.")
     body = [_leaderboard_panel(ev), f"""<h2>Why this page exists</h2>
 <p>{e(iv['purpose'])}</p>
 <p class="muted small">Pass run {e(iv['generated_utc'])} by {e(iv['generated_by'])}; reachability
@@ -1328,7 +1341,9 @@ why every bulk file in this repository arrives through a GitHub Actions runner.<
     body.append(note("info", "Every row above names the URL and how it was reached, so a reader can "
                              "repeat it. Where a claim could not be checked, the row says so instead "
                              "of being omitted — an empty row is a finding."))
-    return "\n".join(body)
+    return page("Verification", "verification.html", "\n".join(body),
+                "Independent re-checks of every load-bearing external claim, with the method that "
+                "established each one.")
 
 
 def _emission_decision(ev: dict) -> str:
@@ -2828,6 +2843,7 @@ table.bands td:nth-child(4){font-size:.85rem;color:#44403c}
 .pill.ok{background:#dcfce7;color:#14532d}
 .pill.bad{background:#fee2e2;color:#7f1d1d}
 .pill.info{background:#e0f2fe;color:#075985}
+.pill.warn{background:#fef3c7;color:#78350f}
 ol.findings li{margin:9px 0}
 ul li,ol li{margin:5px 0}
 table.cmp td:nth-child(4){color:#44403c;font-size:.87rem}
@@ -3403,6 +3419,315 @@ result) is on <a href="sources.html">sources</a> and in <code>docs/data_catalog.
 
 
 
+def _readiness(ev: dict) -> dict:
+    """The measured gate table behind docs/how_to_submit.html (or an explicit absence)."""
+    return ev.get("readiness") or {}
+
+
+def _readiness_pill(status: str) -> str:
+    cls = {"PASS": "ok", "FAIL": "bad", "MISSING": "warn", "SKIPPED": "warn",
+           "HUMAN": "info"}.get(status, "warn")
+    return f'<span class="pill {cls}">{e(status)}</span>'
+
+
+def _deadline_from_catalog() -> dict:
+    """The competition end date as docs/data_catalog.csv records it, never as typed prose.
+
+    Row C1 (the competition home page) carries the verified note "end date Dec 3 2026 11:59pm UTC".
+    Parsing it here means a re-verification that changes the date changes the page; a parse that
+    fails renders nothing rather than an unverified string.
+    """
+    p = DOCS / "data_catalog.csv"
+    if not p.exists():
+        return {}
+    import csv
+    import re as _re
+    with p.open(newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            if (row.get("id") or "").strip() != "C1":
+                continue
+            blob = " ".join(str(v) for v in row.values())
+            m = _re.search(r"end date\s+([^;]+?)\s*(?:;|$)", blob, _re.I)
+            if m:
+                return dict(text=m.group(1).strip(), method=row.get("verification_method"),
+                            date=row.get("verification_date"),
+                            result=row.get("verification_result"), url=row.get("official_link"))
+    return {}
+
+
+def build_how_to_submit(ev: dict) -> str:
+    """The executive-summary subpage: exactly how a submission gets entered, gate by gate.
+
+    Nothing on this page is typed as a fact.  The gate table is
+    `data/evidence/submission_readiness.json` (measured by scripts/check_submission_readiness.py,
+    which re-hashes the artifacts and re-runs the pre-flight); the artifact's sha256 is re-hashed
+    here at build time; the deadline is parsed from the verified catalogue row C1; and every rules
+    sentence is quoted by id with its own verification badge.  The long-form operational page
+    (docs/submission.html) keeps the measurements and the irregularities - this page is the recipe.
+    """
+    rd = _readiness(ev)
+    checks = rd.get("checks") or []
+    summary = rd.get("summary") or {}
+    art = _sha_bytes(SHIPPED_SUBMISSION)
+    val_log = _read(f"{SHIPPED_EVIDENCE_DIR}/validation.log")
+    vrows, vpassed = _validation_rows(val_log)
+    dl = _deadline_from_catalog()
+    lb = ((ev.get("independent_verification") or {}).get("competition_standing") or {})
+
+    def by_id(cid):
+        return next((c for c in checks if c.get("id") == cid), None)
+
+    data_c, pre_c, art_c = by_id("data_placed"), by_id("preflight"), by_id("artifact")
+    val_c, rules_c, base_c, human_c = (by_id("artifact_validated"), by_id("rules_quotes"),
+                                       by_id("cpu_baseline"), by_id("human_steps"))
+
+    # ---- 1. the gate table ------------------------------------------------------------
+    gate_rows = []
+    for c in checks:
+        if c["id"] == "candidates":
+            continue
+        meas = c.get("measured") or {}
+        detail = ""
+        if c["id"] == "data_placed":
+            files = meas.get("files") or []
+            detail = ", ".join(f"{f['file']} {f['status']}" for f in files) or "no manifest"
+        elif c["id"] == "preflight":
+            # The full last line, not a slice: truncating it mid-path (… configs/config.yaml ->
+            # "configs/config") makes the page cite a file that does not exist, which is exactly
+            # what the page's own link-hygiene test refuses.
+            _ll = str(meas.get("last_line") or "")
+            detail = (f"exit code {meas.get('exit_code')} — "
+                      + (_ll if len(_ll) <= 240 else _ll[:240] + "…"))
+        elif c["id"] == "artifact":
+            detail = (f"{meas.get('bytes', 0):,} bytes · sha256 {str(meas.get('sha256'))[:16]}… · "
+                      f"recorded {str(meas.get('recorded_sha256'))[:16]}…")
+        elif c["id"] == "artifact_validated":
+            detail = f"{len(meas.get('checks') or [])} parsed validator lines"
+        elif c["id"] == "rules_quotes":
+            detail = (f"{meas.get('n_found')}/{meas.get('n_quotes')} sentences match the PDF "
+                      f"verbatim; PDF sha256 {str(meas.get('source_pdf_sha256'))[:16]}…")
+        elif c["id"] == "cpu_baseline":
+            if meas.get("policy"):
+                gen = (meas.get("generalisation") or {}).get("combined")
+                detail = (f"policy {meas.get('policy')} · {meas.get('emitted_px', 0):,} emitted px "
+                          f"· {meas.get('minutes')} min CPU"
+                          + (f" · union DTI {gen} on the untouched fold "
+                             f"{meas.get('measurement_fold')}" if gen is not None else ""))
+            else:
+                detail = c.get("note", "")
+        elif c["id"] == "human_steps":
+            detail = " · ".join(s["action"] for s in (meas.get("steps") or [])[:3]) + " …"
+        gate_rows.append(f'<tr><td class="mono small">{e(c["id"])}</td><td>{e(c["label"])}</td>'
+                         f'<td>{_readiness_pill(c["status"])}</td>'
+                         f'<td class="small">{e(detail)}</td>'
+                         f'<td class="small mono">{e(c.get("source", ""))}</td></tr>')
+    gate_table = (f'<table><thead><tr><th>Gate</th><th>What it asserts</th><th>Status</th>'
+                  f'<th>Measured</th><th>Re-check by hand</th></tr></thead><tbody>'
+                  f'{"".join(gate_rows)}</tbody></table>') if gate_rows else missing(
+        "The readiness measurement has not been committed.",
+        "python scripts/check_submission_readiness.py")
+
+    # ---- 3. routes ---------------------------------------------------------------------
+    routes = [
+        ("A", "Use the committed ensemble artifact", "seconds",
+         f"curl -L -o submission.tif {REPO}/raw/main/{SHIPPED_SUBMISSION}",
+         "The 11-fold blend with the adopted emission policy. Format-validated by the committed "
+         "validator log; its quality numbers are on <a href=\"results.html\">results</a>."),
+        ("B", "Re-run the training workflow on GitHub Actions", "2–6 h, free",
+         "gh workflow run train-and-submit.yml -f profile=smoke   # or: Actions → Train and build submission → Run workflow",
+         "Uses the CPU runner as the unrestricted machine: assembles data/ from the bridge, trains, "
+         "infers, validates, scores, and publishes <code>submission.tif</code> as a workflow artifact."),
+        ("C", "Generate one locally, CPU-only, no GPU", "≈ 20 min",
+         "python scripts/baseline_submission.py",
+         "Classical classifier on the official 19 bands. It holds out <b>two</b> folds: one selects "
+         "the emission policy on the <b>union</b> population, the other measures the winner "
+         "untouched, so the quoted number is not the maximum of the numbers it was chosen from. "
+         "Writes the raster, its <code>.sha256</code> sidecar and a report that refuses to claim "
+         "competitiveness. A floor, not a contender — see the caveat below."),
+        ("D", "Full-capacity GPU training", "≈ 1 h on a 24 GB GPU",
+         "python -m src.train --config configs/config.yaml && python -m src.inference --config configs/config.yaml --out submission.tif",
+         "The reference-scale configuration (10 MC splits, 60 epochs, EfficientNet-B5). Needs a GPU "
+         "box; not required for a valid first submission."),
+    ]
+    route_rows = "".join(
+        f'<tr><td><b>{e(k)}</b></td><td><b>{e(name)}</b></td><td class="small">{e(cost)}</td>'
+        f'<td><pre class="mono small" style="margin:0;white-space:pre-wrap">{e(cmd)}</pre></td>'
+        f'<td class="small">{why}</td></tr>' for k, name, cost, cmd, why in routes)
+
+    # ---- 5. upload steps ----------------------------------------------------------------
+    upload_steps = [
+        ("Join the competition", f'<a href="{COMP}">competition home</a> → create a DrivenData '
+         'profile → accept the rules.',
+         "entry"),
+        ("Open the Submit tab", f'<a href="{SUBMISSIONS_URL}">…/competition-doe-gems/submissions/</a> '
+         "(the platform shows the quota it will enforce).", "weekly_limit"),
+        ("Upload the .tif", "One file, unzipped, ≤ 100 MB in practice; the platform validates the "
+         "format on receipt and reports either a score or a format error.", "single_geotiff"),
+        ("Read the returned score", f'Public scores appear on the <a href="{LEADERBOARD_URL}">'
+         "leaderboard</a>; the headline number to beat was "
+         f'<b>{e(str(lb.get("top_dti", "—")))}</b> over {e(str(lb.get("n_ranked", "—")))} ranked '
+         "entrants when this repository last read it "
+         f'({e(str(lb.get("observed_utc", ""))[:10])}).', None),
+        ("Keep exactly one entry", "Before the deadline, designate the single submission that is "
+         "scored across <b>both</b> prize rounds — the same file, re-scored against the revised "
+         "label set.", "one_final_submission"),
+    ]
+    step_html = "".join(
+        f'<li><b>{e(t)}</b> — {body}'
+        + (f'<br>{quote_block(ev, qid, t)}' if qid else "")
+        + '</li>' for t, body, qid in upload_steps)
+
+    # ---- precomputed fragments (f-strings cannot carry backslashes in expressions on py3.11) --
+    validator_rows = "".join(
+        f'<tr><td class="mono">{e(sym)}</td><td class="small">{e(txt)}</td></tr>'
+        for sym, txt in vrows) or '<tr><td>—</td><td class="small">validator log not committed</td></tr>'
+    if dl:
+        deadline_html = (
+            f'Deadline as recorded in <code>docs/data_catalog.csv</code> row C1: '
+            f'<b>{e(dl.get("text", ""))}</b> — verified {e(str(dl.get("date", "")))} by '
+            f'{e(str(dl.get("method", "")))} ({e(str(dl.get("result", "")))}) from '
+            f'<a href="{e(str(dl.get("url", COMP)))}">the competition home page</a>. Confirm it on '
+            f'the platform: the catalogue is a dated snapshot, not a live feed.')
+    else:
+        deadline_html = (
+            f'The deadline could not be parsed from <code>docs/data_catalog.csv</code>; read it on '
+            f'<a href="{COMP}">the competition page</a> rather than trusting a page here.')
+    scores_note = (
+        f'Public scores appear on the <a href="{LEADERBOARD_URL}">leaderboard</a>; the headline '
+        f'number to beat was <b>{e(str(lb.get("top_dti", "—")))}</b> over '
+        f'{e(str(lb.get("n_ranked", "—")))} ranked entrants when this repository last read it '
+        f'({e(str(lb.get("observed_utc", ""))[:10])}).')
+    upload_steps = [
+        ("Join the competition",
+         f'<a href="{COMP}">competition home</a> &rarr; create a DrivenData profile &rarr; accept '
+         'the rules.', "entry"),
+        ("Open the Submit tab",
+         f'<a href="{SUBMISSIONS_URL}">…/competition-doe-gems/submissions/</a> — the platform shows '
+         'the quota it will enforce.', "weekly_limit"),
+        ("Upload the .tif",
+         'One file, unzipped, single band. The platform validates the format on receipt and returns '
+         'either a score or a format error.', "single_geotiff"),
+        ("Read the returned score", scores_note, None),
+        ("Keep exactly one entry",
+         'Before the deadline, designate the single submission that is scored across <b>both</b> '
+         'prize rounds — the same file, re-scored against the revised label set.',
+         "one_final_submission"),
+    ]
+    step_html = "".join(
+        f'<li><b>{e(title)}</b> — {body}'
+        + (quote_block(ev, qid, title) if qid else "")
+        + '</li>' for title, body, qid in upload_steps)
+    summary_line = (f'{e(str(summary.get("passed", "?")))} PASS · '
+                    f'{e(str(summary.get("missing", "?")))} missing · '
+                    f'{e(str(summary.get("failed", "?")))} failing · '
+                    f'{e(str(summary.get("human", "?")))} human-only')
+
+    # ---- final page ----------------------------------------------------------------------
+    return page("How to submit, exactly", "how_to_submit.html", f"""
+<p><b>A subpage of the <a href="executive_summary.html">executive summary</a>.</b> This is the
+recipe, in order: <b>which file</b> goes to the platform, <b>four ways</b> to obtain it (one of them
+CPU-only, needing neither a GPU nor any artefact a runner produced), <b>how to check it</b>,
+<b>where to click</b>, and <b>what the rules require</b> of the upload. Every gate below is a
+measurement from this checkout; nothing here is typed from memory. The long-form page,
+<a href="submission.html">submission details</a>, carries the same procedure with the measurements
+and the irregularities in full.</p>
+
+<h2 id="gates">1. What is already true in this repository (measured now)</h2>
+<p>Every row below is a measurement from <code>data/evidence/submission_readiness.json</code>
+({e(str(rd.get("generated_utc", "not committed")))}), produced by
+<code>scripts/check_submission_readiness.py</code>, which re-hashes the rasters, re-runs the
+pre-flight and re-reads the committed validator log. <code>HUMAN</code> is not a failure — it
+means no program here can do it.</p>
+{gate_table}
+{note("info", "<strong>The one gate that has never been closed is a person.</strong> Enrolling, "
+      "uploading and reading a private leaderboard are human-only (the rules sentence below). "
+      "Everything a machine can do up to that click is done and re-verified here, which is why "
+      "the first upload is the highest-value next action on this project.")}
+
+<h2 id="file">2. The file that goes to the platform</h2>
+<table><thead><tr><th>Field</th><th>Value</th><th>How it was established</th></tr></thead><tbody>
+<tr><td><b>Path in this repository</b></td><td class="mono small">{e(SHIPPED_SUBMISSION)}</td>
+<td class="small">the only artifact whose format validation and emission policy are both committed</td></tr>
+<tr><td><b>Bytes / sha256</b></td>
+<td class="mono small">{art['bytes']:,} bytes<br>{e(art.get('sha256', '—'))}</td>
+<td class="small">re-hashed by <code>scripts/build_site.py</code> while rendering this page</td></tr>
+<tr><td><b>Grid / type</b></td><td class="mono small">3292 × 3730 · EPSG:32611 · 100 m · float32 · [0,1] · NaN outside the footprint</td>
+<td class="small">the committed validator log: {len([r for r in vrows if r[0] == "✓"])} checks ✓,
+{_state_pill(vpassed, "PASSED", "NOT PROVEN")}</td></tr>
+<tr><td><b>Upload it with</b></td>
+<td class="small">download the raw URL from route A below, then run
+<code>sha256sum submission.tif</code> and compare with the hash in this row</td>
+<td class="small">a hash mismatch means the bytes are not the artifacts the numbers on this site describe</td></tr>
+</tbody></table>
+
+<h2 id="routes">3. Four routes to that file</h2>
+<table><thead><tr><th></th><th>Route</th><th>Cost</th><th>Exact command</th><th>What you get</th></tr></thead>
+<tbody>{route_rows}</tbody></table>
+
+<h2 id="validate">4. Validate before uploading (the gate that catches a silent format break)</h2>
+<pre><code>python scripts/validate_submission.py --pred submission.tif \
+    --sample data/sample_submission.tif --train data/training_features.tif</code></pre>
+<p>Expected last line: <code>✅ Validation PASSED - Ready for submission!</code> It checks CRS,
+resolution, single band, dtype, value range, grid, transform and NaN coverage, and exits non-zero on
+any failure, so it can gate a script. On the committed artifact the same log contains:</p>
+<table><thead><tr><th></th><th>Check</th></tr></thead><tbody>
+{validator_rows}
+</tbody></table>
+
+<h2 id="upload">5. Uploading, click by click</h2>
+<ol>{step_html}</ol>
+
+<h2 id="after">6. After the upload</h2>
+<ul>
+<li>Record the sha256 you uploaded next to the leaderboard score the platform returns: that is the
+only unbiased number this project has ever had (every local number is a surrogate, on
+<a href="results.html">results</a>).</li>
+<li>Diarise the final selection. <span class="small">{deadline_html}</span></li>
+<li>The same file is re-scored in Phase 2 against the expert-revised new-fault set.
+{quote_block(ev, "phase2_target", "why the local surrogates are not the scored population")}</li>
+</ul>
+
+<h2 id="rules">7. The rules sentences that bind the upload</h2>
+{quote_block(ev, "single_geotiff", "the submission format the platform enforces")}
+{quote_block(ev, "entry", "who may enter and how")}
+{quote_block(ev, "one_final_submission", "the final-selection obligation")}
+{quote_block(ev, "citizen", "eligibility")}
+{quote_block(ev, "ai_disclosure", "disclosure of generative-AI use")}
+
+<h2 id="baseline-caveat">8. The CPU route, and its own caveat</h2>
+<p class="small">{e((base_c or {}).get("note", "The CPU route has not been measured in this checkout."))}</p>
+{note("warn", "<strong>A submission that scores badly is still information; a submission that is "
+      "never uploaded is not.</strong> Route C exists so a valid entry is possible from any machine "
+      "in the project, and its own report refuses to claim competitiveness. Route A is the artifact "
+      "to upload first.")}
+
+<h2 id="sources">9. Every claim on this page, and where it comes from</h2>
+<table><thead><tr><th>Claim class</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>Gate statuses</td><td class="small"><code>data/evidence/submission_readiness.json</code>
+({summary_line})</td></tr>
+<tr><td>Artifact bytes + hash</td><td class="small">re-hashed at build time from
+<code>{e(SHIPPED_SUBMISSION)}</code>; recorded counterpart
+<code>{e(SHIPPED_EVIDENCE_DIR)}/submission.sha256</code></td></tr>
+<tr><td>Format specification</td><td class="small"><a href="{PROB}">problem description → submission
+format</a> · validator: <code>scripts/validate_submission.py</code></td></tr>
+<tr><td>Rules sentences</td><td class="small"><a href="{RULES}">official rules PDF</a>, quoted by id
+from <code>data/evidence/rules_quotes.json</code> ({_catalog_rows_text()}every catalogue row on
+<a href="sources.html">sources</a> carries its verification method, date and result)</td></tr>
+<tr><td>Leaderboard snapshot</td><td class="small"><code>data/evidence/independent_verification.json</code>
+· <a href="{LEADERBOARD_URL}">live leaderboard</a></td></tr>
+<tr><td>Quality of each field</td><td class="small"><a href="results.html">results</a> — surrogate
+populations, with the caveats that bound them</td></tr>
+<tr><td>Quality of the CPU route</td><td class="small"><code>data/evidence/baseline/baseline_report.json</code>
+— selected on fold {e(str((base_c or {}).get("measured", {}).get("held_out_fold", "?")))}, measured on the
+fold nothing touched, and the measurement <b>re-executed and diffed</b> inside the same run
+(<code>generalisation.audit</code>: reproduced
+{e(str((base_c or {}).get("measured", {}).get("audit_reproduced", "?")))}, max |Δ|
+{e(str((base_c or {}).get("measured", {}).get("audit_max_delta", "?")))}).</td></tr>
+</tbody></table>
+""", "Executive summary › how to submit: the exact file, the exact commands, the exact clicks, and "
+     "the gates this checkout passes right now.")
+
+
 def main() -> int:
     ev = {
         "inventory": load(ROOT / "data/evidence/inventory.json"),
@@ -3446,6 +3771,9 @@ def main() -> int:
         "combined_truth": load(ROOT / "data/evidence/proxy/combined_truth_shipped.json"),
         # The pre-registered FIELD rule's machine verdict (scripts/check_field_selection.py).
         "field_selection": load(ROOT / "data/evidence/field_selection.json"),
+        # The submission-readiness gate table (scripts/check_submission_readiness.py): every gate
+        # on docs/how_to_submit.html is a measurement from the checkout that built the page.
+        "readiness": load(ROOT / "data/evidence/submission_readiness.json"),
         # The same quantities recomputed on a GitHub-hosted runner from the same committed bytes,
         # compared field by field (.github/workflows/block-holdout.yml).
         "runner_reproduction": load(ROOT / "data/evidence/block_holdout/sandbox_vs_runner.json"),
@@ -3500,6 +3828,7 @@ def main() -> int:
     pages = {
         "index.html": build_index(ev),
         "executive_summary.html": build_executive_summary(ev),
+        "how_to_submit.html": build_how_to_submit(ev),
         "submission.html": build_submission(ev),
         "data.html": build_data(ev),
         "metric.html": build_metric(ev),
