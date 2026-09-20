@@ -6,9 +6,9 @@
  "baseline_report": "data/evidence/block_holdout/fold0_heldout.json",
  "pseudo_report": "data/evidence/pseudo_labels/fold0_heldout.json",
  "baseline_held_out_dti": 0.080584,
- "pseudo_held_out_dti": 0.184141,
+ "pseudo_held_out_dti": 0.148303,
  "baseline_held_out_px": 90433,
- "pseudo_held_out_px": 338649,
+ "pseudo_held_out_px": 471988,
  "bootstrap": {
   "baseline_no_pseudo": {
    "dti_p50": 0.07985,
@@ -26,17 +26,17 @@
    "n_scoreable_blocks": 7
   },
   "pseudo": {
-   "dti_p50": 0.185772,
+   "dti_p50": 0.151605,
    "dti_ci95": [
-    0.099301,
-    0.262417
+    0.069679,
+    0.231483
    ],
-   "contrast_vs_reference_p50": 0.106095,
+   "contrast_vs_reference_p50": 0.070533,
    "contrast_vs_reference_ci95": [
-    0.035616,
-    0.161646
+    0.011044,
+    0.133105
    ],
-   "prob_beats_reference": 0.999,
+   "prob_beats_reference": 0.988,
    "n_blocks": 56,
    "n_scoreable_blocks": 7
   }

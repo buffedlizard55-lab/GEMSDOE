@@ -1,6 +1,191 @@
-# Project status — 2026-09-19 (sessions 11–18)
+# Project status — 2026-09-19 (sessions 11–19)
 
-## Session 18 (current session, 2026-09-19) — the field axis got a pre-registered rule and a machine gate; the block-holdout got its fold-0 gap; the pseudo-label route was built, proven leakage-safe, and dispatched
+## Session 19 (current session, 2026-09-19) — every landed report read on every truth population, the submission path got its own page, and the third population is now measured on both arms
+
+Session 18's queue was: read the four landed reports, update the site and STATUS, pick the next
+experiment. All four reports are now read — but reading them exposed the real defect, which was not
+in the numbers, it was in *which population* the numbers were measured on.
+
+1. **All four block-holdout folds are committed, and the gap is a spread, not a point.**
+   Fold 3 landed on `main` while this session was working (commit `c129336`, run 35451858112), so
+   the partition is complete. `scripts/read_landed_reports.py` (new) recomposes the four committed
+   `fold*_generalisation_gap.json` files into
+   `data/evidence/block_holdout/fold_gap_summary.json`:
+
+   | fold | held-out DTI | trained-on DTI | gap | scoreable blocks (held/trained) | CI readable |
+   |---|---|---|---|---|---|
+   | 0 | 0.0806 [0.0586, 0.1021] | 0.0920 | **+0.0114** | 8 / 26 | no (8 units) |
+   | 1 | 0.0789 [0.0644, 0.0963] | 0.0719 | **−0.0070** | 9 / 25 | no (9 units) |
+   | 2 | 0.0480 [0.0238, 0.0803] | 0.0619 | **+0.0139** | 9 / 25 | no (9 units) |
+   | 3 | 0.0892 [0.0581, 0.1197] | 0.0985 | **+0.0093** | 8 / 26 | no (8 units) |
+
+   Mean **+0.006904**, min −0.007019, max +0.013916, spread **0.020935**, positive in 3 of 4 folds.
+   The honest reading is unchanged by the fourth fold and is now derived rather than asserted: *no
+   clear memorisation, no clear transfer gain* — the sign is not stable across folds and no fold
+   reaches the ≥12 resampling units a readable block-bootstrap interval needs, so the per-fold
+   intervals stay flagged `interval_readable: false` by the scorer itself. **The full-grid number
+   (0.099859, reproduced digit-for-digit on a runner) remains the selection statistic**; the gap is
+   quoted as a spread across folds, never as an error bar.
+
+2. **The pseudo-label contrast was measured on one population, and that population is the one the
+   pseudo-labels were cut from.** `data/evidence/pseudo_labels/fold0_two_population_contrast.json`
+   (derived, and the derivation reproduces the runner's committed paired bootstrap exactly —
+   DTIs, CI95 and P=0.999) reads the contrast on *every* committed truth population:
+
+   | scope | population | baseline → pseudo | contrast | P(pseudo > baseline) |
+   |---|---|---|---|---|
+   | held-out (8 blocks) | proxy-only (new-fault-like) | 0.0806 → 0.1841 | **+0.1036** | 0.999 |
+   | held-out (8 blocks) | catalogue labels | 0.2113 → 0.1239 | **−0.0874** | 0.001 |
+   | trained-on (26 blocks) | proxy-only | 0.0920 → 0.1428 | +0.0507 | 1.000 |
+   | trained-on (26 blocks) | catalogue labels | 0.2152 → 0.1388 | −0.0764 | 0.000 |
+
+   Emission support goes 90,433 → 338,649 px on the held-out blocks. Derived verdict
+   `TRADE_OFF_PROXY_GAINS_CATALOGUE_LOSSES`, `shippable_evidence: false`. The circularity is
+   *derived*, not asserted: `configs/config_pseudo_labels.yaml`'s `pseudo_label_path` is the same
+   `proxy_catalogue.tif` (code 2) the proxy truth comes from, so the +0.1036 arm is measured against
+   truth cut from the training signal's own raster while the −0.0874 arm is not. Two component
+   populations pointing in opposite directions settle nothing — which is the reason for item 3.
+
+3. **A third truth population is now measured: the union (new).**
+   `scripts/block_holdout_eval.py --combined-population` scores the union of the catalogue labels
+   and the new-fault-like proxy pixels the labels do not contain (122,652 px: 60,988 + 61,664,
+   disjointness verified at score time) as the closest local surrogate for the Phase-2 "complete
+   updated test set" of rules §3.6. It is off by default so every committed report keeps the schema
+   its tests pin. Why it cannot be inferred from the two components: `TP_w` and `FN_w` are sums over
+   *truth* pixels and the two populations are disjoint, so they add — but **`FP_w` is a sum over
+   *prediction* pixels** (1 − max_g k(d(x,g))), so the union's `FP_w` is not the sum of the
+   components' and the union DTI must be scored from the rasters.
+   `data/evidence/proxy/combined_truth_shipped.json`: the shipped artifact scores **0.207431, CI95
+   [0.192924, 0.222879]** on that surrogate (components: catalogue 0.229799, proxy-only 0.099859).
+   The full candidate sweep on the union puts the adopted policy **2nd of the 10 distinct emissions** (50 swept, 40 pruned as duplicates): widening
+   to 1 px scores 0.212838, a **+0.0054** contrast at **P = 0.815** with support 516,204 px — below
+   *both* pre-registered bars (P ≥ 0.95 and +0.010), so **the adopted emission policy holds on a
+   third population too**. Mean per-block sign agreement between the two component populations is
+   **0.747** — that is the mean of `population_agreement.per_candidate[].agreement_fraction` over
+   the 50 swept candidate rows, i.e. the block-level story is mostly shared but not identical. For
+   the adopted candidate itself the two populations agree in sign on **32 of 32** blocks where both
+   are scoreable (`agreement_fraction: 1.0`), so the disagreement lives in the *rejected* candidates.
+
+4. **Both arms of the fold-0 contrast now exist on the union — via a download, not a retrain.**
+   The first pseudo fire's artifact did not carry `outputs/prob_raw.tif`, so *that* arm can never be
+   scored on a new population (recorded in `LIMITATIONS.md`; do not try to reconstruct it). The
+   workflows are fixed instead, and the fix is pinned by lint tests:
+   * `block-holdout.yml` and `pseudo-label.yml` score every scope with `--combined-population`, so
+     each fold's raw field carries all three populations while the field still exists;
+   * `pseudo-label.yml` downloads the **baseline** arm's raw field from the artifact of the run that
+     produced its committed report (`BASELINE_RUN_ID=35413207736` → artifact `block-holdout-fold-0`,
+     24.8 MB, verified present today, expires 2026-10-03) and re-scores it on the union. The sha256
+     the committed report recorded for its own input is checked first, so a wrong run id fails the
+     job instead of contrasting two different fields; a missing file warns and the union contrast is
+     reported `NOT_SCORED` rather than guessed;
+   * `pseudo-label.yml`'s artifact now carries `outputs/prob_raw.tif` + `outputs/manifest.json`;
+   * `scripts/read_landed_reports.py --strict` recomposes the whole contrast from the committed
+     per-block rows, independently of the runner's inline bootstrap, and **exits 2** if they
+     disagree — a derived number is committed only when an independent recomputation reproduces it.
+     The same script reads a sibling `*_combined.json` report as either arm's union population,
+     validated to be the *same* probability field by input sha256, and records per-population
+     `sources` in the output so every number says which file it came from;
+   * `--gaps-only` writes just the fold-gap summary, which is all a block-holdout job can derive the
+     moment a fold lands (no pseudo arm exists yet).
+   The trigger was re-fired with that reasoning recorded in `.github/triggers/pseudo-label`, and the
+   branch push dispatched it (run **35477119490**): every new step came back **green** — the
+   cross-run artifact download, the sha256 gate (it accepted the downloaded field, so
+   `BASELINE_RUN_ID=35413207736` really is the run that produced the committed report), both arms'
+   three-population scoring, the `--strict` recomputation (it matched the runner's own inline
+   bootstrap, so the run did not exit 2), the evidence commit through `scripts/push_evidence.sh` and
+   the artifact upload that now carries `outputs/prob_raw.tif`. The measurement is item 8.
+
+5. **A latent CI defect fixed on the way: evidence pushes raced each other.** Three fold jobs plus a
+   pseudo-label fire from the same trigger push all rewrite the *same derived file*
+   (`fold_gap_summary.json`), and the old `git commit; git pull --rebase; git push` sequence fails
+   the job when two interleave — losing 300 minutes of evidence. `scripts/push_evidence.sh` replaces
+   it in both workflows: on a conflict it **regenerates the derived file from the merged tree** (the
+   only correct resolution — the summary is a function of every committed fold) and re-stages exactly
+   the files that were staged, never an unrelated large raster.
+
+6. **`docs/submission.html` — the operational page (new).** Nav entry "Make a submission": what to
+   upload, where, in what format, what the rules require, what is irregular, and the pre-flight
+   checklist. Nothing on it is typed as a fact: the artifact's sha256 and byte count are re-hashed at
+   build time, the data-placement table compares the manifest pins against whatever `data/` holds
+   now, the validator table is the committed validation log parsed, rules sentences are quoted by id
+   from `data/evidence/rules_quotes.json` with their verification badge, and the catalog row count is
+   read from `docs/data_catalog.csv` (92 rows). `scripts/audit_docs.py` passes (0 uncatalogued hosts).
+
+7. **The tests found four real defects, all fixed.** `relative_to(ROOT)` crashed on any path outside
+   the repo (8 call sites → a `_rel()` helper); every directory/config default was bound at `def`
+   time, so monkeypatching the constant did nothing (`Path(arg or CONSTANT)` at call time); the
+   submission page rendered "rank 1 of ?" whenever the decision record carried no rank (`_policy_
+   subtitle()` now renders the rank only when it exists); and a test token used `"single-band".title()`
+   where the page says `single-band`.
+
+**Verification.** Local suite **368 passed, 1 skipped** (baseline 318 at the start of the session;
++49 pinning the combined population, the landed-report reader and the submission page, +6 workflow
+lints for the three-population scoring, the sha256 gate, the artifact contents and the race-safe
+push, +5 for the sibling re-scores, `--strict` and `--gaps-only`). `read_landed_reports.py --check
+--strict --quiet` passes on the committed evidence. Site rebuilt from `scripts/build_site.py`, and
+the fold-gap caveat on the results page is now *derived* from `fold_gap_summary.json` instead of
+asserting "folds 1–3 are in flight".
+
+8. **The re-fire landed: the union population is measured on both arms — and it does not clear the
+   bar.** Run 35477119490 (branch, 2026-09-20T02:06Z) committed both arms on all three populations.
+   Fold 0, adopted policy `floor0.1_w0px`:
+
+   | scope | population | baseline → pseudo | contrast | P(pseudo > baseline) | CI95 of the contrast |
+   |---|---|---|---|---|---|
+   | **held-out (8 blocks)** | **combined (union)** | 0.197183 → **0.228463** | **+0.031280** | **0.916** | [−0.010237, +0.082188] |
+   | held-out (8 blocks) | proxy-only | 0.080584 → 0.148303 | +0.067719 | 0.988 | [+0.011044, +0.133105] |
+   | held-out (8 blocks) | catalogue labels | 0.211259 → 0.103369 | −0.107890 | 0.000 | [−0.155060, −0.068517] |
+   | trained-on (26 blocks) | combined (union) | 0.227349 → 0.189818 | −0.037531 | 0.0025 | [−0.064954, −0.007951] |
+   | trained-on (26 blocks) | proxy-only | 0.092020 → 0.097677 | +0.005657 | 0.700 | [−0.013210, +0.028078] |
+   | trained-on (26 blocks) | catalogue labels | 0.215206 → 0.106995 | −0.108211 | 0.000 | [−0.121993, −0.094166] |
+
+   Derived verdict **`GAIN_ON_THE_COMBINED_SURROGATE`** ("the combined population is the only
+   committed population that contains BOTH fault kinds, and it moves +0.031280"), and
+   **`shippable_evidence: false`** — which in this file is a *constant by construction*, not a
+   threshold that was evaluated: the reader makes no shipping decision, and the `shipping_note` says
+   a pseudo-labelled field reaches the leaderboard only through `docs/FIELD_SELECTION_RULE.md` as a
+   new `reblend.yml` RUN_ID with R3 measured on both fields' raw rasters, while the proxy arm here is
+   source-circular. Read against the bar that rule *does* use (R3: paired block bootstrap
+   P ≥ 0.95), the union contrast reaches **P = 0.916 with an interval that spans zero on 8 scoreable
+   blocks** — so it is *suggestive, not established*, and the scorer's own reliability rule (below 12
+   resampling units the interval is COARSE) means P here is a spread indicator, not a confidence
+   statement.
+
+   Three things keep this from being a positive result:
+   * **The effect is the size of the replicate noise.** The first fire measured proxy +0.1036
+     (P = 0.999) and catalogue −0.0874 (P = 0.001); this fire, same seed, same config, same
+     partition, different runner, measured proxy **+0.0677** and catalogue **−0.1079**. That is a
+     ~0.036 run-to-run swing on the proxy arm — the same order as the +0.0313 union contrast itself.
+   * **The two scopes disagree in sign on the union** (+0.0313 held-out vs −0.0375 trained-on). A
+     held-out-only gain is the direction that would matter (generalisation, not memorisation), but a
+     sign flip between scopes on the same field is instability, not a result.
+   * **Eight blocks is not a sample.** Both fires' numbers are in git history; the second overwrote
+     the first's files, so quoting either one alone would overstate the precision.
+
+   One coincidence worth defusing explicitly: the baseline's union held-out DTI is **0.197183**, which
+   looks like the public leaderboard's top score (**0.1972**). They are unrelated quantities — 8
+   held-out 51 km blocks of one survey against a local surrogate truth, versus the private
+   expert-labelled new-fault test set — and the resemblance carries no information at all.
+
+**Verification (this item).** Run 35477119490 steps 11/12/14 (artifact download, sha256-gated
+re-score, `--strict` derived reading) all completed `success`; the committed
+`data/evidence/pseudo_labels/fold0_derived_reading.log` is that step's own output. Merging this work
+to `main` re-fires the same trigger path, and that run is **cancelled before it can commit**: a third
+replicate would overwrite the committed evidence these docs quote without answering anything new, and
+the workflow itself is already validated end to end by 35477119490. Re-firing on purpose means
+changing a parameter (a different fold, or a pooled multi-fold contrast), not repeating this one. Locally the suite
+was re-run after the sandbox restart that wiped the venv and the gitignored rasters: the bridge
+reassembled all four files with every sha256 pin verified and the suite returned to **375 passed,
+1 skipped** (the transient second skip was only `pypdf` missing from the fresh venv).
+
+**Next session:** the union question is answered as far as one fold can answer it — *suggestive gain,
+under-powered, inside replicate noise*. Do not re-fire fold 0 expecting a different number; if the
+pseudo route is pursued it needs **≥12 scoreable blocks**, i.e. a contrast pooled over the four
+committed folds rather than one, before P means anything. Otherwise the §11 ordering stands: **8
+(human: enroll and upload — the only unbiased signal available) → 3 (1 m DEM derivatives) → 6 (GPU
+EfficientNet-B5) → 4 (selection on the union population, which every fold field now carries)**.
+
+## Session 18 (2026-09-19) — the field axis got a pre-registered rule and a machine gate; the block-holdout got its fold-0 gap; the pseudo-label route was built, proven leakage-safe, and dispatched
 
 Session 17 closed the cross-catalogue question (refused) and left three open work items from the
 plan: commit a FIELD-selection rule before any re-blend, dispatch block-holdout folds 1–3, and

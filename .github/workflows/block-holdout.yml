@@ -25,7 +25,14 @@ name: Block-holdout evaluation (per-block DTI, bootstrap CI, fold-restricted tra
 #                  metric's R, then scores each fold's raw probability map TWICE: on the blocks that
 #                  fold never saw (--score-fold K) and on the blocks it trained on (--score-fold K
 #                  --complement).  The difference is the generalisation gap, per fold, with a
-#                  bootstrap CI - the measurement the scattered-window holdout cannot make.
+#                  bootstrap CI - the measurement the scattered-window holdout cannot make.  Each
+#                  scope is scored on THREE truth populations (--combined-population): the
+#                  catalogue labels, the new-fault-like proxy pixels the labels do not contain, and
+#                  their disjoint union - the union is the closest available stand-in for the
+#                  private leaderboard's population, and it is what a fold's raw field is later
+#                  contrasted against (see pseudo-label.yml).  After a fold lands, the job refreshes
+#                  the DERIVED data/evidence/block_holdout/fold_gap_summary.json with
+#                  scripts/read_landed_reports.py --gaps-only.
 #
 # Egress: the competition rasters come from the sha256-pinned git bridge when it is in the tree
 # (scripts/assemble_data_bridge.py) and from the data-tab Dropbox mirrors otherwise, exactly like
@@ -314,11 +321,9 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f "$D" || true
-          git diff --cached --quiet && echo "no block-holdout evidence changes" || {
-            git commit -m "evidence(block-holdout): per-block DTI + bootstrap CI measured on a runner [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          }
+          # this job and the fold jobs of the same run push at the same time
+          bash scripts/push_evidence.sh \
+            "evidence(block-holdout): per-block DTI + bootstrap CI measured on a runner [skip ci]"
 
       - name: Upload block-holdout artifacts
         if: always()
@@ -408,6 +413,7 @@ jobs:
               --proxy data/evidence/proxy/proxy_catalogue.tif \
               --template data/sample_submission.tif \
               --score-fold ${{ matrix.fold }} $MODE \
+              --combined-population \
               --crosscheck-sweep "" \
               --out "data/evidence/block_holdout/fold${{ matrix.fold }}_${TAG}.json" \
               2>&1 | tee "data/evidence/block_holdout/fold${{ matrix.fold }}_${TAG}.log"
@@ -453,14 +459,21 @@ jobs:
           set -euo pipefail
           set +e
           D=data/evidence/block_holdout
+          K=${{ matrix.fold }}
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f "$D"/fold${{ matrix.fold }}_*.json "$D"/fold${{ matrix.fold }}_*.log || true
-          git diff --cached --quiet && echo "no per-fold evidence changes" || {
-            git commit -m "evidence(block-holdout): fold ${{ matrix.fold }} generalisation gap [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          }
+          # fold_gap_summary.json is DERIVED from every committed fold*_generalisation_gap.json, so
+          # the job that lands a fold is the job that refreshes it: scripts/read_landed_reports.py
+          # recomposes the per-fold gaps from the committed rows (it never re-scores a raster),
+          # counts the folds that have landed and names the ones still missing.  --gaps-only skips
+          # the paired pseudo-label contrast, which needs an arm this workflow does not produce.
+          python scripts/read_landed_reports.py --gaps-only --quiet \
+            || echo "::warning::the fold-gap summary could not be refreshed from the committed folds"
+          git add -f "$D"/fold${K}_*.json "$D"/fold${K}_*.log "$D"/fold_gap_summary.json || true
+          # three folds push in parallel and all of them touch the summary, so the push retries and
+          # REGENERATES the derived file from the merged tree instead of resolving a conflict
+          bash scripts/push_evidence.sh \
+            "evidence(block-holdout): fold $K generalisation gap [skip ci]"
 
       - name: Upload fold artifact
         if: always()
@@ -472,6 +485,7 @@ jobs:
             outputs/manifest.json
             outputs/heldout_mc*.npz
             data/evidence/block_holdout/fold${{ matrix.fold }}_*
+            data/evidence/block_holdout/fold_gap_summary.json
             train_block_holdout.log
             inference_block_holdout.log
           retention-days: 14

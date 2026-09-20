@@ -1,6 +1,12 @@
 # Submission Guide — GEMS Prize (Verified from Official Sources)
 
-> **See also:** [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) and the online
+> **See also:** the online **[Make a submission](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html)**
+> page — the same path as a build-time-verified checklist (artifact sha256 re-hashed from the bytes,
+> the placement table compared against whatever `data/` holds now, the validator table parsed from its
+> own committed log, rules sentences quoted by id with their verification badge, and the irregularities
+> that a submitter must know about before uploading).
+>
+> Also [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) and the online
 > [Executive Summary Subpage](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)
 > for the comprehensive executive roadmap, eligibility rules, Generative AI disclosure narrative, and
 > pre-validated ready-to-upload submission raster.

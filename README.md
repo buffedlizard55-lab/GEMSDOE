@@ -2,8 +2,11 @@
 
 > **Start here → [Executive summary: How to submit](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)** (markdown: [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md))
 >
+> **Just submitting? → [Make a submission](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html)** — the operational checklist: the exact artifact (sha256 re-hashed at build time), the format the platform enforces, the rules sentences that bind it, the known irregularities, and the pre-flight gate. Uploading is human-only; everything up to the upload is done and validated.
+>
 > **Project Site:** [Overview](https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html) ·
 > [Executive summary](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html) ·
+> [Make a submission](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html) ·
 > [Data](https://buffedlizard55-lab.github.io/GEMSDOE/docs/data.html) ·
 > [Current review](REVIEW_2026-09-17.md) ·
 > [Metric](https://buffedlizard55-lab.github.io/GEMSDOE/docs/metric.html) ·
@@ -21,6 +24,22 @@
 > superseded** — in particular, the claim that competition data cannot be downloaded is no
 > longer true (it was acquired via the Actions data bridge), and the feature stack has
 > **19 bands, not the ~10** listed below. Prefer the site and `STATUS.md` where they disagree.
+>
+> **2026-09-19 (session 19): every landed report is read, on every truth population.** All four
+> block-holdout folds are committed and their generalisation gap is derived from them — **+0.0114 /
+> −0.0070 / +0.0139 / +0.0093**, mean **+0.006904**, spread **0.020935** — but no fold has the ≥12
+> resampling units a readable block-bootstrap interval needs, so the honest reading is *no clear
+> memorisation, no clear transfer gain* and the full-grid DTI stays the selection statistic
+> (`data/evidence/block_holdout/fold_gap_summary.json`). A **third truth population** is now measured:
+> the disjoint union of the catalogue labels and the new-fault-like proxy pixels (122,652 px), the
+> closest local surrogate for the expanded Phase-2 truth of rules §3.6 — the shipped artifact scores
+> **0.2074 CI95 [0.1929, 0.2229]** there and the adopted emission policy **holds** (the only better
+> candidate is +0.0054 at P = 0.815, below both pre-registered bars). The SGMC pseudo-label fold 0
+> landed as a **trade-off, not a gain**: proxy-only +0.1036 (P = 0.999) against catalogue −0.0874
+> (P = 0.001) on the held-out blocks, i.e. not shippable on this evidence, and its union arm is being
+> measured by the re-fired workflow. New: [`docs/submission.html`](https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission.html),
+> `scripts/read_landed_reports.py` (derivation with a `--strict` cross-check) and
+> `scripts/push_evidence.sh` (race-safe evidence pushes). Suite: **368 passed, 1 skipped**.
 >
 > **2026-09-17 (session 9): the data-placement blocker is resolved.** The three official rasters are
 > committed as sha256-pinned git parts (`data/bridge/`) and reassembled into `data/` with every hash

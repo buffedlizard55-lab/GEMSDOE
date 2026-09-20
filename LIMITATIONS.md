@@ -1,3 +1,74 @@
+## Session 19 (2026-09-19) — what the third population and the four-fold gap do and do not license
+
+1. **The combined (union) population is a surrogate, not the private truth, and its DTI is not a
+   predicted score.** It is the disjoint union of two *local* catalogues — the competition's
+   `labels.tif` (60,988 px) and the SGMC proxy's code-2 pixels that the labels do not contain
+   (61,664 px) — so it contains **no expert-verified new faults**, which is what rules §3.6 scores
+   in both phases. The shipped artifact's **0.207431 CI95 [0.192924, 0.222879]** on that union is
+   therefore *not comparable* to the public leaderboard's top score of 0.1972 and must never be
+   quoted as a predicted standing. What it does license: a **third, differently-composed population
+   on which the adopted emission policy was re-tested and held** (the only better candidate is
+   +0.0054 at P = 0.815, below both pre-registered bars).
+2. **`FP_w` is not decomposable across truth populations.** `TP_w` and `FN_w` are sums over *truth*
+   pixels and the two populations are disjoint, so they add; `FP_w` is a sum over *prediction*
+   pixels (1 − max_g k(d(x,g))), so the union's `FP_w` is **not** the sum of the components'. Any
+   sentence of the form "the union DTI follows from the two component DTIs" is false — the union must
+   be scored from the rasters, which is why both workflows now pass `--combined-population`.
+3. **The four-fold generalisation gap is a spread of point readings, not a distribution with error
+   bars.** Folds have 8, 9, 9 and 8 scoreable blocks; a readable block-bootstrap interval needs ≥12,
+   so every per-fold interval is flagged `interval_readable: false` by the scorer itself. The gap's
+   **sign is not stable across folds** (+0.0114, −0.0070, +0.0139, +0.0093). Per-fold rankings are
+   not supported by this evidence, and the **full-grid DTI (0.099859, reproduced digit-for-digit on a
+   runner) remains the selection statistic**.
+4. **The first pseudo-label fire's raw field is unrecoverable.** Run 35451858126's artifact did not
+   carry `outputs/prob_raw.tif`, so that arm can never be scored on the union (or on any future
+   population). The re-fire is a **new training run** with the same seed, partition and config, i.e. a
+   *replicate*, not the same field: if its proxy-only contrast differs from +0.1036 within training
+   noise, that is expected, not a contradiction. The fixed artifact list (`outputs/prob_raw.tif` +
+   `outputs/manifest.json`) is what prevents this class of loss going forward.
+5. **The baseline arm's union numbers depend on an artifact retention window.** They come from
+   downloading run 35413207736's `block-holdout-fold-0` artifact (24.8 MB, `retention-days: 14`,
+   **expires 2026-10-03**) and re-scoring it after a sha256 gate. After that date the baseline's union
+   population can only be read from the committed sibling JSON this fire produces — or by retraining
+   fold 0. The committed JSON survives; the raster does not.
+6. **Artifact downloads are egress-blocked in this sandbox**, so the download-and-re-score step
+   cannot be exercised locally end to end: it is verified by static lint (the sha256 gate, the
+   `run-id` parameter plumbing, the `continue-on-error` path, the missing-file warning) and by the
+   API listing that proves the artifact exists and its size. The *scoring* it feeds is the same
+   `--combined-population` code path that produced `combined_truth_shipped.json` locally.
+7. **The union contrast for fold 0 is measured — and it is under-powered, not decisive.** Run
+   35477119490 (2026-09-20T02:06Z) landed both arms on all three populations. On the union, the
+   held-out blocks give baseline 0.197183 → pseudo **0.228463**, contrast **+0.031280**,
+   **P = 0.916**, CI95 **[−0.010237, +0.082188]** — the interval spans zero, and with only **8
+   scoreable blocks** the scorer's own reliability rule marks it COARSE, so P is a spread indicator
+   rather than a confidence statement. The trained-on blocks move the *other* way on the same
+   population (−0.037531, P = 0.0025, 26 blocks). Derived verdict
+   `GAIN_ON_THE_COMBINED_SURROGATE` with `shippable_evidence: false` — and that flag is a **constant
+   by construction** in `scripts/read_landed_reports.py`, not a threshold that was evaluated: the
+   reader makes no shipping decision. Measured against the bar `docs/FIELD_SELECTION_RULE.md`
+   actually pre-registers for adopting a field (R3: paired block bootstrap P ≥ 0.95; R1: a +0.010
+   margin), this contrast clears the margin and **misses P**, so it licenses *no* adoption. It is
+   suggestive on the only population that contains both fault kinds, and that is all it is.
+8. **GitHub Pages is served by the legacy branch build, not by `pages.yml`.** Verified 2026-09-19:
+   `build_type: legacy`, `source: {branch: main, path: "/"}`; `/GEMSDOE/docs/executive_summary.html`
+   resolves while `/GEMSDOE/executive_summary.html` 404s, even though the Actions deploy job reports
+   success with a `docs/`-rooted artifact. **Limitation:** every README/site link is correct for the
+   legacy build only; switching Pages to the workflow build would break all of them at once, so the
+   mismatch is flagged here rather than "fixed" in one file.
+9. **Replicate variability is now measured, and it is the size of the effect.** The two pseudo-label
+   fires used the same seed (46), the same config and the same block partition, on different runners:
+   fire 1 gave proxy-only **+0.1036** (P = 0.999) and catalogue **−0.0874** (P = 0.001); fire 2 gave
+   proxy-only **+0.0677** (P = 0.988) and catalogue **−0.1079** (P = 0.000). That is a ~0.036
+   run-to-run swing on one arm and ~0.020 on the other — **the same order as the +0.0313 union
+   contrast**, so no single-fold contrast from this pipeline should be read to two decimal places.
+   Both fires are in git history, but the second overwrote the first's committed files, so quoting
+   either one alone overstates the precision. What would fix it: a contrast pooled over the four
+   committed folds (≥12 scoreable blocks per scope) instead of one fold, or repeated fires with the
+   spread reported.
+10. **Submitting is still human-only.** No DrivenData account or credentials exist in this sandbox
+   (the data tab redirects to login), so nothing here can enrol, upload, read a public score, or make
+   the single final selection. `docs/submission.html` is the handover checklist for the person who can.
+
 ## Session 16 (2026-09-18) — what the new error bars do and do not license
 
 1. **The emission decision now has an error bar, and the bar does not move the decision.** Block-stratified

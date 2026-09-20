@@ -23,3 +23,34 @@ pseudo-label
 # RUN_ID with measured R3.  This fire produces the measurement such an adoption would need.
 #
 # Parameters: .github/triggers/pseudo-label-params
+
+# 2026-09-19 (session 19): SECOND fire, same parameters - the workflow that measures them changed.
+#
+# WHY AGAIN: the first fire (above) landed fold 0 on the two COMPONENT populations only:
+# proxy-only +0.1036 [P=0.999] and catalogue -0.0874 [P=0.001] on the held-out blocks
+# (data/evidence/pseudo_labels/fold0_paired_vs_baseline.json).  Those two numbers point in
+# opposite directions, so neither can settle anything, and the private leaderboard scores a
+# population that contains BOTH kinds of fault.  The union is the only population on which the
+# question "does the SGMC signal add detection or move it between fault kinds?" has one answer.
+# FP_w is a sum over PREDICTION pixels, so the union's DTI cannot be inferred from the two
+# components - it has to be scored from the rasters.  The first fire's artifact did not carry
+# outputs/prob_raw.tif, so its pseudo arm cannot be re-scored; this fire fixes the artifact list
+# and measures the union on both arms.
+#
+# WHAT IS NEW IN THE WORKFLOW SINCE THE FIRST FIRE
+#   * --combined-population on the pseudo arm's scoring (both scopes);
+#   * the baseline arm's raw field is downloaded from run 35413207736's artifact
+#     block-holdout-fold-0 and re-scored on the union AFTER its sha256 is checked against the
+#     one its committed report recorded (BASELINE_RUN_ID) - no second training run;
+#   * scripts/read_landed_reports.py --fold K --strict recomposes the whole contrast from the
+#     committed per-block rows and FAILS the run if it disagrees with the inline bootstrap;
+#   * the artifact now carries outputs/prob_raw.tif + outputs/manifest.json, so any later
+#     population question about this arm is a download, not a retrain;
+#   * scripts/push_evidence.sh replaces the bare pull --rebase + push, because a block-holdout
+#     fire triggered by the same push rewrites the same derived fold_gap_summary.json.
+#
+# WHAT WOULD CHANGE THE ANSWER: a positive union contrast on the held-out blocks with
+# P(pseudo > baseline) >= 0.95 would mean the signal adds detection on the population the
+# leaderboard actually scores.  The pre-registered shipping thresholds are unchanged
+# (docs/FIELD_SELECTION_RULE.md): the union contrast must clear 0.95 / +0.010 before a
+# pseudo-labelled field may even be proposed to the field-selection gate.  Nothing here ships.

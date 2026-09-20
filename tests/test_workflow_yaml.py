@@ -260,3 +260,129 @@ def test_pseudo_label_params_fire_is_paired():
         f"the fire targets fold {fold} but its no-pseudo baseline {base.name} is not committed"
     assert keys.get("SEED", "").strip() in ("46",), \
         "the paired reading requires the baseline's seed (46)"
+
+
+# --------------------------------------------------------------------------------------
+# three populations, one field, and the derived files that follow from them
+#
+# Session 19 measured the shipped artifact on the UNION of the catalogue labels and the
+# new-fault-like proxy pixels the labels do not contain (data/evidence/proxy/
+# combined_truth_shipped.json: DTI 0.207431 [0.192924, 0.222879] on 122,652 truth px) and found
+# that the two component populations of the pseudo-label signal move in OPPOSITE directions
+# (fold 0: proxy +0.1036, catalogue -0.0874).  FP_w is a sum over PREDICTION pixels, so the
+# union's DTI cannot be inferred from the components - both arms have to be scored on the union
+# from their raw rasters.  The first pseudo-label fire could not be re-scored because its artifact
+# did not carry outputs/prob_raw.tif.  These tests pin the fixed workflow text.
+# --------------------------------------------------------------------------------------
+def _steps(wf_name: str, job: str) -> list[dict]:
+    return yaml.safe_load((REPO / ".github" / "workflows" / wf_name).read_text())["jobs"][job]["steps"]
+
+
+def _step(steps: list[dict], needle: str) -> dict:
+    hit = [s for s in steps if needle in str(s.get("run", "")) or needle in str(s.get("name", ""))]
+    assert hit, f"no step matching {needle!r}"
+    return hit[0]
+
+
+def test_pseudo_label_scores_both_arms_on_the_combined_population():
+    """Both arms of the paired contrast must exist on all three truth populations."""
+    steps = _steps("pseudo-label.yml", "train")
+    pseudo_score = _step(steps, "--score-fold ${{ needs.params.outputs.fold }} $MODE")
+    assert "--combined-population" in pseudo_score["run"], \
+        "the pseudo arm must be scored on the union population too, not only its two components"
+    base_score = _step(steps, "Score the baseline field on the same three populations")
+    assert "--combined-population" in base_score["run"], \
+        "the baseline arm must be re-scored on the union, otherwise the contrast has one arm only"
+    dl = _step(steps, "Download the baseline field")
+    assert dl.get("uses") == "actions/download-artifact@v4"
+    with_ = dl["with"]
+    assert with_["run-id"] == "${{ needs.params.outputs.baseline_run_id }}", \
+        "the baseline field comes from a specific run's artifact, so the run id must be a parameter"
+    assert with_["name"] == "block-holdout-fold-${{ needs.params.outputs.fold }}", \
+        "the artifact name must follow block-holdout.yml's per-fold naming"
+    assert with_.get("github-token") == "${{ secrets.GITHUB_TOKEN }}", \
+        "a cross-run artifact download needs the token"
+    assert dl.get("continue-on-error") is True, \
+        "an expired artifact must warn, not fail a 300-minute training run that already produced evidence"
+    upload = _step(steps, "Upload fold artifact")
+    assert "outputs/prob_raw.tif" in str(upload["with"]["path"]), \
+        "without the raw field in the artifact this arm can never be scored on a new population"
+
+
+def test_the_baseline_re_score_refuses_a_field_that_is_not_the_committed_one():
+    """A wrong BASELINE_RUN_ID must fail loudly, not contrast two different probability fields."""
+    steps = _steps("pseudo-label.yml", "train")
+    run = _step(steps, "Score the baseline field on the same three populations")["run"]
+    assert "inputs']['pred_grid']['sha256']" in run or 'pred_grid' in run, \
+        "the gate must read the sha256 the committed report recorded for its own input"
+    assert "sha256sum" in run
+    assert re.search(r'if \[ "\$WANT" != "\$GOT" \]; then', run), "the comparison must be explicit"
+    assert "exit 1" in run and "::error::" in run
+    assert re.search(r'if \[ ! -f "\$SRC" \]; then', run) and "exit 0" in run, \
+        "a missing file in the artifact is a warning (the combined contrast is then NOT_SCORED)"
+
+
+def test_the_derived_reading_is_cross_checked_before_anything_is_committed():
+    """--strict means: an independent recomputation must reproduce the runner's own contrast."""
+    steps = _steps("pseudo-label.yml", "train")
+    names = [str(s.get("name", "")) for s in steps]
+    derived = next(i for i, s in enumerate(steps)
+                   if "read_landed_reports.py" in str(s.get("run", "")) and "--strict" in str(s.get("run", "")))
+    commit = next(i for i, n in enumerate(names) if n.startswith("Commit the pseudo-label evidence"))
+    assert derived < commit, "the strict reading must run before the commit step it feeds"
+    run = steps[commit]["run"]
+    assert "fold_gap_summary.json" in run, "the refreshed derived summary must be committed"
+    assert "scripts/push_evidence.sh" in run
+
+
+def test_block_holdout_scores_three_populations_and_refreshes_the_derived_summary():
+    steps = _steps("block-holdout.yml", "train")
+    score = _step(steps, "--score-fold ${{ matrix.fold }} $MODE")
+    assert "--combined-population" in score["run"], \
+        "each fold's raw field must carry the union population while the field still exists"
+    commit = _step(steps, "Commit the per-fold block-holdout evidence")
+    assert "read_landed_reports.py --gaps-only" in commit["run"], \
+        "the job that lands a fold is the job that refreshes the derived summary"
+    assert "fold_gap_summary.json" in commit["run"]
+    assert "scripts/push_evidence.sh" in commit["run"]
+    upload = _step(steps, "Upload fold artifact")
+    assert "fold_gap_summary.json" in str(upload["with"]["path"])
+
+
+def test_evidence_pushes_survive_the_parallel_landing_of_derived_files():
+    """Three fold jobs and a pseudo-label fire can all rewrite fold_gap_summary.json at once.
+
+    A bare `git pull --rebase; git push` fails the job when two of them interleave, and the
+    evidence of a 300-minute run is lost with it.  The helper regenerates the DERIVED file from
+    the merged tree instead of resolving the conflict from either side.
+    """
+    helper = REPO / "scripts" / "push_evidence.sh"
+    assert helper.exists()
+    text = helper.read_text()
+    assert "read_landed_reports.py --gaps-only" in text, \
+        "on a conflict the summary must be re-derived from the merged tree"
+    assert "git rebase --abort" in text and "git reset --mixed HEAD~1" in text
+    assert "git diff --cached --name-only" in text, \
+        "a retry must re-stage exactly the files that were staged, never an unrelated large raster"
+    import subprocess
+    r = subprocess.run(["bash", "-n", str(helper)], capture_output=True, text=True)
+    assert r.returncode == 0, f"push_evidence.sh does not parse:\n{r.stderr}"
+    for wf in ("block-holdout.yml", "pseudo-label.yml"):
+        body = (REPO / ".github" / "workflows" / wf).read_text()
+        assert 'git push origin "HEAD:' not in body, \
+            f"{wf} still pushes evidence directly - it must go through scripts/push_evidence.sh"
+
+
+def test_baseline_run_id_parameter_is_a_run_id_or_empty():
+    """An empty or non-numeric run id would be fed to download-artifact's typed `run-id`."""
+    pf = REPO / ".github" / "triggers" / "pseudo-label-params"
+    keys = dict(re.findall(r"^([A-Z][A-Z0-9_]*)=(.*)$", pf.read_text(), re.M))
+    assert "BASELINE_RUN_ID" in keys, "the workflow reads BASELINE_RUN_ID, so the params file must define it"
+    value = keys["BASELINE_RUN_ID"].strip()
+    assert value == "" or value.isdigit(), f"BASELINE_RUN_ID={value!r} is not a run id"
+    body = (REPO / ".github" / "workflows" / "pseudo-label.yml").read_text()
+    assert "*[!0-9]*" in body, "the params job must reject a non-numeric run id before it is used"
+    if value:
+        note = pf.read_text()
+        assert value in note and "artifact" in note, \
+            "the run id must be documented with the artifact it is expected to hold"

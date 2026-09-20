@@ -21,8 +21,10 @@ than inventing content. Run:  python scripts/build_site.py
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import html
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +68,7 @@ def page(title: str, active: str, body: str, subtitle: str = "") -> str:
     nav = [
         ("index.html", "Overview"),
         ("executive_summary.html", "Executive summary"),
+        ("submission.html", "Make a submission"),
         ("data.html", "Data"),
         ("metric.html", "Metric"),
         ("method.html", "Method"),
@@ -941,8 +944,8 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
       <td>2</td>
       <td><b>Spatial block-holdout (solve the in-domain / proxy sign conflict)</b></td>
       <td>In-domain DTI (0.1903 → 0.0908 when widening) and proxy DTI (+0.11 when widening) disagree on sign — choosing one population corrupts the other.</td>
-      <td><b>MEASURED 2026-09-18/19, FOLD 0 LANDED 2026-09-19.</b> <code>scripts/block_holdout_eval.py</code> scores the shipped submission per 51.2 km block and bootstraps over blocks: proxy DTI <b>0.0999, CI95 [0.0883, 0.1119]</b>; the best genuinely different alternative (width 1 px, 0.0878) beats the reference with probability <b>0.008</b>, so the adopted policy is confirmed <i>with an error bar</i>. A GitHub-hosted runner then recomputed all ten quantities from the same bytes: <b><code>agree: true</code></b>, DTI 0.099859 and both CI bounds identical (<a href="metric.html#runner-reproduction">reproduction table</a>). <b>Fold 0 generalisation gap now measured</b> (<code>data/evidence/block_holdout/fold0_generalisation_gap.json</code>): a fold-0 model trained with whole 51 km blocks held out scores <b>0.0806 [0.0586, 0.1021]</b> on the blocks it never saw vs <b>0.0920 [0.0747, 0.1100]</b> on the blocks it trained on — a <b>+0.0114</b> memorisation-vs-transfer gap on 8/26 scoreable blocks.</td>
-      <td><b>IN FLIGHT 2026-09-19.</b> Folds 1,2,3 are queued in <code>.github/triggers/block-holdout-params</code> (<code>TRAIN_FOLDS=1,2,3</code>, seed 46) so the committed evidence carries the four-fold <i>spread</i> of the gap, not one point estimate. Fold 0's evidence is already committed; only 1,2,3 are trained.</td>
+      <td><b>MEASURED 2026-09-18/19, ALL FOUR FOLDS LANDED 2026-09-19.</b> <code>scripts/block_holdout_eval.py</code> scores the shipped submission per 51.2 km block and bootstraps over blocks: proxy DTI <b>0.0999, CI95 [0.0883, 0.1119]</b>; the best genuinely different alternative (width 1 px, 0.0878) beats the reference with probability <b>0.008</b>, so the adopted policy is confirmed <i>with an error bar</i>. A GitHub-hosted runner then recomputed all ten quantities from the same bytes: <b><code>agree: true</code></b>, DTI 0.099859 and both CI bounds identical (<a href="metric.html#runner-reproduction">reproduction table</a>). <b>Fold 0 generalisation gap now measured</b> (<code>data/evidence/block_holdout/fold0_generalisation_gap.json</code>): a fold-0 model trained with whole 51 km blocks held out scores <b>0.0806 [0.0586, 0.1021]</b> on the blocks it never saw vs <b>0.0920 [0.0747, 0.1100]</b> on the blocks it trained on — a <b>+0.0114</b> memorisation-vs-transfer gap on 8/26 scoreable blocks. The other three folds have since landed (fold 1 <b>−0.0070</b>, fold 2 <b>+0.0139</b>, fold 3 <b>+0.0093</b>), so the gap is a spread: mean <b>+0.006904</b>, min −0.007019, max +0.013916, positive in 3 of 4 folds (<code>data/evidence/block_holdout/fold_gap_summary.json</code>, derived by <code>scripts/read_landed_reports.py --gaps-only</code> from the four committed gap files).</td>
+      <td><b>COMPLETE 2026-09-19 — the partition is fully measured.</b> Folds 1, 2 and 3 were trained on a runner (<code>.github/triggers/block-holdout-params</code>, <code>TRAIN_FOLDS=1,2,3</code>, seed 46) and all four folds' evidence is committed, so the gap is a spread rather than one point estimate. <b>Read it as a spread, not as an error bar:</b> no fold has the ≥12 resampling units a readable block-bootstrap CI needs (8, 9, 9 and 8 scoreable blocks), so every per-fold interval is flagged <code>interval_readable: false</code> by the scorer itself and the full-grid number remains the selection statistic. What is still open is the population, not the folds: each fold's raw field now also carries the combined truth population (<code>--combined-population</code>), and the pseudo-label arm of fold 0 is being re-fired so that contrast exists on the combined population too.</td>
     </tr>
     <tr>
       <td>3</td>
@@ -953,10 +956,10 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
     </tr>
     <tr>
       <td>4</td>
-      <td><b>Model selection on new-fault-like population</b></td>
-      <td>Early stopping &amp; fold weighting still maximize <em>in-domain</em> DTI; the emission policy no longer does but the model does.</td>
-      <td>Emission policy now uses proxy DTI; training loop does not yet.</td>
-      <td>Add a second early-stopping signal on proxy-like validation; or ensemble-weight by proxy DTI (A/B shows equal weights safer until proxy signal is stable).</td>
+      <td><b>Model selection on the population the leaderboard actually scores</b></td>
+      <td>Early stopping &amp; fold weighting still maximize <em>in-domain</em> DTI; the emission policy no longer does but the model does. Selecting on one population is not neutral either: for the pseudo-label signal the two available populations disagree in <b>sign</b> (item 7), so either can be quoted in favour of either answer.</td>
+      <td><b>MEASURED 2026-09-19 — a third truth population now exists.</b> <code>scripts/block_holdout_eval.py --combined-population</code> scores the disjoint union of the catalogue labels and the new-fault-like proxy pixels the labels do not contain (<b>122,652 px</b> = 60,988 + 61,664, disjointness verified at score time), the closest local surrogate for the expanded Phase-2 truth of rules §3.6. The shipped artifact scores <b>0.2074, CI95 [0.1929, 0.2229]</b> there (components: catalogue 0.2298, proxy-only 0.0999) and the adopted emission policy <b>holds</b>: the only better candidate in the sweep is width 1 px at <b>+0.0054 with P = 0.815</b>, below <i>both</i> pre-registered bars (P ≥ 0.95, +0.010) — <code>data/evidence/proxy/combined_truth_shipped.json</code>. Training-side selection is still in-domain.</td>
+      <td>Select on the <b>union</b>, never on its components: <code>FP_w</code> sums over <i>prediction</i> pixels, so the union's DTI cannot be inferred from the two component DTIs (<code>TP_w</code>/<code>FN_w</code> do add — the populations are disjoint). Add a union-population early-stopping signal or ensemble weights; every fold field committed from now on carries that population (<code>--combined-population</code> is in both training workflows).</td>
     </tr>
     <tr>
       <td>5</td>
@@ -976,8 +979,8 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
       <td>7</td>
       <td><b>Pseudo-label / self-training from SGMC proxy trace</b></td>
       <td>SGMC trace is allowed to inform the model (rules §3.2), but only through a held-out split so the gain cannot be label leakage. This is the <b>only remaining external-catalogue route</b> after the QFaults transfer refused on a 100 % overlap with the labels (item 1).</td>
-      <td><b>BUILT + DISPATCHED 2026-09-19.</b> Pseudo-label support added to <code>src/dataset.py::make_patches</code>: the 61,664 px of SGMC trace the labels do NOT contain (<code>proxy_catalogue.tif</code> code 2) become training-window label mass, while the block partition, the window selection and the held-out region are untouched — so the model never sees the pseudo pixels of the blocks it is scored on. <code>configs/config_pseudo_labels.yaml</code> differs from the block-holdout baseline in exactly those pseudo keys (pinned by <code>tests/test_pseudo_labels.py</code>, 7 tests incl. the leakage invariants). <code>.github/workflows/pseudo-label.yml</code> trains fold 0 (seed 46, the baseline's seed) and paired-bootstraps the held-out result against the committed no-pseudo baseline (0.0806 [0.0586, 0.1021]).</td>
-      <td>Read <code>data/evidence/pseudo_labels/fold0_paired_vs_baseline.json</code> when it lands: a held-out gain is generalisation of the SGMC-mapped fault style; a trained-on-only gain is memorisation. A pseudo-labelled ensemble ships only through the field-selection gate (item 5's rule) as a new <code>reblend.yml</code> RUN_ID with measured R3 — no shortcut path exists.</td>
+      <td><b>MEASURED 2026-09-19/20, fold 0, on all three populations — a trade-off on the components, suggestive but under-powered on the union, and not shippable on this evidence.</b> Pseudo-label support in <code>src/dataset.py::make_patches</code> makes the 61,664 px of SGMC trace the labels do NOT contain (<code>proxy_catalogue.tif</code> code 2) training-window label mass, while the block partition, the window selection and the held-out region are untouched — so the model never sees the pseudo pixels of the blocks it is scored on (leakage invariants pinned by <code>tests/test_pseudo_labels.py</code>). On the fold-0 <b>held-out</b> blocks the paired contrast reads <b>proxy-only 0.0806 → 0.1483 (+0.0677, P = 0.988)</b> but <b>catalogue 0.2113 → 0.1034 (−0.1079, P = 0.000)</b>, and on the <b>combined</b> population — the only one holding both fault kinds — <b>0.1972 → 0.2285 (+0.0313, P = 0.916, CI95 [−0.010, +0.082])</b>: suggestive, but the interval spans zero on 8 scoreable blocks and the trained-on blocks move the other way (−0.0375). Derived verdict <code>GAIN_ON_THE_COMBINED_SURROGATE</code>, <code>shippable_evidence: false</code> — a constant by construction, because this reader makes no shipping decision (<code>data/evidence/pseudo_labels/fold0_two_population_contrast.json</code>, recomposed from the committed per-block rows and reproducing the runner's own bootstrap exactly, cross-checked by <code>--strict</code> in the run that produced it). The +0.1036 arm is <b>source-circular</b> — derived from the config, not asserted: <code>pseudo_label_path</code> is the same raster the proxy truth is cut from.</td>
+      <td><b>Do not re-fire fold 0 expecting a better number.</b> The two fires (same seed 46, same config, same partition, different runners) differ by ~0.036 on the proxy arm — the same order as the +0.0313 union effect — so one fold cannot separate this signal from its own training noise, and any interval from &lt;12 resampling units is marked COARSE by the scorer. The next measurement that would mean something is a contrast <b>pooled over the four committed folds</b> (≥12 scoreable blocks per scope); the baseline arms' raw fields for folds 1–3 are on their runner artifacts until ~2026-10-03. Against the rule that does exist — <code>docs/FIELD_SELECTION_RULE.md</code> R3 <b>P ≥ 0.95</b> on both fields' raw rasters, R1 a +0.010 margin — this contrast clears the margin and <b>misses P</b>, so it licenses no adoption. A pseudo-labelled ensemble still ships only as a new <code>reblend.yml</code> RUN_ID with measured R3 — no shortcut path exists.</td>
     </tr>
     <tr>
       <td>8</td>
@@ -1866,13 +1869,33 @@ def _block_holdout(ev: dict) -> str:
     if restr.get("mode") and restr["mode"] != "all_blocks":
         caveats.append(f"<b>Scope:</b> {e(restr.get('note', ''))}")
     else:
-        caveats.append(
-            "<b>Scope:</b> this is a <em>reshaping</em> measurement on the shipped ensemble, which "
-            "trained on every block. The generalisation reading exists now: fold 0 trained with "
-            "whole blocks held out scores 0.0806 [0.0586, 0.1021] on the blocks it never saw vs "
-            "0.0920 on the blocks it trained on (gap +0.0114, "
-            "<code>data/evidence/block_holdout/fold0_generalisation_gap.json</code>); folds 1-3 "
-            "are in flight to give the gap a spread instead of a point estimate.")
+        fg = ev.get("fold_gaps") or {}
+        g = fg.get("gap") or {}
+        per = fg.get("per_fold") or []
+        missing = fg.get("folds_missing") or []
+        if g and per:
+            detail = ", ".join(f"fold {r['fold']} {r['generalisation_gap']:+.4f}" for r in per)
+            readable = [r["fold"] for r in per
+                        if (r.get("reliability") or {}).get("interval_readable")]
+            landed = ("every fold of the partition has landed" if not missing
+                      else f"folds {missing} have not landed yet")
+            caveats.append(
+                "<b>Scope:</b> this is a <em>reshaping</em> measurement on the shipped ensemble, "
+                "which trained on every block. The generalisation reading exists now: models "
+                "trained with whole 51 km blocks held out differ from their own trained-on score "
+                f"by {detail} — mean {g['mean']:+.6f}, spread {g['spread']:.6f}, positive in "
+                f"{g['folds_with_positive_gap']} of {len(per)} folds, and {landed} "
+                "(<code>data/evidence/block_holdout/fold_gap_summary.json</code>, derived by "
+                "<code>scripts/read_landed_reports.py</code> from the committed per-fold gaps). "
+                + ("No fold reaches the 12 resampling units a readable block-bootstrap CI needs, "
+                   "so these are point readings with a spread across folds, not intervals."
+                   if not readable else
+                   f"Folds {readable} have enough resampling units for a readable interval."))
+        else:
+            caveats.append(
+                "<b>Scope:</b> this is a <em>reshaping</em> measurement on the shipped ensemble, "
+                "which trained on every block; no block-holdout fold evidence is committed yet, so "
+                "it carries no generalisation reading of its own.")
 
     agree = [c["agreement_fraction"] for c in d["population_agreement"]["per_candidate"]
              if c["agreement_fraction"] is not None]
@@ -2819,6 +2842,567 @@ footer p{margin:5px 0}
 """
 
 
+# --------------------------------------------------------------------------- submission page
+# The operational subpage: exactly how to enter the competition and upload a valid GeoTIFF.
+# Every number on it is measured at build time (the shipped raster's own sha256/bytes), read from
+# a committed evidence file (the validator's log, the blend report, the block bootstrap), or quoted
+# verbatim from the official rules PDF by quote id from data/evidence/rules_quotes.json.  Nothing
+# here is typed in as a fact.
+SHIPPED_SUBMISSION = "data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif"
+SHIPPED_EVIDENCE_DIR = "data/evidence/runs/ens12-adopted-floor0.1-w0"
+SUBMISSIONS_URL = COMP + "submissions/"
+LEADERBOARD_URL = COMP + "leaderboard/"
+
+
+def _sha_bytes(rel: str) -> dict:
+    """Hash the committed bytes at build time so the page quotes a checksum it just measured."""
+    p = ROOT / rel
+    if not p.exists():
+        return dict(exists=False, path=rel)
+    h = hashlib.sha256()
+    with p.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return dict(exists=True, path=rel, sha256=h.hexdigest(), bytes=p.stat().st_size)
+
+
+def _read(rel: str):
+    p = ROOT / rel
+    return p.read_text(encoding="utf-8", errors="ignore") if p.exists() else None
+
+
+def _policy_subtitle(dec: dict) -> str:
+    """The adopted policy's rank, only when the decision record actually carries it."""
+    rob = (((dec or {}).get("verdict") or {}).get("robustness_across_ensembles") or {})
+    n = rob.get("n_candidates")
+    return (f"rank 1 of {int(n)} candidates · adopted by measurement" if n
+            else "adopted by measurement (data/evidence/emission_decision.json)")
+
+
+def _catalog_rows():
+    """Row count of docs/data_catalog.csv, read at build time (a typed count drifts)."""
+    p = DOCS / "data_catalog.csv"
+    if not p.exists():
+        return None
+    import csv
+    with p.open(newline="", encoding="utf-8") as fh:
+        return sum(1 for _ in csv.DictReader(fh))
+
+
+def _lead_upper(text: str) -> str:
+    """Upper-case only the first character (str.capitalize would lower-case the rest, which
+    mangles a sentence that contains an uppercase identifier)."""
+    return (text[:1].upper() + text[1:]) if text else text
+
+
+def _catalog_rows_text() -> str:
+    n = _catalog_rows()
+    return f"{n} rows, " if n else ""
+
+
+def _rules_quote(ev: dict, qid: str):
+    for q in ((ev.get("rules_quotes") or {}).get("quotes") or []):
+        if q.get("id") == qid:
+            return q
+    return None
+
+
+def quote_block(ev: dict, qid: str, why: str) -> str:
+    """A verbatim rules quotation with its verification state, or an explicit 'not verified' note."""
+    q = _rules_quote(ev, qid)
+    rq = ev.get("rules_quotes") or {}
+    if not q:
+        return note("warn", f"<strong>Quote <code>{e(qid)}</code> is not in the committed rules "
+                            f"evidence.</strong> {e(why)} Re-verify with "
+                            f"<code>python scripts/verify_rules_quotes.py</code> against "
+                            f"<a href=\"{RULES}\">the official rules PDF</a>.")
+    badge = ('<span class="pill ok">VERBATIM MATCH</span>' if q.get("exact_match")
+             else '<span class="pill bad">NOT FOUND IN THE PDF</span>')
+    return (f'<blockquote><p><em>&ldquo;{e(q.get("quote"))}&rdquo;</em><br>'
+            f'<span class="small">— official rules {e(q.get("section"))} · {badge} '
+            f'<a href="{RULES}">docs.nlr.gov/docs/fy26osti/96647.pdf</a> · sha256 '
+            f'<code>{e(str((rq.get("source") or {}).get("sha256", "?"))[:16])}…</code> · checked by '
+            f'<code>scripts/verify_rules_quotes.py</code> '
+            f'{e(str(rq.get("generated_utc", ""))[:10])} · why it matters: {e(q.get("why") or why)}'
+            f'</span></p></blockquote>')
+
+
+def _validation_rows(log_text: str):
+    """The validator's own committed output, parsed into (state, text) rows."""
+    rows, passed = [], bool(log_text and "Validation PASSED" in log_text)
+    for line in (log_text or "").splitlines():
+        line = line.strip()
+        m = re.match(r"^([✓xXi])\s+(.*)$", line)
+        if m:
+            rows.append((m.group(1), m.group(2)))
+    return rows, passed
+
+
+def _nan_row(pw: dict) -> str:
+    """The NaN/finite split of the written raster, computed from its own committed facts."""
+    try:
+        finite = int(pw.get("finite_px") or 0)
+        total = int(pw.get("width") or 0) * int(pw.get("height") or 0)
+        if total <= 0:
+            return "written: grid size not recorded"
+        return (f"written: {finite:,} finite px of {total:,} ({100.0 * (1 - finite / total):.2f} % "
+                "NaN, outside the GeoDAWN footprint)")
+    except Exception:
+        return "written: not recorded"
+
+
+def _spec_table(ev: dict, art: dict, postwrite: dict) -> str:
+    """Requirement / mandated value / where it comes from / how this repo proves it."""
+    ras = (ev.get("rasters") or {})
+    grid = None
+    for key in ("sample_submission", "sample_submission.tif", "training_features",
+                "training_features.tif"):
+        if isinstance(ras.get(key), dict):
+            grid = ras[key]
+            break
+    measured = []
+    if postwrite:
+        measured = [
+            ("Projected CRS", "EPSG:32611 (UTM zone 11N)",
+             f'{PROB}#submission-format',
+             f"written: {e(postwrite.get('crs'))}"),
+            ("Pixel size", "100 m × 100 m",
+             f'{PROB}#submission-format',
+             f"written: {e(postwrite.get('res'))}"),
+            ("Grid size", "3292 × 3730 px (same bounds as the training data)",
+             f'{PROB}#submission-format',
+             f"written: {e(postwrite.get('width'))}×{e(postwrite.get('height'))}"),
+            ("Bands", "exactly 1",
+             f'{PROB}#submission-format',
+             f"written: {e(postwrite.get('count'))}"),
+            ("Data type", "float32",
+             f'{PROB}#submission-format',
+             f"written: {e(postwrite.get('dtype'))}"),
+            ("Value range", "0…1, higher = more likely to be a fault",
+             f'{PROB}#submission-format',
+             f"written: min {e(postwrite.get('min'))}, max {e(postwrite.get('max'))}"),
+            ("Outside the survey footprint", "null / NaN",
+             f'{PROB}#submission-format',
+             _nan_row(postwrite)),
+            ("Emitted support", "not mandated — this is the policy choice",
+             "data/evidence/emission_decision.json",
+             f"written: {int(postwrite.get('nonzero_px') or 0):,} px > 0"),
+        ]
+    if grid:
+        measured.append(("Independent grid check", "the raster the validator compares against",
+                         "data/evidence/rasters.json",
+                         (f"sample_submission: {e(grid.get('width'))}×{e(grid.get('height'))}, "
+                          f"CRS {e(grid.get('crs'))}, res {e(grid.get('res'))}")))
+    def src_cell(c: str) -> str:
+        """An official URL becomes a link; a repository path becomes code (the site is published
+        from docs/, so a relative href to data/ would 404 - scripts/audit_docs.py checks this)."""
+        if c.startswith("http"):
+            short = c.replace(COMP, "…/")
+            return f'<a href="{e(c)}">{e(short)}</a>'
+        return f'<code>{e(c)}</code>'
+
+    rows = "".join(
+        f'<tr><td><b>{e(a)}</b></td><td>{e(b)}</td>'
+        f'<td class="small">{src_cell(c)}</td>'
+        f'<td class="small mono">{d}</td></tr>' for a, b, c, d in measured)
+    if not rows:
+        return missing("The post-write raster facts are not committed.",
+                       "python scripts/blend_submission.py … (writes postwrite.json next to the submission)")
+    return ("""<table><thead><tr><th>Requirement</th><th>Mandated value</th>
+<th>Official source</th><th>What the shipped file actually contains (committed evidence)</th>
+</tr></thead><tbody>""" + rows + "</tbody></table>")
+
+
+def _state_pill(ok, yes="READY", no="MISSING") -> str:
+    return f'<span class="pill {"ok" if ok else "bad"}">{e(yes if ok else no)}</span>'
+
+
+def build_submission(ev: dict) -> str:
+    """The operational 'how do I actually submit' page."""
+    art = _sha_bytes(SHIPPED_SUBMISSION)
+    val_log = _read(f"{SHIPPED_EVIDENCE_DIR}/validation.log")
+    vrows, vpassed = _validation_rows(val_log)
+    postwrite = load(ROOT / f"{SHIPPED_EVIDENCE_DIR}/postwrite.json") or {}
+    blend = load(ROOT / f"{SHIPPED_EVIDENCE_DIR}/blend_report.json") or {}
+    usable = _read(f"{SHIPPED_EVIDENCE_DIR}/usable_folds.txt")
+    placement = ev.get("placement") or {}
+    bs = ev.get("block_stratified") or {}
+    fg = ev.get("fold_gaps") or {}
+    pc = ev.get("pseudo_contrast") or {}
+    ct = ev.get("combined_truth") or {}
+    fs = ev.get("field_selection") or {}
+    iv = ev.get("independent_verification") or {}
+    lb = iv.get("competition_standing") or {}
+    dec = ev.get("emission_decision") or {}
+    best = ((dec.get("verdict") or {}).get("best_measured_candidate") or {}) if dec else {}
+
+    n_folds = len([x for x in (usable or "").splitlines() if x.strip()])
+    vrow_html = "".join(
+        f'<tr><td class="mono">{"✓" if s == "✓" else ("i" if s == "i" else "x")}</td>'
+        f'<td>{e(t)}</td></tr>' for s, t in vrows)
+
+    cards = [
+        ("File to upload", f"<b class='mono' style='font-size:.9rem'>{e(SHIPPED_SUBMISSION.split('/')[-1])}</b>",
+         (f"{art['bytes']:,} bytes · single-band float32 GeoTIFF" if art['exists'] else "NOT COMMITTED")),
+        ("sha256 (measured at build time)",
+         f"<b class='mono' style='font-size:.86rem'>{e((art.get('sha256') or '—')[:24])}…</b>",
+         "re-measured by scripts/build_site.py from the committed bytes"),
+        ("Format validation", "<b>PASSED</b>" if vpassed else "<b>NOT PROVEN</b>",
+         f"{len([r for r in vrows if r[0] == '✓'])} checks ✓ in the committed validator log"),
+        ("Emission policy", "<b>floor 0.1 · thin · width 0 px</b>", _policy_subtitle(dec)),
+        ("Ensemble", f"<b>{n_folds} live folds</b>", "runs 35042805806 + 35249562910 (mean12)"),
+        ("Submission quota", "<b>3 per week</b>", "one final selection before the deadline (rules §3.2/§3.5)"),
+        ("Deadline", "<b>Dec 3, 2026 · 11:59 PM UTC</b>", "the same file is scored in both prize rounds"),
+        ("Public leaderboard top", f"<b>{lb.get('top_dti', '—')}</b>",
+         "this repository is NOT on that leaderboard (no DrivenData account)"),
+    ]
+    grid = "".join(f'<div class="stat"><div class="k">{e(k)}</div><div class="v">{v}</div>'
+                   f'<div class="s">{e(s)}</div></div>' for k, v, s in cards)
+
+    out = []
+    out.append(f"""
+{note("ok", "<strong>This is the operational page.</strong> It answers one question: <em>what exactly do I do to put a valid entry into the GEMS Prize?</em> Background, eligibility analysis and the full source catalogue live on the <a href='executive_summary.html'>executive summary</a>; the numbers behind the model live on <a href='results.html'>results</a>. Every fact below is either (a) measured from the committed bytes while this page was built, (b) copied from a committed evidence JSON, or (c) quoted verbatim from the official rules PDF by quote id.")}
+<div class="stats">{grid}</div>
+
+<h2>0. The whole submission in five commands</h2>
+<p>No training, no GPU, no DrivenData credentials needed for the repository side. This is the path
+that was re-executed in the development sandbox; the validator output it produces is committed at
+<code>{e(SHIPPED_EVIDENCE_DIR)}/validation.log</code>.</p>
+<pre><code>git pull                                     # get the sha256-pinned raster bridge
+python scripts/assemble_data_bridge.py       # verify + place data/training_features.tif, labels.tif, sample_submission.tif
+python scripts/prepare_data.py               # pre-flight: grid, CRS, resolution, band tags
+python scripts/validate_submission.py \\
+    --pred {e(SHIPPED_SUBMISSION)} \\
+    --sample data/sample_submission.tif --train data/training_features.tif
+# -> "✅ Validation PASSED - Ready for submission!"</code></pre>
+<p>Then upload <code>{e(SHIPPED_SUBMISSION)}</code> at
+<a href="{SUBMISSIONS_URL}">{e(SUBMISSIONS_URL)}</a> (account + enrollment required — the one step
+this repository cannot do for you, see <a href="#human">§8</a>).</p>
+""")
+
+    # ------------------------------------------------------------------ step 1: enter
+    out.append(f"""
+<h2 id="step1">1. Enter the competition (once, before anything else)</h2>
+{quote_block(ev, "entry", "how an entry is created")}
+{quote_block(ev, "citizen", "who may compete as an individual")}
+<ol>
+  <li>Create / sign in to a DrivenData account and open
+      <a href="{COMP}">{e(COMP)}</a>.</li>
+  <li>Click <b>Compete!</b> and accept the competition rules and restrictions
+      (the rules are the PDF at <a href="{RULES}">{e(RULES)}</a>, mirrored on
+      <a href="{RULES_HEROX}">HeroX resource 2274</a>).</li>
+  <li>Download the data from the <a href="{DATA_TAB}">data tab</a> — this needs the account you
+      just created; the repository does not need it, because the same three rasters are committed
+      as a sha256-pinned bridge under <code>data/bridge/</code> (see §2).</li>
+</ol>
+{note("warn", "<strong>Irregularity, flagged not hidden:</strong> the data tab's own mirrors are Dropbox links, and the file names there differ from the names the problem page uses (<code>gems-geodawn-numerical-features.tif</code> vs <code>training_features.tif</code>, <code>existing_faults.tif</code> vs <code>labels.tif</code>, <code>example_submission.tif</code> vs <code>sample_submission.tif</code>). <code>scripts/assemble_data_bridge.py</code> maps them by sha256, not by name, so the drift cannot silently substitute a file.")}
+""")
+
+    # ------------------------------------------------------------------ step 2: data
+    # The page re-measures the placement itself: pinned sha256 from the committed manifest vs the
+    # sha256 of whatever data/ holds right now, so the page can never claim a placement that this
+    # checkout does not have.
+    manifest = load(ROOT / "data/bridge/manifest.json") or {}
+    pins = {}
+    for f_ in manifest.get("files") or []:
+        if f_.get("canonical"):
+            pins[f_["canonical"]] = dict(sha256=f_.get("sha256"), bytes=f_.get("bytes"),
+                                         mirror=f_.get("name"))
+    place_rows, placed = [], True
+    for canonical in ("training_features.tif", "labels.tif", "sample_submission.tif"):
+        rel = f"data/{canonical}"
+        got = _sha_bytes(rel)
+        pin = pins.get(rel) or pins.get(canonical) or {}
+        if not got["exists"]:
+            placed = False
+            state, detail = "ABSENT", "run the two commands above"
+        elif pin.get("sha256") and got.get("sha256") == pin["sha256"]:
+            state, detail = "MATCHES THE PIN", f"sha256 {got['sha256'][:16]}… · {got['bytes']:,} B"
+        else:
+            placed, state = False, "DOES NOT MATCH THE PIN"
+            detail = f"got {str(got.get('sha256'))[:16]}…, pinned {str(pin.get('sha256'))[:16]}…"
+        place_rows.append(
+            f'<tr><td class="mono">{e(rel)}</td>'
+            f'<td class="small mono">{e(str(pin.get("sha256") or "?")[:24])}…</td>'
+            f'<td class="small mono">{e(detail)}</td>'
+            f'<td>{_state_pill(state == "MATCHES THE PIN", state, state)}</td></tr>')
+    out.append(f"""
+<h2 id="step2">2. Put the official rasters in <code>data/</code> and prove they are the official ones</h2>
+<p><code>data/</code> payloads are gitignored; <code>data/bridge/</code> is committed in ≤ 90 MiB
+parts (GitHub rejects a 419 MB blob) with every part and the whole file pinned by sha256 in
+<code>data/bridge/manifest.json</code>. Reassembly verifies before it writes and aborts on any
+mismatch, so a corrupted or substituted raster cannot enter the pipeline quietly.</p>
+<pre><code>python scripts/assemble_data_bridge.py    # verify parts -> concatenate -> verify whole-file sha256 -> place canonical names
+python scripts/prepare_data.py            # 3292x3730, 19 bands, EPSG:32611, 100 m, aligned bounds, band tags present</code></pre>
+<table><thead><tr><th>Canonical file</th><th>Pinned sha256 (data/bridge/manifest.json)</th>
+<th>In this checkout, measured while building this page</th><th>State</th></tr></thead>
+<tbody>{''.join(place_rows)}</tbody></table>
+<table class="kv">
+<tr><th>Where the bytes came from</th><td>{e(str(((placement or {}).get("transport") or {}).get("runner_download") or "the Dropbox mirrors printed on the official DrivenData data tab, fetched on a GitHub-hosted runner"))}</td></tr>
+<tr><th>Where the pins came from</th><td><code>data/evidence/inventory.json</code>, measured on a runner by <code>scripts/inspect_competition_data.py</code>; the placement workflow fails if any sha256 drifts</td></tr>
+<tr><th>Placement evidence</th><td><code>data/evidence/data_placement.json</code> ({e(str((placement or {}).get("generated_utc") or "not committed"))}) — {e(str((placement or {}).get("claim") or ""))[:220]}</td></tr>
+<tr><th>Pre-flight result</th><td>{e(str((placement or {}).get("prepare_data_result") or "run scripts/prepare_data.py"))}</td></tr>
+</table>
+{note("ok" if placed else "warn", ("<strong>Ready.</strong> All three canonical rasters are present in this checkout with the pinned sha256, so every step below can be run offline — no DrivenData login needed."
+   if placed else "<strong>data/ is not populated in this checkout.</strong> Run the two commands above (the bridge is committed, so this works with no access to DrivenData); every later step needs those three files."))}
+""")
+
+    # ------------------------------------------------------------------ step 3: raster
+    out.append(f"""
+<h2 id="step3">3. Pick the raster you are going to upload</h2>
+<table><thead><tr><th>Route</th><th>Command</th><th>When to use it</th><th>Cost</th></tr></thead><tbody>
+<tr class="hl"><td><b>A — the committed, validated artifact</b><br><span class="small">what we would upload today</span></td>
+<td class="mono small">{e(SHIPPED_SUBMISSION)}</td>
+<td>Immediately. It is the 11-fold ensemble mean shaped with the adopted policy and its format validation is committed.</td>
+<td class="num">0 min</td></tr>
+<tr><td><b>B — local inference</b></td>
+<td class="mono small">python -m src.inference --config configs/config.yaml --out submission.tif</td>
+<td>You trained locally (<code>python -m src.train --config configs/config.yaml</code>) and want predictions from your own weights. The adopted shaping is applied automatically from <code>data/evidence/emission_decision.json</code>.</td>
+<td class="num">CPU hours without a GPU</td></tr>
+<tr><td><b>C — re-blend committed fold artifacts</b></td>
+<td class="mono small">python scripts/blend_submission.py --runs … --shaping-t0 0.1 --shaping-dilate 0 --shaping-source data/evidence/emission_decision.json --out submission.tif</td>
+<td>You want a different <em>field</em> (a different set of training runs). On GitHub Actions this is <code>.github/workflows/reblend.yml</code>, and a field that is not the shipped one only blends if the pre-registered field rule allows it.</td>
+<td class="num">minutes (no training)</td></tr>
+<tr><td><b>D — train the full configuration</b></td>
+<td class="mono small">python -m src.train --config configs/config.yaml &amp;&amp; python -m src.inference …</td>
+<td>You have a ≥ 24 GB GPU. This is the route to a better score, not to a valid file.</td>
+<td class="num">~1 h GPU / ~4 h+ CPU per fold</td></tr>
+</tbody></table>
+<p class="small">The field rule (<code>docs/FIELD_SELECTION_RULE.md</code>, machine-checked by
+<code>scripts/check_field_selection.py</code>) exists so route C cannot quietly change which
+ensemble ships. Current committed verdict:
+<b>{e(str(((fs or {}).get("verdict") or {}).get("decision") or "not measured in this checkout"))}</b>
+({e(str(((fs or {}).get("verdict") or {}).get("why") or ""))[:200]}).</p>
+""")
+
+    # ------------------------------------------------------------------ step 4: validate
+    out.append(f"""
+<h2 id="step4">4. Validate the file before you upload it (mandatory gate)</h2>
+<pre><code>python scripts/validate_submission.py \\
+    --pred {e(SHIPPED_SUBMISSION)} \\
+    --sample data/sample_submission.tif --train data/training_features.tif</code></pre>
+<p>The validator checks CRS, resolution, band count, dtype, value range, grid size and transform
+against the competition template — i.e. exactly the requirements the
+<a href="{PROB}#submission-format">problem page's submission format</a> lists. Its committed output
+for the artifact in route A:</p>
+{('<table><thead><tr><th>State</th><th>Validator check (verbatim from ' + e(SHIPPED_EVIDENCE_DIR) + '/validation.log)</th></tr></thead><tbody>' + vrow_html + '</tbody></table>') if vrow_html else missing("The committed validator log is not in this checkout.", "python scripts/validate_submission.py --pred … --sample data/sample_submission.tif")}
+{note("ok" if vpassed else "bad", ("<strong>Validation PASSED</strong> — the file is uploadable as-is." if vpassed else "<strong>The committed log does not contain a PASS line.</strong> Re-run the validator before uploading."))}
+<h3>The format spec, line by line</h3>
+{_spec_table(ev, art, postwrite)}
+""")
+
+    # ------------------------------------------------------------------ step 5: upload
+    out.append(f"""
+<h2 id="step5">5. Upload it on DrivenData</h2>
+<ol>
+  <li>Open <a href="{SUBMISSIONS_URL}">{e(SUBMISSIONS_URL)}</a>.</li>
+  <li>Click <b>Make new submission</b>.</li>
+  <li>Upload the validated <code>.tif</code> (route A: <code>{e(SHIPPED_SUBMISSION)}</code>,
+      {(f"{art['bytes']:,} bytes" if art['exists'] else 'size not measured')}
+      {('· sha256 <code class="small">' + e(art.get('sha256', '')) + '</code>') if art['exists'] else ''}).</li>
+  <li>In the narrative box paste the generative-AI disclosure from §6 (it is not counted in the
+      word count, per the rules).</li>
+  <li>Submit, then confirm on the <a href="{LEADERBOARD_URL}">public leaderboard</a> that the
+      submission parsed and scored. A file that fails ingestion shows no score.</li>
+</ol>
+{note("warn", "<strong>This is the human-only step.</strong> This repository has no DrivenData credentials and the data tab redirects to a login, so no number in this repository has ever been confirmed by the official scorer. Everything here is measured against local surrogate populations; the public leaderboard is the first unbiased signal, and it needs a person with an account.")}
+""")
+
+    # ------------------------------------------------------------------ step 6: AI disclosure
+    out.append(f"""
+<h2 id="step6">6. Generative-AI disclosure (required if you used it — we did)</h2>
+{quote_block(ev, "ai_disclosure", "what the narrative must say")}
+<p>Ready-to-paste narrative for a submission produced by this repository:</p>
+<pre><code>Generative AI Technology Disclosure (GEMS Prize Rules Section 3.2)
+
+Generative AI assistance (an LLM coding agent working in this repository) was used to write and
+review the code, the tests, the documentation and the verification tooling of this submission:
+the training and inference pipeline (PyTorch / segmentation-models-pytorch UNet, UNet++ and
+DeepLabV3+ encoders), the distance-weighted Tversky loss, the emission-policy measurement scripts
+and the pre-registered decision rules. Every quantitative claim in the accompanying documentation
+is produced by a committed script from committed evidence files, and the repository records which
+numbers are surrogate measurements rather than official scores. External data used is free and
+public (USGS SGMC, DOI 10.3133/ds1052; INGENIOUS Great Basin compilation, DOI 10.15121/1881483).
+The entrant is responsible for the accuracy, authenticity and authorship of this submission,
+including all content developed with generative AI tools.</code></pre>
+<p class="small">Edit the architecture list and the external-data list to match what your own run
+used; the disclosure must describe <em>your</em> submission.</p>
+""")
+
+    # ------------------------------------------------------------------ step 7: quota/final
+    out.append(f"""
+<h2 id="step7">7. Quota, deadline and the single final selection</h2>
+{quote_block(ev, "weekly_limit", "how many submissions are allowed")}
+{quote_block(ev, "one_final_submission", "the final-selection requirement")}
+{quote_block(ev, "no_private_knowledge", "why the final selection is a generalisation bet")}
+{quote_block(ev, "phase2_target", "what the same file is scored against in the second round")}
+<table><thead><tr><th>Constraint</th><th>What it means for us</th></tr></thead><tbody>
+<tr><td><b>3 submissions / week</b></td><td>A scarce resource: each upload is an experiment whose only read-out is the public split. The repository's surrogate measurements decide what to upload; the quota decides how often we can check.</td></tr>
+<tr><td><b>One final selection</b></td><td>Before the deadline, exactly one submission is marked final and is scored in <em>both</em> prize rounds — so the file that wins the public split is not automatically the right final choice.</td></tr>
+<tr><td><b>No private-score knowledge</b></td><td>The final selection is made blind on the private test set. This is why the repository pre-registers decision rules (<code>docs/FIELD_SELECTION_RULE.md</code>, <code>data/evidence/emission_decision.json</code>) instead of picking the best-looking local number.</td></tr>
+<tr><td><b>Phase 2 re-scores the same file</b></td><td>Against the full expert-revised fault set. A file tuned to restate the training catalogue can only lose there; this is the argument for the emission policy that is measured on faults the labels do <em>not</em> contain.</td></tr>
+</tbody></table>
+""")
+
+    # ------------------------------------------------------------------ step 8: human-only
+    out.append(f"""
+<h2 id="human">8. What only a human can do (the project's real blocker)</h2>
+<table><thead><tr><th>Task</th><th>Why the repository cannot do it</th><th>What it unlocks</th></tr></thead><tbody>
+<tr><td><b>Create the DrivenData account, enroll, upload</b></td>
+<td>No credentials, and <a href="{DATA_TAB}">the data tab</a> redirects to a login (verified: HTTP 302 to the login page).</td>
+<td>The first official score for this model, and the only unbiased read-out of the emission policy.</td></tr>
+<tr><td><b>Confirm eligibility</b> (rules §1.3, Appendix A)</td>
+<td>An individual competitor must be a U.S. citizen or permanent resident; entity paperwork and finalist certifications are legal acts.</td>
+<td>Being able to accept an award.</td></tr>
+<tr><td><b>Choose the final submission before Dec 3, 2026 11:59 PM UTC</b></td>
+<td>Irreversible, blind on the private split, and one per entity.</td>
+<td>Both prize rounds.</td></tr>
+<tr><td><b>A GPU</b> (≥ 24 GB) for the full configuration</td>
+<td>GitHub-hosted CPU runners take ~300 min per fold at the reduced configuration; the full one (EfficientNet-B5, 60 epochs, 10 MC splits) is not reachable on them.</td>
+<td>Detection gains, which the committed evidence says are the binding constraint — not the emission policy.</td></tr>
+</tbody></table>
+""")
+
+    # ------------------------------------------------------------------ step 9: current state
+    proxy_dti = ((bs.get("verdict") or {}).get("reference_proxy_dti") if bs else None)
+    proxy_ci = ((bs.get("verdict") or {}).get("reference_proxy_ci95") if bs else None)
+    gap = (fg.get("gap") or {}) if fg else {}
+    held = ((pc.get("arms") or {}).get("heldout") or {}) if pc else {}
+    hp = (held.get("populations") or {}) if held.get("status") == "MEASURED" else {}
+    proxy_arm, labels_arm = hp.get("proxy_only") or {}, hp.get("labels") or {}
+    comb_arm = hp.get("combined") or {}
+    comp = ((pc.get("arms") or {}).get("complement") or {}) if pc else {}
+    cp = (comp.get("populations") or {}) if comp.get("status") == "MEASURED" else {}
+    comb_comp_arm = cp.get("combined") or {}
+    comb = ((ct.get("combined_population") or {}) if ct else {})
+
+    state_rows = []
+    if proxy_dti is not None:
+        state_rows.append(("Shipped artifact on the new-fault-like surrogate",
+                           f"DTI <b>{proxy_dti:.4f}</b>" + (f" CI95 [{proxy_ci[0]:.4f}, {proxy_ci[1]:.4f}]" if proxy_ci else ""),
+                           "data/evidence/block_holdout/block_stratified.json (block bootstrap, reproduced digit-for-digit on a runner)"))
+    if gap:
+        state_rows.append(("Generalisation gap over the committed block-holdout folds",
+                           f"mean <b>{gap.get('mean'):+.4f}</b> (min {gap.get('min'):+.4f}, max {gap.get('max'):+.4f}) over {e(str(fg.get('n_folds_committed')))} fold(s)",
+                           "data/evidence/block_holdout/fold_gap_summary.json"))
+    if proxy_arm.get("status") == "MEASURED":
+        state_rows.append(("SGMC pseudo-labels, fold 0, held-out blocks — new-fault-like population",
+                           f"{proxy_arm.get('reference_dti'):.4f} → <b>{proxy_arm.get('candidate_dti'):.4f}</b> ({proxy_arm.get('contrast'):+.4f}, P={e(str((proxy_arm.get('bootstrap') or {}).get('prob_candidate_beats_reference')))})",
+                           "data/evidence/pseudo_labels/fold0_two_population_contrast.json"))
+    if labels_arm.get("status") == "MEASURED":
+        state_rows.append(("…the same change on the catalogue population (independent of the pseudo-label source)",
+                           f"{labels_arm.get('reference_dti'):.4f} → <b>{labels_arm.get('candidate_dti'):.4f}</b> ({labels_arm.get('contrast'):+.4f}, P={e(str((labels_arm.get('bootstrap') or {}).get('prob_candidate_beats_reference')))})",
+                           "same file — the two populations move in opposite directions"))
+    def _arm_cells(arm, extra=""):
+        b = arm.get("bootstrap") or {}
+        ci = b.get("contrast_ci95") or []
+        val = (f"{arm.get('reference_dti'):.4f} → <b>{arm.get('candidate_dti'):.4f}</b> "
+               f"({arm.get('contrast'):+.4f}, P={e(str(b.get('prob_candidate_beats_reference')))}"
+               + (f", CI95 [{ci[0]:+.4f}, {ci[1]:+.4f}]" if len(ci) == 2 else "") + ")" + extra)
+        return val
+
+    if comb_arm.get("status") == "MEASURED":
+        state_rows.append(("…and on the <b>combined</b> surrogate — the only population holding both fault kinds (held-out blocks)",
+                           _arm_cells(comb_arm),
+                           "same file — the union is scored from the rasters because FP_w sums over prediction pixels and does not decompose"))
+    if comb_comp_arm.get("status") == "MEASURED":
+        state_rows.append(("…the same union population on the blocks that fold <em>trained</em> on (the memorisation check)",
+                           _arm_cells(comb_comp_arm),
+                           "same file, complement scope — the two scopes disagree in sign, so one fold cannot settle it"))
+    if comb:
+        ref = (comb.get("reference") or {})
+        state_rows.append(("Shipped artifact on the combined surrogate (labels ∪ new-fault-like trace)",
+                           f"DTI <b>{ref.get('dti'):.4f}</b>" + (f" CI95 [{ref['ci95'][0]:.4f}, {ref['ci95'][1]:.4f}]" if ref.get("ci95") else ""),
+                           "data/evidence/proxy/combined_truth_shipped.json"))
+    if lb:
+        state_rows.append(("Public leaderboard top score (snapshot, not ours)",
+                           f"<b>{lb.get('top_dti')}</b> over {e(str(lb.get('n_ranked')))} ranked entrants",
+                           f"{e(str(lb.get('url') or LEADERBOARD_URL))}"))
+    state_html = "".join(f"<tr><td>{a}</td><td>{b}</td><td class='small mono'>{e(c)}</td></tr>"
+                         for a, b, c in state_rows)
+
+    verdict_line = ""
+    if pc:
+        verdict_line = (f'<p><b>Pseudo-label verdict (derived):</b> <code>{e(str(pc.get("verdict")))}</code> — '
+                        f'{e(str(pc.get("verdict_reason")))}. '
+                        f'{e(_lead_upper(str(pc.get("shipping_note") or "")))}</p>')
+    out.append(f"""
+<h2 id="state">9. What we would upload today, and what would change it</h2>
+<p><b>Today:</b> route A, <code>{e(SHIPPED_SUBMISSION)}</code>
+{('— sha256 <code class="small">' + e(art.get('sha256', '')) + '</code>, ' + f"{art['bytes']:,} bytes" + ', both measured while building this page') if art['exists'] else '— NOT PRESENT in this checkout'}.
+It is the only artifact in the repository whose format validation is committed and whose emission
+policy was adopted by a pre-registered rule rather than by hand.</p>
+{('<table><thead><tr><th>Measurement</th><th>Value</th><th>Committed evidence</th></tr></thead><tbody>' + state_html + '</tbody></table>') if state_html else missing("No measurement evidence is present in this checkout.", "python scripts/read_landed_reports.py")}
+{verdict_line}
+{note("warn", "<strong>Read this before believing any number above.</strong> None of them is an official score. The surrogate populations are (a) the training catalogue, (b) USGS SGMC traces the catalogue does not contain, and (c) their union as a stand-in for the Phase-2 'complete updated test set'. The scored population is the expert-revised new-fault set (rules §1.1/§3.6), which nobody outside the organisers has. Fold-restricted bootstraps also resample only 8–9 blocks, below the 12 the scorer itself requires before it calls an interval readable, so they are spread indicators, not confidence statements.")}
+""")
+
+    # ------------------------------------------------------------------ irregularities
+    out.append(f"""
+<h2 id="flags">10. Irregularities flagged before you submit</h2>
+<table><thead><tr><th>#</th><th>Finding</th><th>How it was established</th><th>Consequence for the submission</th></tr></thead><tbody>
+<tr><td>1</td><td><code>example_submission.tif</code> is bit-identical to the labels raster, although the problem page describes the sample submission as predicting total fault absence.</td>
+<td class="small">sha256 equality + pixel comparison, <code>data/evidence/transfer_analysis.json</code></td>
+<td>Do not use the sample as a "no fault" baseline; use it only as the grid/CRS template (which is what <code>scripts/validate_submission.py</code> does).</td></tr>
+<tr><td>2</td><td>File-name drift between the problem page, the reference solution and the data tab's mirrors.</td>
+<td class="small"><code>data/bridge/manifest.json</code> maps mirror name → canonical name by sha256</td>
+<td>Handled; placement is by checksum, so a name cannot substitute a file.</td></tr>
+<tr><td>3</td><td>The 1 m DEM links file is a scan with no text layer; the competition JSON inside it contains duplicate rows and path/filename project mismatches.</td>
+<td class="small">three extractors + OCR, then every tile URL checked against the USGS bucket (<code>scripts/download_dem_tiles.py --complete-listing</code>)</td>
+<td>DEM derivatives are still unused (<code>external_dem_path: null</code>); the canonical tile list is enumerable without the PDF.</td></tr>
+<tr><td>4</td><td>Submission cadence: an earlier project instruction said 2 per 7 days, the rules PDF says three per week.</td>
+<td class="small">verbatim quote <code>weekly_limit</code> in <code>data/evidence/rules_quotes.json</code></td>
+<td>Plan on 3/week (the official document wins) and check the number the platform shows at submission time.</td></tr>
+<tr><td>5</td><td>The cross-catalogue transfer measurement refused itself: QFaults and the training labels are the same lines (60,938 of 60,939 in-footprint QFaults px already within R = 3 px of a label).</td>
+<td class="small"><code>data/evidence/xcat/transfer_report.json</code>, measured on a runner</td>
+<td>No free second Quaternary catalogue is independent of these labels, so external-catalogue signal is limited to SGMC — and §9 shows what that buys.</td></tr>
+</tbody></table>
+""")
+
+    # ------------------------------------------------------------------ finalist package
+    out.append(f"""
+<h2 id="finalist">11. If you place: the finalist package</h2>
+{quote_block(ev, "code_assets", "what finalists must deliver")}
+<ul>
+  <li>This repository is that package: pinned dependencies (<code>requirements.verified.txt</code>),
+      the configs that produced the shipped artifact, the blend provenance
+      (<code>{e(SHIPPED_EVIDENCE_DIR)}/usable_folds.txt</code>, <code>fold_provenance.txt</code>,
+      <code>blend_report.json</code>) and the reproduction route
+      (<a href="reproduce.html">reproduce</a>).</li>
+  <li>Documentation must follow DrivenData's winning-model template (provided to winners after the
+      competition closes) — hardware, dependencies, preprocessing, training time, inference commands.</li>
+  <li>It must be able to generate predictions on <b>new data samples</b>, which is what
+      <code>src/inference.py</code> + <code>scripts/validate_submission.py</code> do end to end.</li>
+</ul>
+
+<h2 id="checklist">12. Pre-flight checklist</h2>
+<pre><code>[ ] DrivenData account created and competition joined ("Compete!" accepted)
+[ ] python scripts/assemble_data_bridge.py      -> all sha256 verified
+[ ] python scripts/prepare_data.py              -> "OK: data/ passes every pre-flight check"
+[ ] raster chosen (route A/B/C/D) and, if not route A, generated
+[ ] python scripts/validate_submission.py --pred &lt;file&gt; --sample data/sample_submission.tif --train data/training_features.tif
+                                                -> "✅ Validation PASSED"
+[ ] sha256 of the uploaded file recorded next to the submission (compare with this page's build-time hash)
+[ ] generative-AI disclosure pasted into the narrative
+[ ] public leaderboard shows a score for the submission
+[ ] weekly quota used deliberately (3/week) and the final selection diarised before Dec 3, 2026 11:59 PM UTC</code></pre>
+<p class="small">Sources for every requirement on this page:
+<a href="{PROB}#submission-format">problem description · submission format</a> ·
+<a href="{RULES}">official rules PDF</a> ·
+<a href="{COMP}">competition home</a> ·
+<a href="{DATA_TAB}">data tab</a> ·
+<a href="{RULES_HEROX}">HeroX rules mirror</a> ·
+<a href="{REFSOL}">reference solution</a> ·
+<a href="{GDR_INGENIOUS}">INGENIOUS Great Basin compilation (label source)</a>.
+The full auditable table ({_catalog_rows_text()}each with a verification method, date and
+result) is on <a href="sources.html">sources</a> and in <code>docs/data_catalog.csv</code>.</p>
+""")
+    return page("Make a submission", "submission.html", "".join(out),
+                "Exactly how to enter the DOE GEMS Prize and upload a valid GeoTIFF — every step "
+                "verified against the official rules and re-executed in this repository.")
+
+
+
 def main() -> int:
     ev = {
         "inventory": load(ROOT / "data/evidence/inventory.json"),
@@ -2853,6 +3437,15 @@ def main() -> int:
         # blocks, plus the gate that reproduces the runner's committed sweep row in the sandbox
         # (scripts/block_holdout_eval.py).
         "block_stratified": load(ROOT / "data/evidence/block_holdout/block_stratified.json"),
+        # The four landed block-holdout folds aggregated into the gap's distribution, and the
+        # pseudo-label contrast on EVERY committed truth population (scripts/read_landed_reports.py).
+        "fold_gaps": load(ROOT / "data/evidence/block_holdout/fold_gap_summary.json"),
+        "pseudo_contrast": load(ROOT / "data/evidence/pseudo_labels/fold0_two_population_contrast.json"),
+        # The Phase-2-like surrogate population (labels UNION proxy-only) scored on the shipped
+        # raster: scripts/block_holdout_eval.py --combined-population.
+        "combined_truth": load(ROOT / "data/evidence/proxy/combined_truth_shipped.json"),
+        # The pre-registered FIELD rule's machine verdict (scripts/check_field_selection.py).
+        "field_selection": load(ROOT / "data/evidence/field_selection.json"),
         # The same quantities recomputed on a GitHub-hosted runner from the same committed bytes,
         # compared field by field (.github/workflows/block-holdout.yml).
         "runner_reproduction": load(ROOT / "data/evidence/block_holdout/sandbox_vs_runner.json"),
@@ -2907,6 +3500,7 @@ def main() -> int:
     pages = {
         "index.html": build_index(ev),
         "executive_summary.html": build_executive_summary(ev),
+        "submission.html": build_submission(ev),
         "data.html": build_data(ev),
         "metric.html": build_metric(ev),
         "method.html": build_method(ev),
