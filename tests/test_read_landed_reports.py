@@ -346,23 +346,54 @@ def test_the_recomposition_reproduces_the_runners_own_paired_contrast():
 
 
 @pytest.mark.skipif(not COMMITTED, reason="the landed runner reports are not in this checkout")
-def test_the_committed_reading_is_a_trade_off_and_is_not_shippable():
-    """The finding this script exists to make visible: the proxy arm gains, the independent arm loses."""
+def test_the_committed_reading_is_not_shippable_and_the_union_population_decides():
+    """The finding this script exists to make visible, on the committed re-fire (run 35477119490).
+
+    Pinned qualitatively rather than by value on purpose: two fires of the same seed, config and
+    partition on different runners differed by ~0.036 on the proxy arm (+0.1036 then +0.0677), so a
+    test that hard-codes one replicate's decimals would fail on the next honest re-measurement while
+    proving nothing.  What must hold for ANY fire is the structure asserted here - including the
+    tripwire at the end, which fails loudly the day this contrast actually reaches the adoption bar
+    (docs/FIELD_SELECTION_RULE.md R3: P >= 0.95) so the docs cannot silently stay stale.
+    """
     m = _mod()
     r = m.contrast_report(0, m.load_json(m.DECISION), m.pseudo_provenance())
     held = r["arms"]["heldout"]["populations"]
-    assert held["proxy_only"]["contrast"] > 0.05, "the proxy gain landed"
-    assert held["labels"]["contrast"] < -0.05, "the catalogue loss landed"
+    # the two COMPONENT populations disagree in sign - the reason the union had to be scored at all
+    assert held["proxy_only"]["contrast"] > 0, "the source-circular arm gains"
+    assert held["labels"]["contrast"] < 0, "the independent (catalogue) arm loses"
     assert held["labels"]["bootstrap"]["prob_candidate_beats_reference"] < 0.05
-    assert r["verdict"] == "TRADE_OFF_PROXY_GAINS_CATALOGUE_LOSSES"
-    assert r["shippable_evidence"] is False
+    # the union arm exists, and it says where its two arms came from
+    assert held["combined"]["status"] == "MEASURED", "the union arm must be scored, not inferred"
+    src = held["combined"]["sources"]
+    assert src["baseline"].endswith("fold0_heldout_combined.json"), \
+        "the baseline's union numbers come from the sha256-gated re-score of its runner artifact"
+    assert src["pseudo"].endswith("pseudo_labels/fold0_heldout.json")
+    # and it is the population that decides the verdict
+    expected = ("GAIN_ON_THE_COMBINED_SURROGATE" if held["combined"]["contrast"] > 0
+                else "LOSS_ON_THE_COMBINED_SURROGATE")
+    assert r["verdict"] == expected
+    assert r["shippable_evidence"] is False, "this reader makes no shipping decision, ever"
+    assert "FIELD_SELECTION_RULE.md" in r["shipping_note"]
     assert r["pseudo_provenance"]["circular_source"] is True
-    # the same split must hold on the blocks the model trained on (memorisation arm)
+    # the memorisation check: the same populations on the blocks that fold trained on
     comp = r["arms"]["complement"]["populations"]
     assert comp["proxy_only"]["contrast"] > 0 and comp["labels"]["contrast"] < 0
-    # and the coarse-interval caveat travels with the number
+    assert comp["combined"]["status"] == "MEASURED"
+    assert (comp["combined"]["contrast"] > 0) != (held["combined"]["contrast"] > 0), \
+        "the committed fire's two scopes disagree in sign on the union - that instability is part " \
+        "of the finding, and if a future fire stabilises it the docs must be rewritten"
+    # the coarse-interval caveat travels with every fold-restricted number
     assert held["proxy_only"]["interval_readable"] is False
+    assert held["combined"]["interval_readable"] is False
     assert "COARSE" in r["caveat"] or "spread indicator" in r["caveat"]
+    # TRIPWIRE: the committed contrast does not reach the adoption bar.  If this fires, the union
+    # gain is real and STATUS/EXECUTIVE_SUMMARY/LIMITATIONS/the site all have to say so.
+    b = held["combined"]["bootstrap"]
+    ci = b["contrast_ci95"]
+    assert b["prob_candidate_beats_reference"] < 0.95 or (ci[0] < 0 < ci[1]), \
+        f"the union contrast now clears R3's bar ({b['prob_candidate_beats_reference']}, {ci}) - " \
+        "the shipping story in the docs is stale and must be rewritten"
 
 
 @pytest.mark.skipif(not COMMITTED, reason="the landed runner reports are not in this checkout")
@@ -388,7 +419,11 @@ def test_main_writes_both_artefacts_and_check_writes_nothing(tmp_path):
     g, c = json.loads(gaps_out.read_text()), json.loads(contrast_out.read_text())
     assert g["generated_by"] == m.__name__.replace("__main__", "") or \
         g["generated_by"] == "scripts/read_landed_reports.py"
-    assert c["verdict"] == "TRADE_OFF_PROXY_GAINS_CATALOGUE_LOSSES"
+    held_comb = c["arms"]["heldout"]["populations"]["combined"]
+    assert held_comb["status"] == "MEASURED"
+    assert c["verdict"] == ("GAIN_ON_THE_COMBINED_SURROGATE" if held_comb["contrast"] > 0
+                            else "LOSS_ON_THE_COMBINED_SURROGATE"), \
+        "once the union is scored it decides the verdict"
     assert c["policy"]["candidate_label"] == POLICY_LABEL
     assert set(c["arms"]) == {"heldout", "complement"}
 

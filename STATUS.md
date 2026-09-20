@@ -87,8 +87,13 @@ in the numbers, it was in *which population* the numbers were measured on.
      `sources` in the output so every number says which file it came from;
    * `--gaps-only` writes just the fold-gap summary, which is all a block-holdout job can derive the
      moment a fold lands (no pseudo arm exists yet).
-   The trigger is re-fired with that reasoning recorded in `.github/triggers/pseudo-label`; the fire
-   happens when this branch merges to `main`, so the evidence lands on `main` directly.
+   The trigger was re-fired with that reasoning recorded in `.github/triggers/pseudo-label`, and the
+   branch push dispatched it (run **35477119490**): every new step came back **green** — the
+   cross-run artifact download, the sha256 gate (it accepted the downloaded field, so
+   `BASELINE_RUN_ID=35413207736` really is the run that produced the committed report), both arms'
+   three-population scoring, the `--strict` recomputation (it matched the runner's own inline
+   bootstrap, so the run did not exit 2), the evidence commit through `scripts/push_evidence.sh` and
+   the artifact upload that now carries `outputs/prob_raw.tif`. The measurement is item 8.
 
 5. **A latent CI defect fixed on the way: evidence pushes raced each other.** Three fold jobs plus a
    pseudo-label fire from the same trigger push all rewrite the *same derived file*
@@ -121,14 +126,64 @@ push, +5 for the sibling re-scores, `--strict` and `--gaps-only`). `read_landed_
 the fold-gap caveat on the results page is now *derived* from `fold_gap_summary.json` instead of
 asserting "folds 1–3 are in flight".
 
-**Next session:** read the re-fired fold-0 union contrast when it lands
-(`data/evidence/block_holdout/fold0_heldout_combined.json` +
-`data/evidence/pseudo_labels/fold0_heldout.json`'s combined population) — that is the only
-population on which the pseudo-label question has one answer, and the pre-registered bars are
-P ≥ 0.95 / +0.010 before a pseudo field may even be proposed to the field-selection gate. Then the
-§11 ordering: **8 (human: enroll and upload — the only unbiased signal available) → 3 (1 m DEM
-derivatives) → 6 (GPU EfficientNet-B5) → 4 (selection on the union population, which every fold
-field now carries)**.
+8. **The re-fire landed: the union population is measured on both arms — and it does not clear the
+   bar.** Run 35477119490 (branch, 2026-09-20T02:06Z) committed both arms on all three populations.
+   Fold 0, adopted policy `floor0.1_w0px`:
+
+   | scope | population | baseline → pseudo | contrast | P(pseudo > baseline) | CI95 of the contrast |
+   |---|---|---|---|---|---|
+   | **held-out (8 blocks)** | **combined (union)** | 0.197183 → **0.228463** | **+0.031280** | **0.916** | [−0.010237, +0.082188] |
+   | held-out (8 blocks) | proxy-only | 0.080584 → 0.148303 | +0.067719 | 0.988 | [+0.011044, +0.133105] |
+   | held-out (8 blocks) | catalogue labels | 0.211259 → 0.103369 | −0.107890 | 0.000 | [−0.155060, −0.068517] |
+   | trained-on (26 blocks) | combined (union) | 0.227349 → 0.189818 | −0.037531 | 0.0025 | [−0.064954, −0.007951] |
+   | trained-on (26 blocks) | proxy-only | 0.092020 → 0.097677 | +0.005657 | 0.700 | [−0.013210, +0.028078] |
+   | trained-on (26 blocks) | catalogue labels | 0.215206 → 0.106995 | −0.108211 | 0.000 | [−0.121993, −0.094166] |
+
+   Derived verdict **`GAIN_ON_THE_COMBINED_SURROGATE`** ("the combined population is the only
+   committed population that contains BOTH fault kinds, and it moves +0.031280"), and
+   **`shippable_evidence: false`** — which in this file is a *constant by construction*, not a
+   threshold that was evaluated: the reader makes no shipping decision, and the `shipping_note` says
+   a pseudo-labelled field reaches the leaderboard only through `docs/FIELD_SELECTION_RULE.md` as a
+   new `reblend.yml` RUN_ID with R3 measured on both fields' raw rasters, while the proxy arm here is
+   source-circular. Read against the bar that rule *does* use (R3: paired block bootstrap
+   P ≥ 0.95), the union contrast reaches **P = 0.916 with an interval that spans zero on 8 scoreable
+   blocks** — so it is *suggestive, not established*, and the scorer's own reliability rule (below 12
+   resampling units the interval is COARSE) means P here is a spread indicator, not a confidence
+   statement.
+
+   Three things keep this from being a positive result:
+   * **The effect is the size of the replicate noise.** The first fire measured proxy +0.1036
+     (P = 0.999) and catalogue −0.0874 (P = 0.001); this fire, same seed, same config, same
+     partition, different runner, measured proxy **+0.0677** and catalogue **−0.1079**. That is a
+     ~0.036 run-to-run swing on the proxy arm — the same order as the +0.0313 union contrast itself.
+   * **The two scopes disagree in sign on the union** (+0.0313 held-out vs −0.0375 trained-on). A
+     held-out-only gain is the direction that would matter (generalisation, not memorisation), but a
+     sign flip between scopes on the same field is instability, not a result.
+   * **Eight blocks is not a sample.** Both fires' numbers are in git history; the second overwrote
+     the first's files, so quoting either one alone would overstate the precision.
+
+   One coincidence worth defusing explicitly: the baseline's union held-out DTI is **0.197183**, which
+   looks like the public leaderboard's top score (**0.1972**). They are unrelated quantities — 8
+   held-out 51 km blocks of one survey against a local surrogate truth, versus the private
+   expert-labelled new-fault test set — and the resemblance carries no information at all.
+
+**Verification (this item).** Run 35477119490 steps 11/12/14 (artifact download, sha256-gated
+re-score, `--strict` derived reading) all completed `success`; the committed
+`data/evidence/pseudo_labels/fold0_derived_reading.log` is that step's own output. Merging this work
+to `main` re-fires the same trigger path, and that run is **cancelled before it can commit**: a third
+replicate would overwrite the committed evidence these docs quote without answering anything new, and
+the workflow itself is already validated end to end by 35477119490. Re-firing on purpose means
+changing a parameter (a different fold, or a pooled multi-fold contrast), not repeating this one. Locally the suite
+was re-run after the sandbox restart that wiped the venv and the gitignored rasters: the bridge
+reassembled all four files with every sha256 pin verified and the suite returned to **375 passed,
+1 skipped** (the transient second skip was only `pypdf` missing from the fresh venv).
+
+**Next session:** the union question is answered as far as one fold can answer it — *suggestive gain,
+under-powered, inside replicate noise*. Do not re-fire fold 0 expecting a different number; if the
+pseudo route is pursued it needs **≥12 scoreable blocks**, i.e. a contrast pooled over the four
+committed folds rather than one, before P means anything. Otherwise the §11 ordering stands: **8
+(human: enroll and upload — the only unbiased signal available) → 3 (1 m DEM derivatives) → 6 (GPU
+EfficientNet-B5) → 4 (selection on the union population, which every fold field now carries)**.
 
 ## Session 18 (2026-09-19) — the field axis got a pre-registered rule and a machine gate; the block-holdout got its fold-0 gap; the pseudo-label route was built, proven leakage-safe, and dispatched
 

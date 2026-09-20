@@ -979,8 +979,8 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
       <td>7</td>
       <td><b>Pseudo-label / self-training from SGMC proxy trace</b></td>
       <td>SGMC trace is allowed to inform the model (rules §3.2), but only through a held-out split so the gain cannot be label leakage. This is the <b>only remaining external-catalogue route</b> after the QFaults transfer refused on a 100 % overlap with the labels (item 1).</td>
-      <td><b>MEASURED 2026-09-19, fold 0 — a trade-off, not a gain, and not shippable on this evidence.</b> Pseudo-label support in <code>src/dataset.py::make_patches</code> makes the 61,664 px of SGMC trace the labels do NOT contain (<code>proxy_catalogue.tif</code> code 2) training-window label mass, while the block partition, the window selection and the held-out region are untouched — so the model never sees the pseudo pixels of the blocks it is scored on (leakage invariants pinned by <code>tests/test_pseudo_labels.py</code>). On the fold-0 <b>held-out</b> blocks the paired contrast reads <b>proxy-only 0.0806 → 0.1841 (+0.1036, P = 0.999)</b> but <b>catalogue 0.2113 → 0.1239 (−0.0874, P = 0.001)</b>, with emission support 90,433 → 338,649 px; the trained-on blocks split the same way (+0.0507 / −0.0764). Derived verdict <code>TRADE_OFF_PROXY_GAINS_CATALOGUE_LOSSES</code>, <code>shippable_evidence: false</code> (<code>data/evidence/pseudo_labels/fold0_two_population_contrast.json</code>, recomposed from the committed per-block rows and reproducing the runner's own bootstrap exactly). The +0.1036 arm is <b>source-circular</b> — derived from the config, not asserted: <code>pseudo_label_path</code> is the same raster the proxy truth is cut from.</td>
-      <td>The two component populations point in opposite directions, so neither settles it: the <b>union</b> arm is being measured by the re-fired workflow, which downloads the baseline's raw field from the artifact of the run that produced its committed report and re-scores it after a <b>sha256 gate</b> (a wrong run id fails the job instead of pairing two different fields), and cross-checks the whole contrast with <code>read_landed_reports.py --strict</code>. Pre-registered bars before a pseudo field may even be <i>proposed</i> to the field-selection gate (item 5's rule): <b>P ≥ 0.95 and +0.010 on the union, held-out blocks</b>. A pseudo-labelled ensemble still ships only as a new <code>reblend.yml</code> RUN_ID with measured R3 — no shortcut path exists.</td>
+      <td><b>MEASURED 2026-09-19/20, fold 0, on all three populations — a trade-off on the components, suggestive but under-powered on the union, and not shippable on this evidence.</b> Pseudo-label support in <code>src/dataset.py::make_patches</code> makes the 61,664 px of SGMC trace the labels do NOT contain (<code>proxy_catalogue.tif</code> code 2) training-window label mass, while the block partition, the window selection and the held-out region are untouched — so the model never sees the pseudo pixels of the blocks it is scored on (leakage invariants pinned by <code>tests/test_pseudo_labels.py</code>). On the fold-0 <b>held-out</b> blocks the paired contrast reads <b>proxy-only 0.0806 → 0.1483 (+0.0677, P = 0.988)</b> but <b>catalogue 0.2113 → 0.1034 (−0.1079, P = 0.000)</b>, and on the <b>combined</b> population — the only one holding both fault kinds — <b>0.1972 → 0.2285 (+0.0313, P = 0.916, CI95 [−0.010, +0.082])</b>: suggestive, but the interval spans zero on 8 scoreable blocks and the trained-on blocks move the other way (−0.0375). Derived verdict <code>GAIN_ON_THE_COMBINED_SURROGATE</code>, <code>shippable_evidence: false</code> — a constant by construction, because this reader makes no shipping decision (<code>data/evidence/pseudo_labels/fold0_two_population_contrast.json</code>, recomposed from the committed per-block rows and reproducing the runner's own bootstrap exactly, cross-checked by <code>--strict</code> in the run that produced it). The +0.1036 arm is <b>source-circular</b> — derived from the config, not asserted: <code>pseudo_label_path</code> is the same raster the proxy truth is cut from.</td>
+      <td><b>Do not re-fire fold 0 expecting a better number.</b> The two fires (same seed 46, same config, same partition, different runners) differ by ~0.036 on the proxy arm — the same order as the +0.0313 union effect — so one fold cannot separate this signal from its own training noise, and any interval from &lt;12 resampling units is marked COARSE by the scorer. The next measurement that would mean something is a contrast <b>pooled over the four committed folds</b> (≥12 scoreable blocks per scope); the baseline arms' raw fields for folds 1–3 are on their runner artifacts until ~2026-10-03. Against the rule that does exist — <code>docs/FIELD_SELECTION_RULE.md</code> R3 <b>P ≥ 0.95</b> on both fields' raw rasters, R1 a +0.010 margin — this contrast clears the margin and <b>misses P</b>, so it licenses no adoption. A pseudo-labelled ensemble still ships only as a new <code>reblend.yml</code> RUN_ID with measured R3 — no shortcut path exists.</td>
     </tr>
     <tr>
       <td>8</td>
@@ -3270,6 +3270,10 @@ used; the disclosure must describe <em>your</em> submission.</p>
     held = ((pc.get("arms") or {}).get("heldout") or {}) if pc else {}
     hp = (held.get("populations") or {}) if held.get("status") == "MEASURED" else {}
     proxy_arm, labels_arm = hp.get("proxy_only") or {}, hp.get("labels") or {}
+    comb_arm = hp.get("combined") or {}
+    comp = ((pc.get("arms") or {}).get("complement") or {}) if pc else {}
+    cp = (comp.get("populations") or {}) if comp.get("status") == "MEASURED" else {}
+    comb_comp_arm = cp.get("combined") or {}
     comb = ((ct.get("combined_population") or {}) if ct else {})
 
     state_rows = []
@@ -3289,6 +3293,22 @@ used; the disclosure must describe <em>your</em> submission.</p>
         state_rows.append(("…the same change on the catalogue population (independent of the pseudo-label source)",
                            f"{labels_arm.get('reference_dti'):.4f} → <b>{labels_arm.get('candidate_dti'):.4f}</b> ({labels_arm.get('contrast'):+.4f}, P={e(str((labels_arm.get('bootstrap') or {}).get('prob_candidate_beats_reference')))})",
                            "same file — the two populations move in opposite directions"))
+    def _arm_cells(arm, extra=""):
+        b = arm.get("bootstrap") or {}
+        ci = b.get("contrast_ci95") or []
+        val = (f"{arm.get('reference_dti'):.4f} → <b>{arm.get('candidate_dti'):.4f}</b> "
+               f"({arm.get('contrast'):+.4f}, P={e(str(b.get('prob_candidate_beats_reference')))}"
+               + (f", CI95 [{ci[0]:+.4f}, {ci[1]:+.4f}]" if len(ci) == 2 else "") + ")" + extra)
+        return val
+
+    if comb_arm.get("status") == "MEASURED":
+        state_rows.append(("…and on the <b>combined</b> surrogate — the only population holding both fault kinds (held-out blocks)",
+                           _arm_cells(comb_arm),
+                           "same file — the union is scored from the rasters because FP_w sums over prediction pixels and does not decompose"))
+    if comb_comp_arm.get("status") == "MEASURED":
+        state_rows.append(("…the same union population on the blocks that fold <em>trained</em> on (the memorisation check)",
+                           _arm_cells(comb_comp_arm),
+                           "same file, complement scope — the two scopes disagree in sign, so one fold cannot settle it"))
     if comb:
         ref = (comb.get("reference") or {})
         state_rows.append(("Shipped artifact on the combined surrogate (labels ∪ new-fault-like trace)",

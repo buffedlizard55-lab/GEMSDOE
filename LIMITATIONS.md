@@ -36,17 +36,36 @@
    `run-id` parameter plumbing, the `continue-on-error` path, the missing-file warning) and by the
    API listing that proves the artifact exists and its size. The *scoring* it feeds is the same
    `--combined-population` code path that produced `combined_truth_shipped.json` locally.
-7. **The union contrast for fold 0 does not exist yet.** `fold0_two_population_contrast.json` reports
-   `combined: NOT_SCORED` for both scopes on the committed evidence, and that is the correct state:
-   the reader refuses to invent a number for a population it has no rasters for. It becomes measured
-   only when the re-fired workflow lands both arms' sibling reports.
+7. **The union contrast for fold 0 is measured — and it is under-powered, not decisive.** Run
+   35477119490 (2026-09-20T02:06Z) landed both arms on all three populations. On the union, the
+   held-out blocks give baseline 0.197183 → pseudo **0.228463**, contrast **+0.031280**,
+   **P = 0.916**, CI95 **[−0.010237, +0.082188]** — the interval spans zero, and with only **8
+   scoreable blocks** the scorer's own reliability rule marks it COARSE, so P is a spread indicator
+   rather than a confidence statement. The trained-on blocks move the *other* way on the same
+   population (−0.037531, P = 0.0025, 26 blocks). Derived verdict
+   `GAIN_ON_THE_COMBINED_SURROGATE` with `shippable_evidence: false` — and that flag is a **constant
+   by construction** in `scripts/read_landed_reports.py`, not a threshold that was evaluated: the
+   reader makes no shipping decision. Measured against the bar `docs/FIELD_SELECTION_RULE.md`
+   actually pre-registers for adopting a field (R3: paired block bootstrap P ≥ 0.95; R1: a +0.010
+   margin), this contrast clears the margin and **misses P**, so it licenses *no* adoption. It is
+   suggestive on the only population that contains both fault kinds, and that is all it is.
 8. **GitHub Pages is served by the legacy branch build, not by `pages.yml`.** Verified 2026-09-19:
    `build_type: legacy`, `source: {branch: main, path: "/"}`; `/GEMSDOE/docs/executive_summary.html`
    resolves while `/GEMSDOE/executive_summary.html` 404s, even though the Actions deploy job reports
    success with a `docs/`-rooted artifact. **Limitation:** every README/site link is correct for the
    legacy build only; switching Pages to the workflow build would break all of them at once, so the
    mismatch is flagged here rather than "fixed" in one file.
-9. **Submitting is still human-only.** No DrivenData account or credentials exist in this sandbox
+9. **Replicate variability is now measured, and it is the size of the effect.** The two pseudo-label
+   fires used the same seed (46), the same config and the same block partition, on different runners:
+   fire 1 gave proxy-only **+0.1036** (P = 0.999) and catalogue **−0.0874** (P = 0.001); fire 2 gave
+   proxy-only **+0.0677** (P = 0.988) and catalogue **−0.1079** (P = 0.000). That is a ~0.036
+   run-to-run swing on one arm and ~0.020 on the other — **the same order as the +0.0313 union
+   contrast**, so no single-fold contrast from this pipeline should be read to two decimal places.
+   Both fires are in git history, but the second overwrote the first's committed files, so quoting
+   either one alone overstates the precision. What would fix it: a contrast pooled over the four
+   committed folds (≥12 scoreable blocks per scope) instead of one fold, or repeated fires with the
+   spread reported.
+10. **Submitting is still human-only.** No DrivenData account or credentials exist in this sandbox
    (the data tab redirects to login), so nothing here can enrol, upload, read a public score, or make
    the single final selection. `docs/submission.html` is the handover checklist for the person who can.
 
