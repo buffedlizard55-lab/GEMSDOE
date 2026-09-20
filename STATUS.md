@@ -72,8 +72,16 @@ exactly how to make a submission into the contest*.
      `reproduce_verified`.
    * `tests/test_submission_page.py` asserted the old nav label ("Make a submission") and would have
      failed on the retitle; it now pins both entries, and the new subpage is checked to be reachable.
+   * **CI caught the new build-reproduction test disagreeing with itself**, and the disagreement was
+     real: `docs/submission.html` renders whether the three official rasters are present in the
+     working tree *right now*, and `data/*.tif` is gitignored by design — so the committed page
+     (built here, rasters present → "MATCHES THE PIN") could never match a fresh clone's build
+     (→ "ABSENT"). The test now strips exactly those live-state lines and nothing else before
+     comparing, states why in the test file, and gains a sibling that asserts two consecutive builds
+     are byte-identical — so drift is still caught, and the environment dependence is documented
+     instead of becoming an intermittent red check.
 
-**Session 20 test count: 420 passed, 1 skipped** (from 368 passed, 1 skipped at the merge).
+**Session 20 test count: 431 passed, 1 skipped** (from 368 passed, 1 skipped at the merge).
 
 ## Session 19 (2026-09-19) — every landed report read on every truth population, the submission path got its own page, and the third population is now measured on both arms
 

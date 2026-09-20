@@ -84,20 +84,57 @@ def _normalised(p: Path) -> bytes:
     return STAMP.sub(b"<STAMP>", p.read_bytes())
 
 
+# The build reads the working tree as well as the committed evidence: `docs/submission.html`
+# reports whether the three official rasters are present RIGHT NOW, and `data/*.tif` is gitignored
+# by design (418 MB + 0.4 MB + 1.6 MB).  So the committed page can only match a build in a checkout
+# that has the rasters, while CI - a fresh clone - legitimately renders "ABSENT" instead.  These
+# markers name every string that may differ for that reason and nothing else; anything outside them
+# is drift, which is what this test exists to catch.  (Discovered by this test failing on the
+# runner, which is the correct behaviour: the alternative was a silently stale page.)
+LIVE_STATE_MARKERS = (b"MATCHES THE PIN", b"pill bad", b"data/ is not populated in this checkout",
+                      b"<strong>Ready.</strong> All three canonical rasters")
+
+
+def _strip_live_state(html: bytes) -> bytes:
+    """Drop the lines that report the working tree's own state, keep everything else."""
+    kept = [ln for ln in html.splitlines(keepends=True)
+            if not any(m in ln for m in LIVE_STATE_MARKERS)]
+    return b"".join(kept)
+
+
+def _comparable(p: Path) -> bytes:
+    return _strip_live_state(_normalised(p))
+
+
 def test_the_build_reproduces_the_committed_pages():
     """The site IS a build artifact: regeneration must be a no-op.
 
     Without this, a page can be edited by hand (or go stale against the evidence it renders) and
-    nothing notices - which is the failure mode the whole repository is built to avoid.
+    nothing notices - which is the failure mode the whole repository is built to avoid.  The one
+    exception is documented above and is exactly as wide as the live-state markers.
     """
     if not any(DOCS.glob("*.html")):
         pytest.skip("the site has not been generated here")
-    before = {p.name: _normalised(p) for p in _generated_pages()}
+    before = {p.name: _comparable(p) for p in _generated_pages()}
     subprocess.run([sys.executable, str(ROOT / "scripts" / "build_site.py")],
                    cwd=ROOT, check=True, capture_output=True)
-    after = {p.name: _normalised(p) for p in _generated_pages()}
+    after = {p.name: _comparable(p) for p in _generated_pages()}
     changed = sorted(n for n in before if before[n] != after[n])
     assert not changed, f"regenerating the site changed {changed}: the committed pages are stale"
+
+
+def test_building_twice_in_one_environment_is_byte_identical():
+    """Determinism, independent of the live-state exception: two builds here must agree exactly."""
+    if not any(DOCS.glob("*.html")):
+        pytest.skip("the site has not been generated here")
+    snapshots = []
+    for _ in range(2):
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "build_site.py")],
+                       cwd=ROOT, check=True, capture_output=True)
+        snapshots.append({p.name: _normalised(p) for p in _generated_pages()})
+    first, second = snapshots
+    changed = sorted(n for n in first if first[n] != second[n])
+    assert not changed, f"two consecutive builds differ in {changed}"
 
 
 def test_every_page_carries_a_build_stamp():
