@@ -1,3 +1,25 @@
+## Session 21 additions (2026-09-21)
+
+1. **The leaderboard bar is a moving target, and it moved while we were reading it.** Top of the
+   public leaderboard: 0.1972 with 43 ranked (2026-09-16 snapshot) → **0.2854 with 50 ranked**
+   (2026-09-21 snapshot, same page, account-free). Both are committed in
+   `data/evidence/independent_verification.json` (`competition_standing` +
+   `competition_standing_history`). Any sentence that quotes the bar without a date is stale by
+   construction; the site renders the bar from the newest snapshot and says when it was read.
+   Consequence: the gap between the best local surrogate number for the shipped field and the
+   public bar is not a stable quantity, so it is not quoted.
+2. **The baseline re-run's `prob_raw.tif` (22.7 MB) is gitignored.** The re-run's audit trail
+   (report, `reproduce_audit.json`, `.sha256`, the byte-identical 545,798 B `submission.tif`) is
+   committed in `data/evidence/baseline_rerun/`; the raw field is regenerable in one ~5–20 min CPU
+   run (`python scripts/baseline_submission.py`), which is exactly what the committed
+   `submission.tif` hash match proves. This follows the existing "audit trail in git, rasters
+   never" convention; it is noted so nobody assumes the raw field is auditable from a fresh clone
+   without re-running.
+3. **The CPU route's wall time depends on machine and load.** The committed report's own timings
+   total 307.9 s; this session's re-run took ~17 min wall on the same 2 vCPU sandbox while a
+   ~4 GB package install competed for CPU. The site now states "≈ 5–20 min (measured 5.1 min on
+   2 vCPU)" rather than a single number.
+
 ## Session 20 additions (2026-09-20)
 
 1. **The CPU baseline is a floor, not a contender, and it is the only field in this repository whose
