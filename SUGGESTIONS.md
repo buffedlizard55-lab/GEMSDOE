@@ -36,7 +36,7 @@
 | **NEW: pool the pseudo contrast over folds before trusting any of it** | Contrast the pseudo and baseline arms over all four folds' held-out blocks (≥12 scoreable blocks per scope) instead of one fold's 8 | Measured replicate noise between the two fires is ~0.036 on the proxy arm — the same order as the +0.0313 union effect — and the scorer marks any interval from <12 resampling units COARSE. One fold cannot separate this signal from its own training noise | The baseline arms' raw fields for folds 1–3 are on their runner artifacts (`block-holdout-fold-1/2/3` of run 35451858112, 14-day retention from 2026-09-19, i.e. **until ~2026-10-03**); the pseudo arm would have to be trained on those folds, so the cheap first step is a pooled *baseline* union score as the comparison point |
 
 **Next session queue (priority order):**
-1. **First leaderboard upload** — human-only; 3/week, one final selection before Dec 3, 2026 11:59 PM UTC. Until then every number here is a local surrogate and the public leaderboard (top 0.1972) is the only unbiased signal.
+1. **First leaderboard upload** — human-only; 3/week, one final selection before Dec 3, 2026 11:59 PM UTC. Until then every number here is a local surrogate and the public leaderboard (top **0.2854** over 50 ranked, snapshot 2026-09-21) is the only unbiased signal.
 2. ~~**Read the re-fired fold-0 union contrast**~~ — **DONE 2026-09-20** (run 35477119490, every new step green): on the union, held-out blocks **0.197183 → 0.228463, +0.031280, P = 0.916, CI95 [−0.010, +0.082]** — suggestive, the interval spans zero on 8 scoreable blocks, and the trained-on scope moves the other way (−0.0375, P = 0.0025). Verdict `GAIN_ON_THE_COMBINED_SURROGATE`, `shippable_evidence: false`. **Do not re-fire fold 0 for a better number:** the two fires differ by ~0.036 on the proxy arm, so the effect is inside replicate noise. If this route is pursued, the next measurement is a contrast **pooled over the four committed folds** (≥12 scoreable blocks per scope) — see the two new rows above.
 3. **1 m DEM derivatives** — highest-upside detection idea left, no external fault catalogue involved; code ready, needs unrestricted egress + ~50 GB.
 4. **GPU full-config** — EfficientNet-B5, 10 MC splits, 60 epochs (`configs/config.yaml`).
@@ -172,8 +172,9 @@
    submission, rules compliance (§1.3, §1.4, App A), GenAI disclosure (§3.2), and GeoTIFF validation.
 5. **Detection is the binding constraint, now quantified.** 74 % of the new-fault-like truth lies
    more than 12 px from any emitted pixel (`miss_distance-ensemble1.json`); the oracle ceiling is
-   1.0000 at width 0 and 0.1618 at 16 px, and the leaderboard's top score (0.1972) is 7.9× the
-   constant-ones baseline measured here. The two experiments below are the remaining upside.
+   1.0000 at width 0 and 0.1618 at 16 px, and the leaderboard's top score (0.2854, 2026-09-21
+   snapshot) is 11.5× the constant-ones baseline measured here. The two experiments below are the
+   remaining upside.
 6. **Cross-catalogue transfer measurement.** Emitting an external fault catalogue (allowed by the
    rules) would raise recall on unmapped faults directly, but the proxy population CANNOT measure it:
    the proxy *is* the catalogue (a catalogue copy scores 0.0 there by the acceptance test). The

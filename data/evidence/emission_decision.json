@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-17T23:47:05+00:00",
+ "generated_utc": "2026-09-21T23:13:21+00:00",
  "generated_by": "scripts/decide_emission_width.py",
  "purpose": "reconcile the three disagreeing emission-width measurements and decide the shipped shaping policy on the record, using the metric's own scaling in |G|",
  "inputs": {
@@ -1200,7 +1200,7 @@
    }
   ],
   "conclusion": "SHIP the measured policy: sweep_best_t0_0.1_width0px (floor 0.1, thin, width 0 px) beats the shipped policy on the new-fault-like population by +0.1118 (condition 1), at 3/3 plausible scored-truth anchors with a crossover of 2,718 px (272 km) (condition 2), and the contrast reproduces on 3 independent ensemble(s) (data/evidence/proxy/eval_sweep-ens123.json: +0.0581, data/evidence/proxy/eval_sweep-ensemble2.json: +0.0456, data/evidence/proxy/eval_sweep-mean12.json: +0.0695) (condition 3). Ship it through the re-blend workflow's SHAPING_T0/SHAPING_DILATE, which is the only path that writes an adopted policy.",
-  "top_priority": "detection, not the emission policy, is the binding constraint: the best measured candidate (0.1365, sweep_best_t0_0.1_width0px) beats the constant-ones baseline (0.0249) on the new-fault-like population it was measured on, while the leaderboard's top score (0.1972) is 7.9x that baseline; the skeleton the candidate replaces scores 0.0247 there",
+  "top_priority": "detection, not the emission policy, is the binding constraint: the best measured candidate (0.1365, sweep_best_t0_0.1_width0px) beats the constant-ones baseline (0.0249) on the new-fault-like population it was measured on, while the leaderboard's top score (0.2854, read 2026-09-21T04:09:25+00:00) is 11.5x that baseline; the skeleton the candidate replaces scores 0.0247 there",
   "best_measured_candidate": {
    "policy": "sweep_best_t0_0.1_width0px",
    "measured_dti": 0.136452,

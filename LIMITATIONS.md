@@ -53,7 +53,7 @@
    `labels.tif` (60,988 px) and the SGMC proxy's code-2 pixels that the labels do not contain
    (61,664 px) — so it contains **no expert-verified new faults**, which is what rules §3.6 scores
    in both phases. The shipped artifact's **0.207431 CI95 [0.192924, 0.222879]** on that union is
-   therefore *not comparable* to the public leaderboard's top score of 0.1972 and must never be
+   therefore *not comparable* to the public leaderboard's top score (0.2854 on the latest snapshot)
    quoted as a predicted standing. What it does license: a **third, differently-composed population
    on which the adopted emission policy was re-tested and held** (the only better candidate is
    +0.0054 at P = 0.815, below both pre-registered bars).
@@ -222,8 +222,8 @@ the worst of the three fields, so the choice is not an artefact of one field.
 
 What is left is detection, and it is now the binding constraint rather than a suspicion: 74 % of the
 new-fault-like truth lies more than 12 px from any emitted pixel, a perfect localizer scores 1.0
-while the best 16 px band caps at 0.1618, and this model's 0.1365 on that population is 69 % of the
-leaderboard top (0.1972). Rows 1, 2, 7, 8, 9 and 10 below are unchanged.
+while the best 16 px band caps at 0.1618, and this model's 0.1365 on that population is 48 % of the
+leaderboard top (0.2854, 2026-09-21 snapshot). Rows 1, 2, 7, 8, 9 and 10 below are unchanged.
 
 ## Sessions 11–12 (2026-09-17) — current status of every blocker, line by line
 

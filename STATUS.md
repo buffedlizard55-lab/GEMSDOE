@@ -340,7 +340,8 @@ asserting "folds 1–3 are in flight".
      the first's files, so quoting either one alone would overstate the precision.
 
    One coincidence worth defusing explicitly: the baseline's union held-out DTI is **0.197183**, which
-   looks like the public leaderboard's top score (**0.1972**). They are unrelated quantities — 8
+   looks like a public leaderboard score (the snapshots bracketing it are **0.1972** on 2026-09-16
+   and **0.2854** on 2026-09-21). They are unrelated quantities — 8
    held-out 51 km blocks of one survey against a local surrogate truth, versus the private
    expert-labelled new-fault test set — and the resemblance carries no information at all.
 
@@ -802,8 +803,9 @@ does not say SHIP is never adopted.
    was still training at this checkpoint; the surviving folds join a later blend together with their
    own sweep, never without one.
 3. **Detection.** 74.0 % of the new-fault-like truth lies more than 12 px from any emitted pixel; the
-   oracle ceiling is 1.0000 at width 0 and 0.1618 at 16 px; the leaderboard top (0.1972) is 7.9× the
-   constant-ones baseline measured here. More independent folds, then the cross-catalogue transfer
+   oracle ceiling is 1.0000 at width 0 and 0.1618 at 16 px; the leaderboard top (0.2854 on the
+   2026-09-21 snapshot) is 11.5× the constant-ones baseline measured here. More independent folds,
+   then the cross-catalogue transfer
    experiment in `SUGGESTIONS.md`.
 4. **Training selection still maximises in-domain DTI.** The emission policy no longer does; the
    model still does (early stopping, fold weights). A new-fault-like selection signal is the
