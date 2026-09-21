@@ -35,7 +35,8 @@ from tqdm import tqdm
 from .dataset import (FaultDataset, band_names, load_features_and_labels, load_norm_stats,
                       make_patches, apply_norm_stats, fit_norm_stats, save_norm_stats)
 from .losses import CombinedLoss, TverskyLoss, DistanceWeightedTverskyLoss
-from .metrics import compute_distance_weighted_tversky, score_arrays_blocked
+from .metrics import (GtContext, compute_distance_weighted_tversky, score_arrays_blocked,
+                      score_within_mask)
 from .models import count_params, get_model
 from .submission_optim import search_threshold, shaping_thresholds, optimize_submission
 
@@ -141,10 +142,66 @@ def shaped_table(pg, gg, R, thresholds):
 
 
 
-def _score_full(pred_full, gt_full, cfg, R):
+def _union_truth(res, proxy_path: str) -> dict:
+    """The combined population, restricted to the fold's held-out test-window footprint.
+
+    Mirrors ``scripts/block_holdout_eval.py --combined-population`` exactly — combined = labels |
+    (proxy code 2 & footprint), the closest local surrogate for the Phase-2 expanded truth (rules
+    §3.6) — but restricted to the fold's own held-out windows so it can serve as a per-epoch model
+    selection signal in ``src/train.py`` without any GPU.  The window footprint is the padded-grid
+    union of ``res["summary"]["test_windows"]``; the unpadded slice of the padded maps covers the
+    original raster, so a truth pixel counts iff it sits in a held-out test window.
+    """
+    from .dataset import load_pseudo_mask              # late import avoids a circular dep
+    y = np.asarray(res["labels"], dtype=np.float64)
+    if y.ndim != 2:
+        raise ValueError("union selection needs the raw labels grid; make_patches did not expose it")
+    proxy_only = load_pseudo_mask(proxy_path, 2)
+    if proxy_only.shape != y.shape:
+        raise ValueError(f"proxy catalogue {proxy_only.shape} != label grid {y.shape}")
+    labels_gt = np.nan_to_num(y, nan=0.0) > 0.5
+    combined = labels_gt | proxy_only
+    tw = (res.get("summary") or {}).get("test_windows") or []
+    ps = int(res["summary"].get("patch_size", 128))
+    H, W = combined.shape
+    foot = np.zeros((H, W), dtype=bool)
+    for (i, j) in tw:
+        # `test_windows` are PADDED-grid origins; the scored maps are cropped back to (H, W)
+        # (`heldout_maps` stitches with crop=y_shape), so clip the footprint to the grid.
+        foot[i:min(i + ps, H), j:min(j + ps, W)] = True
+    return dict(full=combined.astype(np.float32), mask=foot)
+
+
+def _heldout_scopes(cfg, res) -> dict[str, tuple]:
+    """Extra ``(truth, mask)`` pairs to score the held-out maps on (``union_selection``).
+
+    ``truth`` is the FULL combined population (so the FP-weight EDT sees global geometry, exactly
+    like ``scripts/block_holdout_eval.py``); ``mask`` is the fold's test-window footprint, so TP/FN
+    are summed over union-truth pixels inside the held-out windows and FP over predictions inside
+    them — the same windows the in-domain DTI is computed on.
+    """
+    proxy_path = str(cfg["data"].get("proxy_catalogue_path", "")).strip()
+    if not bool(cfg["training"].get("union_selection")) or not proxy_path:
+        return {}
+    u = _union_truth(res, proxy_path)
+    return {"union": (u["full"], u["mask"])}
+
+
+def _score_full(pred_full, gt_full, cfg, R, scopes=None):
     dti, (tp, fp, fn) = score_arrays_blocked(np.nan_to_num(pred_full), gt_full, R_pixels=R,
                                              alpha=cfg["training"]["alpha"], beta=cfg["training"]["beta"])
-    return dti, None, dict(TP_w=tp, FP_w=fp, FN_w=fn)
+    comps = dict(TP_w=tp, FP_w=fp, FN_w=fn)
+    if scopes:
+        pred = np.nan_to_num(pred_full)
+        sc_out = {}
+        for name, (truth, mask) in scopes.items():
+            ctx = GtContext(truth, R_pixels=R)
+            s = score_within_mask(pred, ctx, mask,
+                                  alpha=cfg["training"]["alpha"], beta=cfg["training"]["beta"])
+            sc_out[name] = dict(dti=s["dti"], TP_w=s["TP_w"], FP_w=s["FP_w"], FN_w=s["FN_w"],
+                                n_gt=s["n_gt"], pred_px=s["pred_px"])
+        comps["scopes"] = sc_out
+    return dti, None, comps
 
 
 def train_one_epoch(model, loader, criterion, optimizer, device, scaler, use_amp, fpw_enabled, sched=None):
@@ -371,8 +428,8 @@ def main():
             tr = train_one_epoch(model, train_dl, criterion, opt, device, scaler, use_amp,
                                  use_fpw and loss_name != "plain_tversky", sched=sched)
             pf, gf, pc, gc = heldout_maps(model, res, y.shape, device, cfg, R_px)
-            dti_g, _unused, comps = _score_full(pf, gf, cfg, R_px)
-            # selection_mode: "shaped" (full t0 x thin table per epoch - GPU boxes only) or
+            scopes = _heldout_scopes(cfg, res)
+            dti_g, _unused, comps = _score_full(pf, gf, cfg, R_px, scopes=scopes or None)
             # "raw" (one fixed floor+thin candidate on the compact crop - CPU-cheap, the
             # binding calibration is the pooled search below / blend_submission.py).
             # The shaped path uses shaping_thresholds() (PR #9 fix): the old
@@ -387,12 +444,22 @@ def main():
                 d0 = float(compute_distance_weighted_tversky(
                     optimize_submission(pc, R=R_px, t0=0.5, thin=True), gc, R_pixels=R_px))
                 dti_shaped, sh_best = d0, (0.5, True, d0)
+            scope_bits = ""
+            if comps.get("scopes"):
+                sc = comps["scopes"].get("union") or {}
+                scope_bits = f"  DTI_union={sc.get('dti','n/a')} " \
+                    f"(n_gt={sc.get('n_gt','?')})" if sc.get("dti") is not None \
+                    else f"  DTI_union=n/a (no union truth in hold-out)"
             print(f"epoch {ep + 1}/{epochs}  loss={tr:.4f}  DTI_raw={dti_g:.4f}  "
                   f"DTI_shaped={dti_shaped:.4f} (t0={sh_best[0]:.4g},thin={sh_best[1]})  "
                   f"TP={comps['TP_w']:.0f} FP={comps['FP_w']:.0f} "
-                  f"FN={comps['FN_w']:.0f}  [{time.time() - t0:.0f}s]")
+                  f"FN={comps['FN_w']:.0f}{scope_bits}  [{time.time() - t0:.0f}s]")
             hist.append(dict(mc=mc, epoch=ep + 1, loss=tr, dti_raw=dti_g, dti_shaped=dti_shaped,
-                             **comps))
+                             **{k: v for k, v in comps.items() if k != "scopes"}))
+            if comps.get("scopes"):
+                hist[-1]["scopes"] = {(n): {k: (None if v is None else float(v))
+                                            for k, v in s.items()}
+                                      for n, s in comps["scopes"].items()}
             # model selection on the SHAPED metric: that is the object that gets scored
             if dti_shaped > best["dti"]:
                 best = dict(dti=dti_shaped, epoch=ep + 1)

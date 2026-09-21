@@ -103,17 +103,47 @@ import json
 from pathlib import Path
 
 ALPHA, BETA = 0.2, 0.8
-# The published leaderboard's best public score, snapshotted 2026-09-16 in
-# data/evidence/independent_verification.json (competition_standing.top_dti).  Only used for the
-# top_priority sentence, and refreshed by editing this pin when that evidence is refreshed.
-LEADERBOARD_TOP = 0.1972
+# The published leaderboard's best public score.  Unlike the previous hard-coded pin, this is read
+# from the committed evidence data/evidence/independent_verification.json
+# (competition_standing.top_dti) so the sentence it feeds cannot drift from the snapshot the site
+# already renders.  The literal below is the last known value, used ONLY when the evidence file is
+# absent (unit tests that synthesise evidence without the live record).
+LEADERBOARD_TOP_FALLBACK = 0.1972
 PX_KM = 0.1            # 100 m pixels
+
+ROOT = Path(__file__).resolve().parents[1]
 AOI_AREA_KM2 = 3292 * 3730 * PX_KM ** 2          # 122,791.6 km^2
 GEODAWN_AREA_KM2 = 51857.0                       # USGS GeoDAWN data release, 10.5066/P93LGLVQ
 
 
 def load(path: Path) -> dict:
     return json.loads(path.read_text())
+
+
+INDEPENDENT_VERIFICATION = Path("data/evidence/independent_verification.json")
+
+
+def _leaderboard_top() -> dict:
+    """The published leaderboard's best public score, from the committed evidence.
+
+    The previous implementation hard-coded a snapshot (0.1972, 2026-09-16) which went stale when
+    the evidence was refreshed (0.2854, 2026-09-21); the site rendered the new number while this
+    sentence kept the old one.  `ROOT` is the repository root (the script's own location), so a
+    caller that runs from another cwd or writes ``--out`` somewhere else still resolves the
+    evidence from the same committed file the site reads.
+    """
+    rec = dict(dti=LEADERBOARD_TOP_FALLBACK, observed_utc="NOT RECORDED (evidence absent)",
+               source="fallback literal in scripts/decide_emission_width.py")
+    p = ROOT / INDEPENDENT_VERIFICATION
+    if p.exists():
+        try:
+            st = json.loads(p.read_text()).get("competition_standing") or {}
+            rec = dict(dti=float(st.get("top_dti", LEADERBOARD_TOP_FALLBACK)),
+                       observed_utc=st.get("observed_utc", "NOT RECORDED"),
+                       source=str(INDEPENDENT_VERIFICATION))
+        except (json.JSONDecodeError, ValueError, KeyError):
+            pass
+    return rec
 
 
 def provided(res: dict) -> dict:
@@ -292,6 +322,8 @@ def main() -> int:
     ap.add_argument("--out", default="data/evidence/emission_decision.json")
     a = ap.parse_args()
 
+    leaderboard_top = _leaderboard_top()
+
     assert abs((ALPHA + BETA) - 1.0) < 1e-12, "the projection identity requires alpha + beta == 1"
     # A reproduction is per ENSEMBLE, so the flag takes a list: two independent sweeps that agree
     # are a stronger claim than one, and the record has to be able to hold both.  The flag is
@@ -444,13 +476,14 @@ def main() -> int:
         "top_priority": ("detection, not the emission policy, is the binding constraint: the best "
                          "measured candidate (%.4f, %s) %s the constant-ones baseline (%.4f) on the "
                          "new-fault-like population it was measured on, while the leaderboard's top "
-                         "score (%.4f) is %.1fx that baseline; the skeleton the candidate replaces "
-                         "scores %.4f there"
+                         "score (%.4f, read %s) is %.1fx that baseline; the skeleton the candidate "
+                         "replaces scores %.4f there"
                          % (best_cand["measured_dti"], best_cand["policy"],
                             "beats" if best_cand["measured_dti"] > blanket["measured_dti"]
                             else "trails",
-                            blanket["measured_dti"], LEADERBOARD_TOP,
-                            LEADERBOARD_TOP / max(blanket["measured_dti"], 1e-9),
+                            blanket["measured_dti"], leaderboard_top["dti"],
+                            leaderboard_top["observed_utc"],
+                            leaderboard_top["dti"] / max(blanket["measured_dti"], 1e-9),
                             shipped["measured_dti"])),
     }
     # Sweep policies only: the baselines (blanket, catalogue copy) are ranked in the same table but

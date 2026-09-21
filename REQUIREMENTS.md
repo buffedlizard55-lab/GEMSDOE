@@ -493,10 +493,12 @@
   ScienceBase 589097b1; the login-walled data tab). Three claims are recorded as *not reachable*
   rather than omitted: the data tab and submission form (login), the metric example's PNGs (S3), and
   the Dropbox mirrors of the rasters (bash egress).
-- **Public leaderboard read directly (no account needed), 2026-09-16:** 43 ranked entrants, best
-  public DW-Tversky 0.1972, median 0.0555, last place 0.0000. Recorded in the same file, with only
-  the top five names transcribed and the rest kept as ranges. This is the externally-sourced number
-  the repository's own local proxies are calibrated against on the new Verification page.
+- **Public leaderboard read directly (no account needed):** 2026-09-16 snapshot — 43 ranked
+  entrants, best public DW-Tversky 0.1972, median 0.0555, last place 0.0000; 2026-09-21 snapshot —
+  50 ranked entrants, best 0.2854, median 0.11335, last place 0.0211. Recorded in the same file,
+  with only the top five names transcribed and the rest kept as ranges. This is the
+  externally-sourced number the repository's own local proxies are calibrated against on the new
+  Verification page.
 
 ---
 

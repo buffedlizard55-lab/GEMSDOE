@@ -142,7 +142,7 @@ $$k(d) = \max\left(1 - \frac{d}{R}, 0\right) = \max\left(1 - \frac{d}{300}, 0\ri
      - **Ensemble 2 (Run 35249562910):** DTI **0.0777** vs 0.0320 (+0.0456 contrast)
      - **Ensemble 1+2 Mean (Run 35275312337):** DTI **0.0999** vs 0.0304 (+0.0695 contrast)
      - **3-Ensemble Mean (16 live folds, Run 35285326679):** DTI **0.0850** vs 0.0269 (+0.0581 contrast)
-   - Delivers **0.1365 proxy DTI** (69% of the top public leaderboard score 0.1972).
+   - Delivers **0.1365 proxy DTI** (48% of the top public leaderboard score 0.2854, snapshot 2026-09-21).
 
 ---
 
@@ -393,7 +393,7 @@ Pipeline runs end-to-end on real competition rasters, but placing top-5 — the 
 
 Every number, link, and rule sentence on this page is drawn from machine-measured evidence or directly fetched official sources:
 - **Evidence:** `data/evidence/inventory.json` (file sizes/sha256), `data/evidence/rasters.json` (grid/CRS/bands), `data/evidence/data_placement.json` (bridge provenance), `data/evidence/emission_decision.json` (policy sweeps), `data/evidence/proxy/` (miss distance, oracle ceiling), `docs/link_verification.json` (live URL checks via `scripts/verify_links.py` on a runner).
-- **Sources:** Competition problem page, data tab, About page, official rules PDF (29 verbatim quotes checked by `scripts/verify_rules_quotes.py`), HeroX resource, GDR, USGS GeoDAWN — all listed in `docs/data_catalog.csv` (89 rows, each with `verification_method`, `verification_date`, `verification_result`).
+- **Sources:** Competition problem page, data tab, About page, official rules PDF (29 verbatim quotes checked by `scripts/verify_rules_quotes.py`), HeroX resource, GDR, USGS GeoDAWN — all listed in `docs/data_catalog.csv` (92 rows / 84 unique URLs, each with `verification_method`, `verification_date`, `verification_result`).
 - **Irregularities flagged, not hidden:** Three verified irregularities are documented line-by-line: (1) `example_submission.tif` is bit-identical to `labels.tif` (60,988 px, `data/evidence/transfer_analysis.json`) despite the problem page describing it as predicting total absence; (2) naming drift — `training_features.tif` / `numeric_features.tif` / `gems-geodawn-numerical-features.tif` are the same content (handled in `src/dataset.py`); (3) DEM links PDF has no text layer (scan, 0 URLs via three extractors, OCR + S3-verified). None are silently fixed — all flagged in `docs/data.html` and `LIMITATIONS.md`.
 - **Reproduce:** `python scripts/build_site.py` regenerates the companion HTML (`docs/executive_summary.html`) from the JSON above; `scripts/audit_docs.py` refuses to deploy if any cited artefact is missing or any link is uncatalogued.
 

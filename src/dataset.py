@@ -481,7 +481,10 @@ def make_patches(
                            "compared against the no-pseudo baseline on identical windows"))),
     )
     return dict(X_train=X_train, y_train=y_train, fpw_train=fpw_train,
-                X_test=X_test, y_test=y_test, summary=summary)
+                X_test=X_test, y_test=y_test, summary=summary,
+                # unpadded training-label grid (H, W): the union_population selection signal in
+                # src/train.py builds the combined truth from exactly these pixels
+                labels=y)
 
 
 # --------------------------------------------------------------------------------------
