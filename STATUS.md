@@ -1,4 +1,98 @@
-# Project status — 2026-09-20 (sessions 11–20)
+# Project status — 2026-09-21 (sessions 11–21)
+
+## Session 21 (2026-09-21) — the data-placement blocker is closed in-sandbox, the CPU route is proven byte-reproducible, and the submission subpage was re-verified line by line against the official sources
+
+The instruction carried from the previous sessions was explicit: *the single remaining blocker
+to training is data placement — place the rasters in `data/`, run `prepare_data.py`, and after
+that the full pipeline is ready.* This session did exactly that, inside this sandbox, and then
+re-verified the submission subpage (the executive-summary subpage explaining exactly how a
+submission gets entered) line by line against the official sources.
+
+1. **Data placement completed in this checkout (no unrestricted machine needed).**
+   `python scripts/assemble_data_bridge.py` reassembled all three official rasters from the
+   committed `data/bridge/` parts in 2.8 s, verifying every part sha256 and the whole-file sha256
+   against `data/bridge/manifest.json` (pins from `data/evidence/inventory.json`,
+   measured on a GitHub runner 2026-09-14): `training_features.tif` 418,912,844 B
+   (`4371c82e…`), `labels.tif` 425,830 B (`7ba308cc…`), `sample_submission.tif` 1,599,597 B
+   (`2176d08e…`). `python scripts/prepare_data.py` then **PASSED** on the placed bytes
+   (3292×3730, 19 bands, EPSG:32611, 100 m, aligned bounds, band tags present). The standing
+   blocker named in `EXECUTIVE_SUMMARY.md` and `data/README.md` is therefore closed for any
+   machine that can run `git pull && python scripts/assemble_data_bridge.py`.
+2. **The CPU-only route to a submission was re-executed end to end and reproduced the committed
+   artifact byte for byte.** `python scripts/baseline_submission.py --out-dir
+   data/evidence/baseline_rerun` (CPU, no torch, ~17 min wall in this 2 vCPU sandbox while a
+   package install competed for CPU; the committed report's own timings total 307.9 s) selected
+   the identical policy (`floor 0.000974, thin, width 0 px`, union DTI 0.160259 on selection
+   fold 0), wrote a `submission.tif` whose sha256 is **`9f2577cff20d…` — identical to the
+   committed `data/evidence/baseline/submission.tif`** — and its generalisation audit re-scored
+   the untouched fold 1 at catalogue 0.06597 / proxy 0.071107 / combined 0.078916, `reproduced=
+   True`, max|Δ| = 0.00016874 (same value the committed run recorded). The two reports differ
+   only in `timings_s`. `scripts/validate_submission.py` on the freshly written file: **PASSED**
+   (all 8 checks). The pre-registered support cap did its job visibly: the highest-scoring
+   candidate (floor 0.009487, union 0.197198) emits 487,813 px = 9.4 % of the footprint and is
+   excluded for it, with the reason in the report. Evidence committed:
+   `data/evidence/baseline_rerun/` (report, audit, `.sha256`, the 545,798 B `submission.tif`
+   force-added per the existing convention; `prob_raw.tif` is 22.7 MB and regenerable in one run,
+   so it is gitignored like the other run rasters).
+3. **The official sources were re-read today, line by line, and the subpage's claims hold.**
+   Problem description (page 967): submission format (EPSG:32611, 100 m, same bounds, NaN
+   outside, single float32 band in [0,1]), metric (DTI, α=0.2 β=0.8, R=300 m), datasets and
+   external-data policy — all as quoted on the site. Competition home: end date **Dec 3, 2026,
+   11:59 p.m. UTC**, $300,000 pool, the six "How to compete" steps. Rules PDF
+   (`docs.nlr.gov/docs/fy26osti/96647.pdf`, sha256 `50d854b1…`): §3.1 entry, §3.2 single
+   GeoTIFF + "three submissions per week" + generative-AI disclosure, §3.5 one final selection,
+   §3.6.1/§3.6.2 public/private scoring, §1.3 citizenship — every sentence the subpage quotes
+   was re-verified verbatim against the document.
+4. **Irregularity found and fixed: the deadline was conflated.** `EXECUTIVE_SUMMARY.md` and the
+   executive-summary page printed *"Dec 3, 2026, 11:59 PM UTC (5:00 PM ET)"* — but those are two
+   **different** official times, and they do not convert into each other (11:59 PM UTC is 6:00 PM
+   EST). The platform's competition end is 11:59 PM UTC (home page, verified today); rules §A.1
+   separately requires the submission form / final content to be posted by **5:00 p.m. ET on the
+   deadline date** (22:00 UTC on Dec 3 — two hours earlier). §1.2 defers key dates to the
+   competition website, so both are stated on the page now, with the safe reading (act on the
+   earlier time). Fixed in `scripts/build_site.py` (executive-summary card), `EXECUTIVE_SUMMARY.md`
+   (quick-reference table), and added as a note on the how-to-submit page.
+5. **Irregularity found and fixed: the index page contradicted the adopted policy.** It said the
+   emitted line is *"now written as a band rather than a skeleton"*, but the committed decision
+   record (`data/evidence/emission_decision.json`, all three pre-registered conditions met) ships
+   `sweep_best_t0_0.1_width0px` — floor 0.1, thin, **width 0 px**: at that floor the measured
+   width curve peaks at 0 px on every ensemble (0.136452 at 0 px, monotonically lower up to 20 px
+   on the new-fault-like population). The index now says what the evidence says: a thinned
+   skeleton, with the reason it was measured rather than assumed.
+6. **The sample-template irregularity was re-verified against the official bytes and added to the
+   recipe page.** With the rasters placed, the claim that `example_submission.tif` is not the
+   "total fault absence" template the problem page describes is now a direct measurement on this
+   checkout: 60,988 nonzero pixels, all exactly 1.0, pixel-for-pixel the training labels. The
+   how-to-submit page now carries the caveat at the point where the file is used (validate
+   *against* it — never upload *it*).
+7. **The leaderboard bar moved; the evidence was refreshed instead of left stale.** Re-read the
+   public leaderboard today (account-free): **top 0.2854, 50 ranked** (was 0.1972, 43 ranked,
+   2026-09-16). `data/evidence/independent_verification.json` now carries the 2026-09-21 snapshot
+   with the 2026-09-16 one preserved in `competition_standing_history`. The how-to-submit page
+   renders the current bar from the evidence (the wording already said "when this repository last
+   read it"). This also surfaces a real consequence for strategy: the bar rose **+0.088 in five
+   days** while 7 new entrants appeared — the public split is actively being gamed, which is
+   exactly why the §11 ordering (upload for the unbiased signal first) stands.
+8. **Two builder defects found by the rebuild itself, both fixed.** `_leaderboard_panel` crashed
+   with `KeyError: 'ranks_6_to_11_range'` on the refreshed snapshot because it hardcoded the
+   old range key; it now parses the span from whichever `ranks_6_to_N_range` key the snapshot
+   carries. Route C's cost on the subpage was an unmeasured "≈ 20 min"; it now reads "≈ 5–20 min
+   (measured 5.1 min on 2 vCPU)" from the committed report's timings.
+9. **Verification.** Fresh venv from `requirements.verified.txt`: full suite **430 passed, 2
+   skipped** (both environmental: one needs the runner-generated `--dump-text` evidence pointer —
+   by design skipped in a clean checkout; one needs `reportlab`, installed here to confirm it
+   passes). `scripts/audit_docs.py` **PASS** (0 uncatalogued hosts, no cited-but-missing
+   artefacts). `scripts/check_submission_readiness.py` re-measured on this checkout: **7 PASS, 0
+   FAIL, 0 MISSING, 1 HUMAN** (the two data gates flipped to PASS because the rasters now exist
+   here). Site rebuilt from `scripts/build_site.py`; the committed pages match a fresh build.
+
+**Next session:** the ordering in `EXECUTIVE_SUMMARY.md` §11 stands with item 8 now fully
+machine-ready: **8 (human: enroll + first upload — the only unbiased signal; the bar it reports
+against is 0.2854 as of 2026-09-21) → 3 (1 m DEM derivatives, code ready, needs tile download) →
+6 (GPU EfficientNet-B5 full config) → 4 (selection on the union population) → 7's pooled
+multi-fold union contrast (≥12 scoreable blocks before P means anything).** The runner-side
+artifacts feeding the pseudo-label union contrast expire 2026-10-03 (14-day retention) — if that
+contrast is pursued, the pooled version must fire before then.
 
 ## Session 20 (current session, 2026-09-20) — the submission path got its own page, the gate table is measured instead of described, and there is now a route to an uploadable file that needs no GPU and no runner
 

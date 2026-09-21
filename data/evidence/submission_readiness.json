@@ -1,10 +1,10 @@
 {
- "generated_utc": "2026-09-20T16:56:19Z",
+ "generated_utc": "2026-09-21T04:11:24Z",
  "script": "scripts/check_submission_readiness.py",
  "purpose": "every gate on docs/how_to_submit.html is a measurement from this checkout",
  "root": "/home/user/GEMSDOE",
  "data_dir": "data",
- "seconds": 6.5,
+ "seconds": 6.25,
  "checks": [
   {
    "id": "data_placed",

@@ -19,7 +19,7 @@
 | **Total Cash Prize Pool** | **$300,000** | Rules §1.1 ($50k Phase 1 + $250k Phase 2) |
 | **Phase 1 (Initial Round)** | **$50,000** (Top 5 split $10k each) | Evaluated on private test set of new faults (Rules §1.1, §3.6.1) |
 | **Phase 2 (Final Round)** | **$250,000** (1st: $100k, 2nd: $70k, 3rd: $40k, 4th: $25k, 5th: $15k) | Evaluated on full expanded label set after expert review (§1.1, §3.6.1) |
-| **Submission Deadline** | **December 3, 2026, 11:59 PM UTC** (5:00 PM ET) | Rules §A.1 & Competition Home Page |
+| **Submission Deadline** | **December 3, 2026, 11:59 PM UTC** (platform close). Rules §A.1 separately sets the submission-form / final-content deadline at **5:00 PM ET (22:00 UTC) on the deadline date** — treat the *earlier* as the operative deadline | Competition Home Page (verified 2026-09-21) & Rules §A.1 (verified 2026-09-21) |
 | **Submission Limit** | **Up to 3 per week**; **1 final submission chosen** | Rules §3.4 & §3.5 (selected before deadline without private scores) |
 | **Projected CRS** | **UTM Zone 11N (EPSG:32611)** | Problem description & `data/sample_submission.tif` |
 | **Spatial Resolution** | **100.0 m × 100.0 m** | Matches feature stack `data/training_features.tif` |
@@ -372,7 +372,7 @@ Competition **explicitly permits external data** provided license allows challen
 
 ## 11. What Still Needs Doing — Suggestions to Reach Top Leaderboard (Next Session Priority)
 
-Pipeline runs end-to-end on real competition rasters, but placing top-5 (current best 0.1972) requires moving from **measured plumbing fixes** to **geophysical detection gains**. Prioritized by impact/risk:
+Pipeline runs end-to-end on real competition rasters, but placing top-5 — the public bar was **0.2854** on 2026-09-21 (it was 0.1972 five days earlier; both snapshots are committed in `data/evidence/independent_verification.json`) — requires moving from **measured plumbing fixes** to **geophysical detection gains**. Prioritized by impact/risk:
 
 | # | Improvement | Why It Matters (measured) | Status | Next Action |
 |---|---|---|---|---|

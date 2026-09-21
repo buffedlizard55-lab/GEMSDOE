@@ -237,9 +237,13 @@ def build_index(ev: dict) -> str:
                                        "reproduces the catalogue earns credit only where the experts'"
                                        " new labels coincide with it, and every DTI printed "
                                        "elsewhere on this site is a monitor against the wrong "
-                                       "population. The same asymmetry is why the emitted line is "
-                                       "now written as a band rather than a skeleton &mdash; see the"
-                                       " <a href='metric.html#width'>width measurement</a>.")))
+                                       "population. That asymmetry is also why the emission width "
+                                       "was measured rather than assumed: the adopted policy is a "
+                                       "thinned <em>skeleton</em> (width 0 px) at floor 0.1 &mdash; "
+                                       "at that floor the measured width curve peaks at 0 px on "
+                                       "every ensemble, so a wider band would lower the score, not "
+                                       "raise it &mdash; see the "
+                                       "<a href='metric.html#width'>width measurement</a>.")))
 
     return page("Overview", "index.html", rules_block + f"""
 {note("ok", "<strong>How to read this site.</strong> Nothing here is written from memory. "
@@ -357,7 +361,8 @@ def build_executive_summary(ev: dict) -> str:
         ("Phase 2 / Final", "<b>$250,000</b>", "Top 5 ($100k, $70k, $40k, $25k, $15k) · Expanded labels"),
         ("Raster Format", "<b>EPSG:32611 · 100 m</b>", "3292×3730 single-band float32 [0, 1]"),
         ("Submission Limit", "<b>Up to 3 / week</b>", "1 final submission selected before deadline (§3.4, §3.5)"),
-        ("Official Deadline", "<b>Dec 3, 2026</b>", "11:59 PM UTC / 5:00 PM ET (§A.1)"),
+        ("Official Deadline", "<b>Dec 3, 2026</b>",
+         "platform close 11:59 PM UTC · §A.1 form due 5:00 PM ET (22:00 UTC) the same day — act on the earlier"),
         ("Recommended Policy", "<b>Floor 0.1 / thin / w=0</b>", f"Rank 1 of 132 candidates · +{cand_contrast:.4f} contrast"),
         ("Shipped Submission", "<b>569.5 KB GeoTIFF</b>", "11-fold ensemble mean · sha256 a3dcd6d5…"),
     ]
@@ -1226,10 +1231,15 @@ def _leaderboard_panel(ev: dict) -> str:
     b5 = lb.get("beyond_the_top_five") or {}
     more = ""
     if b5:
-        lo, hi = b5["ranks_6_to_11_range"]
-        more = ('<p class="muted small">Below the top five: ranks 6-11 are between %.4f and %.4f, '
-                'rank 12 is %.4f, and the last of the %d ranked entrants is at %.4f. %s</p>'
-                % (lo, hi, b5["rank_12"], lb["n_ranked"], b5["last_place"], e(b5["note"])))
+        # the range key names its own span (ranks_6_to_11_range, ranks_6_to_50_range, ...):
+        # parse it rather than assuming the snapshot's shape
+        range_key = next((k for k in b5 if k.startswith("ranks_6_to_") and k.endswith("_range")), None)
+        if range_key:
+            lo, hi = b5[range_key]
+            span = range_key[len("ranks_6_to_"):-len("_range")]
+            more = ('<p class="muted small">Below the top five: ranks 6-%s are between %.4f and %.4f, '
+                    'rank 12 is %.4f, and the last of the %d ranked entrants is at %.4f. %s</p>'
+                    % (span, lo, hi, b5["rank_12"], lb["n_ranked"], b5["last_place"], e(b5["note"])))
     not_on_it = note("warn", "<b>This repository is not on it.</b> " + e(lb["gap"]))
     how_to_read = note("ok", (
         "How to read the local numbers on this site against that bar: the catalogue DTI (about 0.19 on "
@@ -3537,7 +3547,7 @@ def build_how_to_submit(ev: dict) -> str:
          "gh workflow run train-and-submit.yml -f profile=smoke   # or: Actions → Train and build submission → Run workflow",
          "Uses the CPU runner as the unrestricted machine: assembles data/ from the bridge, trains, "
          "infers, validates, scores, and publishes <code>submission.tif</code> as a workflow artifact."),
-        ("C", "Generate one locally, CPU-only, no GPU", "≈ 20 min",
+        ("C", "Generate one locally, CPU-only, no GPU", "≈ 5–20 min (measured 5.1 min on 2 vCPU)",
          "python scripts/baseline_submission.py",
          "Classical classifier on the official 19 bands. It holds out <b>two</b> folds: one selects "
          "the emission policy on the <b>union</b> population, the other measures the winner "
@@ -3673,6 +3683,13 @@ any failure, so it can gate a script. On the committed artifact the same log con
 <table><thead><tr><th></th><th>Check</th></tr></thead><tbody>
 {validator_rows}
 </tbody></table>
+{note("warn", "<b>The sample file is a format template, not a prediction.</b> The problem page calls it "
+  '"a sample submission that predicts total fault absence" — the measured bytes disagree: '
+  '<code>sample_submission.tif</code> carries <b>60,988</b> pixels at exactly 1.0, pixel-for-pixel the '
+  'training labels (verified against the placed rasters in this checkout; see '
+  '<a href="data.html#irregularity">Data: Irregularity</a>). It is correct to validate <em>against</em> '
+  'it (grid, CRS, dtype); it is <em>not</em> an absence prediction, and uploading it would mean '
+  'submitting the public catalogue as if it were your model.')}
 
 <h2 id="upload">5. Uploading, click by click</h2>
 <ol>{step_html}</ol>
@@ -3683,6 +3700,13 @@ any failure, so it can gate a script. On the committed artifact the same log con
 only unbiased number this project has ever had (every local number is a surrogate, on
 <a href="results.html">results</a>).</li>
 <li>Diarise the final selection. <span class="small">{deadline_html}</span></li>
+<li><span class="small">Two official times exist, and they differ: the platform closes at <b>11:59 PM UTC</b>
+(competition home page, verified 2026-09-21), while rules <b>§A.1</b> separately requires the
+submission form / final content to be posted by <b>5:00 PM ET on the deadline date</b> — for
+Dec 3 2026 that is <b>22:00 UTC, two hours earlier</b>. The rules' §1.2 defers key dates to the
+competition website, so confirm both on the platform; acting on the earlier time (5:00 PM ET)
+is the safe reading. (§A.1 verified verbatim against the official rules PDF, full document read;
+see the sources page for the citation log.)</span></li>
 <li>The same file is re-scored in Phase 2 against the expert-revised new-fault set.
 {quote_block(ev, "phase2_target", "why the local surrogates are not the scored population")}</li>
 </ul>
