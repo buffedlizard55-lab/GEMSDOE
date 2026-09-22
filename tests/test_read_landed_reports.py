@@ -58,12 +58,16 @@ def _blk(i, tp, fp, fn, ngt):
 
 
 def _report(rows_by_pop, blocks=(3, 4), block_px=512, n_boot=200, seed=0, units=8,
-            proxy_path="data/evidence/proxy/proxy_catalogue.tif"):
+            proxy_path="data/evidence/proxy/proxy_catalogue.tif", score_fold=0, complement=False,
+            partition_seed=0, n_folds=4, mode="balanced"):
     return dict(
         generated_by="scripts/block_holdout_eval.py",
         metric=dict(alpha=ALPHA, beta=BETA, eps=EPS, R_pixels=3),
-        blocks=dict(block_px=block_px, n_blocks=56, n_blocks_scoreable=len(blocks)),
-        restriction=dict(mode="fold_heldout", score_fold=0, complement=False, blocks=list(blocks),
+        blocks=dict(block_px=block_px, n_blocks=56, n_blocks_scoreable=len(blocks),
+                    partition=dict(block_px=block_px, seed=partition_seed, n_folds=n_folds,
+                                   mode=mode)),
+        restriction=dict(mode="fold_heldout", score_fold=score_fold, complement=complement,
+                         blocks=list(blocks),
                          blocks_scoreable=len(blocks), note="synthetic"),
         populations={pop: dict(n_gt=sum(r["n_gt"] for r in rows), alpha=ALPHA, beta=BETA,
                                R_pixels=3, eps=EPS, candidates=list(rows))
@@ -572,3 +576,158 @@ def test_gaps_only_still_reports_the_folds_that_have_not_landed(tmp_path, monkey
     printed = capsys.readouterr().out
     assert "MISSING folds" in printed and "[1, 2, 3]" in printed
     assert "pseudo-label contrast" not in printed, "no contrast section without a contrast"
+
+
+# --------------------------------------------------------------------- pooled multi-fold contrast
+# EXECUTIVE_SUMMARY §11 item 7: one fold has 7-9 scoreable blocks (below the scorer's 12-unit
+# readability bar) and its replicate noise (~0.036) swamps the +0.031 union effect. Pooling the
+# four DISJOINT block folds is the only reading that can settle it. These tests pin that the pool
+# is arithmetic on the committed per-block components, that it refuses to pool non-disjoint or
+# mismatched folds, and that the readability bar drives the verdict.
+def _pool_dirs(tmp_path, folds_blocks, *, pseudo_shift=0.0, base_shift=0.0):
+    """Write a baseline+pseudo report per fold, each fold on its OWN disjoint block ids.
+
+    folds_blocks: {fold: [block_id, ...]}. Both arms carry proxy_only/labels/combined; the pseudo
+    arm's combined TP is shifted by pseudo_shift so a gain/loss can be dialled in.
+    """
+    base_dir, pseudo_dir = tmp_path / "bh", tmp_path / "pl"
+    base_dir.mkdir(exist_ok=True), pseudo_dir.mkdir(exist_ok=True)
+    for fold, ids in folds_blocks.items():
+        def mk(shift):
+            pops = {}
+            for pop in ("proxy_only", "labels", "combined"):
+                blks = [_blk(i, 100.0 + shift, 1000.0, 200.0 - shift, 300) for i in ids]
+                pops[pop] = [_row(blks)]
+            return _report(pops, blocks=tuple(ids), score_fold=fold)
+        # give both arms a DIFFERENT field sha so the "same field" guard is not tripped
+        b = mk(base_shift); p = mk(pseudo_shift)
+        b["inputs"]["pred_grid"] = dict(sha256="a" * 64)
+        p["inputs"]["pred_grid"] = dict(sha256="b" * 64)
+        (base_dir / f"fold{fold}_heldout.json").write_text(json.dumps(b))
+        (pseudo_dir / f"fold{fold}_heldout.json").write_text(json.dumps(p))
+    return base_dir, pseudo_dir
+
+
+def test_pooled_contrast_concatenates_disjoint_folds(tmp_path):
+    m = _mod()
+    prov = m.pseudo_provenance(_write_yaml(tmp_path / "cfg.yaml"))
+    base_dir, pseudo_dir = _pool_dirs(tmp_path, {0: [3, 4], 1: [10, 11], 2: [20], 3: [30, 31, 32]},
+                                      pseudo_shift=40.0)
+    r = m.pooled_contrast([0, 1, 2, 3], DECISION, prov, base_dir, pseudo_dir, n_boot=200)
+    comb = r["populations"]["combined"]
+    assert comb["status"] == "MEASURED"
+    assert comb["folds_pooled"] == [0, 1, 2, 3]
+    # 2+2+1+3 = 8 scoreable blocks pooled -> above the 12 bar? no; but they must all be counted
+    assert comb["resampling_units"] == 8
+    assert comb["n_folds_pooled"] == 4
+    # the pooled DTI is the SUM of every block's components, hand-checkable
+    tp = (100.0 + 40.0) * 8
+    fp = 1000.0 * 8
+    fn = (200.0 - 40.0) * 8
+    assert comb["pooled_candidate_dti"] == pytest.approx(round(tp / (tp + ALPHA * fp + BETA * fn + EPS), 6),
+                                                         abs=1e-6)
+    # pseudo TP up, FN down -> a gain
+    assert comb["pooled_contrast"] > 0
+
+
+def test_pooled_contrast_refuses_non_disjoint_folds(tmp_path):
+    """The four folds partition the grid; a block id in two folds means the geography is resampled
+    twice, which would fake precision. That must be refused, not silently pooled."""
+    m = _mod()
+    prov = m.pseudo_provenance(_write_yaml(tmp_path / "cfg.yaml"))
+    base_dir, pseudo_dir = _pool_dirs(tmp_path, {0: [3, 4], 1: [4, 5]}, pseudo_shift=10.0)
+    with pytest.raises(SystemExit) as e:
+        m.pooled_contrast([0, 1], DECISION, prov, base_dir, pseudo_dir, n_boot=100)
+    assert "disjoint" in str(e.value) or "repeat" in str(e.value)
+
+
+def test_pooled_contrast_refuses_mismatched_partitions(tmp_path):
+    m = _mod()
+    prov = m.pseudo_provenance(_write_yaml(tmp_path / "cfg.yaml"))
+    base_dir, pseudo_dir = _pool_dirs(tmp_path, {0: [3, 4]}, pseudo_shift=10.0)
+    # a second fold whose partition seed differs -> not comparable blocks
+    def mk(shift, seed):
+        pops = {pop: [_row([_blk(10, 100.0 + shift, 1000.0, 200.0, 300)])]
+                for pop in ("proxy_only", "labels", "combined")}
+        rep = _report(pops, blocks=(10,), score_fold=1, partition_seed=seed)
+        rep["inputs"]["pred_grid"] = dict(sha256=("a" if shift == 0 else "b") * 64)
+        return rep
+    (base_dir / "fold1_heldout.json").write_text(json.dumps(mk(0.0, 99)))
+    (pseudo_dir / "fold1_heldout.json").write_text(json.dumps(mk(10.0, 99)))
+    with pytest.raises(SystemExit) as e:
+        m.pooled_contrast([0, 1], DECISION, prov, base_dir, pseudo_dir, n_boot=100)
+    assert "partition" in str(e.value)
+
+
+def test_pooled_contrast_refuses_the_same_field_on_both_arms(tmp_path):
+    """A contrast of a probability field with itself is not a measurement."""
+    m = _mod()
+    prov = m.pseudo_provenance(_write_yaml(tmp_path / "cfg.yaml"))
+    base_dir, pseudo_dir = tmp_path / "bh", tmp_path / "pl"
+    base_dir.mkdir(), pseudo_dir.mkdir()
+    pops = {pop: [_row([_blk(3, 100.0, 1000.0, 200.0, 300)])]
+            for pop in ("proxy_only", "labels", "combined")}
+    rep = _report(pops, blocks=(3,), score_fold=0)
+    rep["inputs"]["pred_grid"] = dict(sha256="c" * 64)
+    (base_dir / "fold0_heldout.json").write_text(json.dumps(rep))
+    (pseudo_dir / "fold0_heldout.json").write_text(json.dumps(rep))   # SAME sha
+    with pytest.raises(SystemExit) as e:
+        m.pooled_contrast([0], DECISION, prov, base_dir, pseudo_dir, n_boot=100)
+    assert "same" in str(e.value).lower() or "itself" in str(e.value).lower()
+
+
+def test_pooled_contrast_names_missing_folds_and_marks_under_power(tmp_path):
+    """A fold whose arm has not landed is listed in `missing`, never dropped from the claim's
+    denominator, and a pool below 12 units is marked not-readable / under-powered."""
+    m = _mod()
+    prov = m.pseudo_provenance(_write_yaml(tmp_path / "cfg.yaml"))
+    base_dir, pseudo_dir = _pool_dirs(tmp_path, {0: [3, 4], 1: [10, 11]}, pseudo_shift=40.0)
+    r = m.pooled_contrast([0, 1, 2, 3], DECISION, prov, base_dir, pseudo_dir, n_boot=200)
+    comb = r["populations"]["combined"]
+    assert comb["folds_pooled"] == [0, 1]
+    assert [x["fold"] for x in comb["missing"]] == [2, 3]
+    assert comb["interval_readable"] is False           # 4 blocks < 12
+    assert comb["clears_pre_registered_bars"] is False
+    assert r["shippable_evidence"] is False
+
+
+def test_pooled_contrast_readable_pool_can_clear_the_bars(tmp_path):
+    """With >=12 disjoint scoreable blocks and a real gain, the pool is readable and can clear the
+    pre-registered bars -> the state that would let the field even be PROPOSED to the field gate."""
+    m = _mod()
+    prov = m.pseudo_provenance(_write_yaml(tmp_path / "cfg.yaml"))
+    folds = {0: [1, 2, 3, 4], 1: [5, 6, 7, 8], 2: [9, 10, 11, 12], 3: [13, 14, 15, 16]}
+    base_dir, pseudo_dir = _pool_dirs(tmp_path, folds, pseudo_shift=60.0)
+    r = m.pooled_contrast([0, 1, 2, 3], DECISION, prov, base_dir, pseudo_dir, n_boot=500)
+    comb = r["populations"]["combined"]
+    assert comb["resampling_units"] == 16 and comb["interval_readable"] is True
+    assert comb["pooled_contrast"] > m.ADOPT_CONTRAST_BAR
+    assert comb["bootstrap"]["prob_candidate_beats_reference"] >= m.ADOPT_P_BAR
+    assert comb["clears_pre_registered_bars"] is True
+    assert r["verdict"] == "POOL_CLEARS_THE_BARS_ON_THE_COMBINED_SURROGATE"
+    assert r["shippable_evidence"] is True
+
+
+def test_pool_reproduces_the_committed_single_fold_number(tmp_path):
+    """Pooling fold 0 alone with block_mode='all' must reproduce the committed fold-0 union numbers.
+
+    'all' sums every block of the partition, which is exactly the row's whole-footprint global_dti,
+    so on one fold the pool is the identity. This is the guard that the pool does not silently
+    change what a single-fold reading already established.
+    """
+    m = _mod()
+    committed = ROOT / "data/evidence/pseudo_labels/fold0_heldout.json"
+    base_committed = ROOT / "data/evidence/block_holdout/fold0_heldout_combined.json"
+    if not committed.exists() or not base_committed.exists():
+        pytest.skip("committed fold-0 arms not present in this checkout")
+    r = m.pooled_contrast([0], m.load_json(m.DECISION), m.pseudo_provenance(),
+                          block_mode="all", n_boot=2000, seed=0)
+    comb = r["populations"]["combined"]
+    assert comb["status"] == "MEASURED"
+    # the committed two-population contrast bootstraps the same rows on the union
+    ref = m.load_json(ROOT / "data/evidence/pseudo_labels/fold0_two_population_contrast.json")
+    combined_arm = ref["arms"]["heldout"]["populations"]["combined"]
+    assert comb["pooled_candidate_dti"] == pytest.approx(combined_arm["candidate_dti"], abs=1e-6)
+    assert comb["pooled_reference_dti"] == pytest.approx(combined_arm["reference_dti"], abs=1e-6)
+    # 'all' draws all 56 blocks but only the scoreable ones are resampling units
+    assert comb["n_blocks_drawn"] == 56 and comb["resampling_units"] == 7

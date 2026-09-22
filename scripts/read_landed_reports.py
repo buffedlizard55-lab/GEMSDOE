@@ -501,6 +501,368 @@ def self_check(rep: dict, fold: int, pl_dir=None) -> List[str]:
     return problems
 
 
+# --------------------------------------------------------------------------------------
+# 3. the POOLED multi-fold contrast (EXECUTIVE_SUMMARY §11 item 7's remaining half)
+# --------------------------------------------------------------------------------------
+# WHY POOLING IS THE ONLY READING THAT CAN SETTLE ITEM 7
+#   Fold 0's union contrast is +0.031280 at P = 0.916 with CI95 [-0.010, +0.082] over 8 scoreable
+#   51.2 km blocks (data/evidence/pseudo_labels/fold0_two_population_contrast.json).  The
+#   scorer's OWN reliability rule (scripts/block_holdout_eval.py::bootstrap_reliability,
+#   MIN_BLOCKS_FOR_A_READABLE_CI = 12) marks that interval COARSE, and the two fires of the same
+#   fold/seed/config on different runners differ by ~0.036 on the proxy arm - i.e. the single-fold
+#   replicate noise is larger than the effect.  A single fold therefore cannot support a shipping
+#   claim in either direction.
+#
+#   The four block-holdout folds partition the SAME 56-block grid into four DISJOINT block sets
+#   (blocks.partition.n_folds = 4, assignment by greedy LPT), so their scoreable blocks are
+#   geographically disjoint: pooling them gives 30-35 resampling units instead of 7-9, which is
+#   above the scorer's own 12-unit bar.  That is a legitimate pool, not a repeated measurement of
+#   one region - and it is why the disjointness of the block ids is VERIFIED below rather than
+#   assumed.
+#
+#   Pooling recomposes each fold's committed per-block metric components (TP_w/FP_w/FN_w are sums)
+#   and bootstraps the concatenation once.  No raster is re-scored and no number is invented:
+#   exactly the derivation-only contract of this script.
+MIN_UNITS_FOR_A_READABLE_POOL = 12       # scripts/block_holdout_eval.py::MIN_BLOCKS_FOR_A_READABLE_CI
+ADOPT_P_BAR = 0.95                       # docs/FIELD_SELECTION_RULE.md R3 (P(F > S) >= 0.95)
+ADOPT_CONTRAST_BAR = 0.010               # docs/FIELD_SELECTION_RULE.md R1 (strictly greater than +0.010)
+
+
+def _poolable_blocks(row: dict, mode: str) -> List[dict]:
+    """The block rows that are resampling units for one fold, under the named convention.
+
+    ``scoreable`` (the pooled default) keeps only the blocks that carry truth AND prediction, i.e.
+    the fold's own held-out blocks that the scorer could actually score.  ``all`` keeps the full
+    56-block partition the per-fold reports bootstrap over (48 of them all-zero for a fold-restricted
+    report), which is the convention the committed per-fold CI was produced with - it exists so the
+    pool can be shown to reproduce a committed single-fold number exactly before it is trusted with
+    four folds.
+    """
+    blocks = row.get("blocks") or []
+    if not blocks:
+        raise SystemExit("a candidate row with no per-block rows cannot be pooled (pruned as a "
+                         "duplicate? re-run the scorer with --keep-duplicate-rows)")
+    if mode == "all":
+        return list(blocks)
+    if mode == "scoreable":
+        return [b for b in blocks if b.get("scoreable")]
+    raise SystemExit(f"unknown --pool-blocks mode {mode!r} (expected 'scoreable' or 'all')")
+
+
+def pooled_paired(base_rows: List[dict], cand_rows: List[dict], alpha: float, beta: float,
+                  eps: float, n_boot: int, seed: int, names: Sequence[str],
+                  block_mode: str = "scoreable") -> dict:
+    """One paired block bootstrap over the CONCATENATED blocks of every supplied fold.
+
+    ``base_rows``/``cand_rows`` are the per-fold candidate rows (arm A and arm B), in the same fold
+    order.  Row 0 of ``bootstrap_from_blocks`` is the reference, so ``prob_beats_reference`` is the
+    paired P(candidate > reference) over the pooled resamples - the same statistic the per-fold
+    reading reports, on 4x the resampling units.
+    """
+    if len(base_rows) != len(cand_rows):
+        raise SystemExit("the two arms must be pooled over the same folds in the same order")
+    bb = [b for r in base_rows for b in _poolable_blocks(r, block_mode)]
+    cb = [b for r in cand_rows for b in _poolable_blocks(r, block_mode)]
+    if len(bb) != len(cb):
+        raise SystemExit(f"the two arms carry different pooled block counts ({len(bb)} vs {len(cb)})"
+                         " - not a paired contrast")
+    if not bb:
+        raise SystemExit("no scoreable blocks in either arm - nothing to pool")
+    ids_b = [b["block"] for b in bb]
+    ids_c = [b["block"] for b in cb]
+    if ids_b != ids_c:
+        raise SystemExit("the two arms are not scored on the same pooled block sequence - the "
+                         "bootstrap would pair unrelated regions")
+    out = bootstrap_from_blocks([dict(label=names[0], blocks=bb),
+                                 dict(label=names[1], blocks=cb)],
+                                alpha=alpha, beta=beta, eps=eps, n_boot=n_boot, seed=seed)
+    ref, cand = out[names[0]], out[names[1]]
+
+    def _sums(rows, key):
+        return float(sum(b[key] for b in rows))
+
+    def _dti(rows):
+        tp, fp, fn = _sums(rows, "TP_w"), _sums(rows, "FP_w"), _sums(rows, "FN_w")
+        return tp / (tp + alpha * fp + beta * fn + eps)
+
+    dti_b, dti_c = _dti(bb), _dti(cb)
+    # A resampling unit is a block that actually carries truth (n_gt > 0): a zero block contributes
+    # nothing to the paired contrast and understates variance if counted, so readability is judged
+    # on the scoreable count regardless of which block set the point estimate summed - exactly the
+    # convention scripts/block_holdout_eval.py::bootstrap_reliability uses.
+    n_scoreable = int(sum(1 for b in cb if b.get("scoreable")))
+    return dict(
+        reference=names[0], candidate=names[1],
+        block_convention=block_mode,
+        n_folds_pooled=len(base_rows),
+        n_blocks_drawn=len(bb),
+        resampling_units=n_scoreable,
+        n_scoreable_blocks=n_scoreable,
+        interval_readable=bool(n_scoreable >= MIN_UNITS_FOR_A_READABLE_POOL),
+        pooled_reference_dti=round(dti_b, 6),
+        pooled_candidate_dti=round(dti_c, 6),
+        pooled_contrast=round(dti_c - dti_b, 6),
+        reference_components=dict(TP_w=_sums(bb, "TP_w"), FP_w=_sums(bb, "FP_w"),
+                                  FN_w=_sums(bb, "FN_w"), n_gt=int(_sums(bb, "n_gt"))),
+        candidate_components=dict(TP_w=_sums(cb, "TP_w"), FP_w=_sums(cb, "FP_w"),
+                                  FN_w=_sums(cb, "FN_w"), n_gt=int(_sums(cb, "n_gt"))),
+        reference_support_px=int(sum(r["support_px"] for r in base_rows)),
+        candidate_support_px=int(sum(r["support_px"] for r in cand_rows)),
+        bootstrap=dict(n_boot=n_boot, seed=seed,
+                       reference_ci95=ref["dti_ci95"], candidate_ci95=cand["dti_ci95"],
+                       contrast_p50=cand["contrast_vs_reference_p50"],
+                       contrast_ci95=cand["contrast_vs_reference_ci95"],
+                       prob_candidate_beats_reference=cand["prob_beats_reference"]),
+    )
+
+
+def _partition_key(report: dict, where: str) -> tuple:
+    p = ((report.get("blocks") or {}).get("partition") or {})
+    if not p:
+        raise SystemExit(f"{where}: the report carries no block partition - pooling would mix "
+                         "unknown geographies")
+    return (int(p.get("block_px", -1)), int(p.get("seed", -1)), int(p.get("n_folds", -1)),
+            str(p.get("mode", "")))
+
+
+def pooled_contrast(folds: Sequence[int], decision: dict, prov: dict, base_dir=None,
+                    pseudo_dir=None, scope: str = "heldout",
+                    populations: Sequence[str] = ("combined", "proxy_only", "labels"),
+                    block_mode: str = "scoreable", n_boot: int = 2000, seed: int = 0) -> dict:
+    """Pool every committed fold's two arms into ONE paired contrast per population.
+
+    Refuses rather than approximates: a fold whose arm is missing is reported in ``missing_folds``
+    (never silently dropped from the denominator of a claim), and the pooled number is only labelled
+    readable when it clears the scorer's own 12-unit bar.
+    """
+    base_dir, pseudo_dir = Path(base_dir or BH), Path(pseudo_dir or PL)
+    pol = adopted_policy_label(decision)
+    label = pol["candidate_label"]
+    per_pop: Dict[str, dict] = {}
+    used_folds: Dict[str, List[int]] = {}
+    missing: Dict[str, List[dict]] = {}
+    partitions: set = set()
+    fields: List[dict] = []
+
+    for pop in populations:
+        b_rows, c_rows, ok_folds, why_missing = [], [], [], []
+        for k in folds:
+            base, pseudo, bpath, ppath, base_x, pseudo_x = scope_pair(base_dir, pseudo_dir, k, scope)
+            src_b = base_x if (pop == "combined" and base_x) else base
+            src_p = pseudo_x if (pop == "combined" and pseudo_x) else pseudo
+            if base is None or pseudo is None:
+                why_missing.append(dict(fold=k, reason="an arm is not committed for this fold/scope",
+                                        baseline_report=bpath, pseudo_report=ppath))
+                continue
+            have_b = pop in ((src_b or {}).get("populations") or {})
+            have_p = pop in ((src_p or {}).get("populations") or {})
+            if not (have_b and have_p):
+                why_missing.append(dict(
+                    fold=k,
+                    reason=(f"the {'baseline' if not have_b else 'pseudo'} arm carries no {pop!r} "
+                            "population - re-score it with block_holdout_eval.py "
+                            "--combined-population"),
+                    baseline_report=bpath, pseudo_report=ppath))
+                continue
+            if base["blocks"]["block_px"] != pseudo["blocks"]["block_px"]:
+                raise SystemExit(f"fold {k}/{scope}/{pop}: the two arms were scored on different "
+                                 "block partitions - not a paired contrast")
+            if base["restriction"]["blocks"] != pseudo["restriction"]["blocks"]:
+                raise SystemExit(f"fold {k}/{scope}/{pop}: the two arms were scored on different "
+                                 "blocks")
+            if int(base["restriction"].get("score_fold", -1)) != int(k):
+                raise SystemExit(f"{bpath}: restriction.score_fold="
+                                 f"{base['restriction'].get('score_fold')} but this is fold {k} - "
+                                 "the report does not describe the fold it is named for")
+            if bool(base["restriction"].get("complement")) != (scope == "complement"):
+                raise SystemExit(f"{bpath}: restriction.complement="
+                                 f"{base['restriction'].get('complement')} but scope={scope!r}")
+            partitions.add(_partition_key(base, bpath))
+            partitions.add(_partition_key(pseudo, ppath))
+            mb = (src_b.get("metric") or {})
+            mp = (src_p.get("metric") or {})
+            if (float(mb.get("alpha")), float(mb.get("beta")), float(mb.get("eps")),
+                    int(mb.get("R_pixels"))) != (float(mp.get("alpha")), float(mp.get("beta")),
+                                                 float(mp.get("eps")), int(mp.get("R_pixels"))):
+                raise SystemExit(f"fold {k}/{pop}: the two arms were scored with different metric "
+                                 f"parameters ({mb} vs {mp})")
+            b_row, c_row = candidate_row(src_b, pop, label), candidate_row(src_p, pop, label)
+            fb, fc = _field_sha(src_b), _field_sha(src_p)
+            if fb and fc and fb == fc:
+                raise SystemExit(f"fold {k}/{pop}: both arms record the SAME probability field "
+                                 f"(sha256 {fb[:12]}...) - a contrast of a field with itself is not "
+                                 "a measurement")
+            fields.append(dict(fold=k, population=pop, baseline_field_sha256=fb,
+                               pseudo_field_sha256=fc,
+                               baseline_report=(base_x or {}).get("_path", bpath) if src_b is base_x
+                               else bpath,
+                               pseudo_report=(pseudo_x or {}).get("_path", ppath) if src_p is pseudo_x
+                               else ppath))
+            b_rows.append(b_row)
+            c_rows.append(c_row)
+            ok_folds.append(k)
+
+        used_folds[pop] = ok_folds
+        missing[pop] = why_missing
+        if not ok_folds:
+            per_pop[pop] = dict(status="NOT_SCORED", folds_pooled=[], missing=why_missing,
+                                note=("no fold carries both arms on this population yet; nothing is "
+                                      "pooled and nothing is claimed"))
+            continue
+        m = float(0.2), float(0.8), float(1e-7)
+        pooled = pooled_paired(b_rows, c_rows, alpha=m[0], beta=m[1], eps=m[2],
+                               n_boot=n_boot, seed=seed,
+                               names=("baseline_no_pseudo", "pseudo"), block_mode=block_mode)
+        # disjointness of the pooled resampling units is the property that makes pooling legitimate:
+        # the four block folds partition the grid, so a block id must appear at most once per arm.
+        ids = [b["block"] for b in _poolable_blocks(b_rows[0], block_mode)]
+        seen: set = set()
+        dupes: List[int] = []
+        for r in b_rows:
+            for b in _poolable_blocks(r, block_mode):
+                if b["block"] in seen:
+                    dupes.append(int(b["block"]))
+                seen.add(int(b["block"]))
+        if dupes:
+            raise SystemExit(f"{pop}: pooled block ids repeat across folds ({sorted(set(dupes))}) - "
+                             "the folds are not disjoint, so pooling would resample the same "
+                             "geography more than once")
+        per_fold = [dict(fold=k, reference_dti=br["global_dti"], candidate_dti=cr["global_dti"],
+                         contrast=round(cr["global_dti"] - br["global_dti"], 6),
+                         scoreable_blocks=sum(1 for b in _poolable_blocks(br, block_mode)))
+                    for k, br, cr in zip(ok_folds, b_rows, c_rows)]
+        b_ = pooled["bootstrap"]
+        p_bar = ADOPT_P_BAR
+        c_bar = ADOPT_CONTRAST_BAR
+        p = b_["prob_candidate_beats_reference"]
+        contrast_p50 = b_["contrast_p50"]
+        clears = bool(p is not None and p >= p_bar and contrast_p50 is not None
+                      and contrast_p50 > c_bar and pooled["interval_readable"])
+        per_pop[pop] = dict(
+            status="MEASURED", folds_pooled=ok_folds, missing=why_missing,
+            per_fold=per_fold, first_pooled_fold_block_ids=ids, **pooled,
+            adoption_bars=dict(prob_bar=p_bar, contrast_bar=c_bar,
+                               min_resampling_units=MIN_UNITS_FOR_A_READABLE_POOL,
+                               source="docs/FIELD_SELECTION_RULE.md R1/R3; "
+                                      "scripts/block_holdout_eval.py::MIN_BLOCKS_FOR_A_READABLE_CI"),
+            clears_pre_registered_bars=clears,
+            bars_reason=(
+                f"P(pseudo > baseline) = {p} (bar >= {p_bar}), pooled contrast p50 = "
+                f"{contrast_p50:+.6f} (bar > {c_bar:+.3f}), resampling units = "
+                f"{pooled['resampling_units']} (bar >= {MIN_UNITS_FOR_A_READABLE_POOL})"
+                + ("" if clears else " - at least one bar is not cleared")),
+        )
+
+    if len(partitions) > 1:
+        raise SystemExit(f"the pooled folds were scored on {len(partitions)} different block "
+                         f"partitions ({sorted(partitions)}) - blocks would not be comparable")
+
+    comb = per_pop.get("combined") or {}
+    proxy = per_pop.get("proxy_only") or {}
+    labels = per_pop.get("labels") or {}
+    if comb.get("status") == "MEASURED":
+        p = comb["bootstrap"]["prob_candidate_beats_reference"]
+        c = comb["bootstrap"]["contrast_p50"]
+        units = comb["resampling_units"]
+        readable = comb["interval_readable"]
+        p_ok = p is not None and p >= ADOPT_P_BAR
+        c_ok = c is not None and c > ADOPT_CONTRAST_BAR
+        if comb["clears_pre_registered_bars"]:
+            verdict = "POOL_CLEARS_THE_BARS_ON_THE_COMBINED_SURROGATE"
+            why = (f"pooled over {len(comb['folds_pooled'])} folds / {units} disjoint blocks: "
+                   f"contrast {c:+.6f} at P = {p}, both above the pre-registered bars and the "
+                   f"interval is readable ({units} >= {MIN_UNITS_FOR_A_READABLE_POOL} units)")
+        elif p_ok and c_ok and not readable:
+            # the effect and its probability clear the bars, but the pool is still under-powered:
+            # this is the state that names the next action (fire more folds), so it gets its own verdict
+            verdict = "POOL_POSITIVE_BUT_UNDER_POWERED"
+            why = (f"contrast {c:+.6f} (> {ADOPT_CONTRAST_BAR:+.3f}) at P = {p} (>= {ADOPT_P_BAR}), "
+                   f"but only {units} pooled resampling units are committed (< "
+                   f"{MIN_UNITS_FOR_A_READABLE_POOL}); the pseudo-label arm exists for folds "
+                   f"{comb['folds_pooled']} only - fire the remaining folds to reach a readable pool")
+        elif p_ok and not c_ok:
+            verdict = "POOL_POSITIVE_BUT_BELOW_THE_EFFECT_BAR"
+            why = (f"P = {p} clears {ADOPT_P_BAR} but the pooled contrast {c:+.6f} does not exceed "
+                   f"{ADOPT_CONTRAST_BAR:+.3f} over {units} blocks")
+        elif c is not None and c > 0:
+            verdict = "POOL_SUGGESTIVE_UNDER_POWERED"
+            why = (f"pooled contrast {c:+.6f} is positive but P = {p} < {ADOPT_P_BAR}"
+                   + ("" if readable else
+                      f" and only {units} resampling units are available (< "
+                      f"{MIN_UNITS_FOR_A_READABLE_POOL})"))
+        else:
+            verdict = "POOL_NO_GAIN_ON_THE_COMBINED_SURROGATE"
+            why = f"pooled contrast {c:+.6f} at P = {p} over {units} blocks"
+    else:
+        verdict, why = "NOT_MEASURABLE", ("no fold carries both arms on the combined population yet"
+                                          if not any(v.get("status") == "MEASURED"
+                                                     for v in per_pop.values())
+                                          else "the combined population is not scored on any pooled fold")
+
+    return dict(
+        generated_utc=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        generated_by="scripts/read_landed_reports.py --pool",
+        purpose=(("the SGMC pseudo-label contrast POOLED over every committed block-holdout fold: "
+                  "one fold carries 7-9 scoreable 51.2 km blocks, below the scorer's own "
+                  "12-unit bar for a readable interval, and its replicate noise (~0.036 between two "
+                  "fires of the same fold/seed/config) is larger than the effect it is asked to "
+                  "resolve (+0.031 on fold 0).  Pooling the four DISJOINT fold partitions is the "
+                  "only reading that can settle EXECUTIVE_SUMMARY §11 item 7; every number here is "
+                  "recomposed from the committed per-block components of both arms.")),
+        scope=scope,
+        policy=pol,
+        pseudo_provenance=prov,
+        block_convention=block_mode,
+        block_convention_note=(
+            "'scoreable' pools only the blocks each fold could actually score (its own held-out "
+            "blocks with truth and prediction); 'all' pools the full 56-block partition the "
+            "per-fold reports bootstrap over, and exists to reproduce a committed single-fold "
+            "number exactly before the pooled reading is trusted"),
+        folds_requested=list(folds),
+        partitions=sorted(str(p) for p in partitions),
+        fields=fields,
+        populations=per_pop,
+        verdict=verdict,
+        verdict_reason=why,
+        shippable_evidence=bool(comb.get("status") == "MEASURED"
+                                and comb.get("clears_pre_registered_bars")),
+        shipping_note=(("no shipping decision is made here.  A pseudo-labelled field reaches the "
+                        "leaderboard only through docs/FIELD_SELECTION_RULE.md as a new reblend.yml "
+                        "RUN_ID with R1-R5 measured on both fields' raw probability rasters; this "
+                        "pooled contrast is the power fix for the union arm, not an adoption")),
+        caveat=("the proxy_only arm is source-circular (see pseudo_provenance.circular_source): its "
+                "truth is cut from the same raster the pseudo-labels came from, so the combined and "
+                "labels arms are the readings that can move a decision.  FP_w is a sum over "
+                "PREDICTION pixels, so the combined population's DTI is never inferable from its "
+                "two components - it is scored here from each arm's own committed combined rows."),
+    )
+
+
+def print_pooled(rep: dict) -> None:
+    print(f"\nPOOLED pseudo-label contrast over folds {rep['folds_requested']} "
+          f"(scope {rep['scope']}, blocks {rep['block_convention']}):")
+    for pop, c in rep["populations"].items():
+        if c.get("status") != "MEASURED":
+            print(f"  {pop:<11} {c.get('status')} - {c.get('note','')}")
+            for m in c.get("missing", []):
+                print(f"              fold {m['fold']}: {m['reason']}")
+            continue
+        b = c["bootstrap"]
+        print(f"  {pop:<11} folds {c['folds_pooled']} -> {c['resampling_units']} pooled blocks "
+              f"(readable: {c['interval_readable']})")
+        print(f"              baseline {c['pooled_reference_dti']:.6f} -> pseudo "
+              f"{c['pooled_candidate_dti']:.6f}  contrast p50 {b['contrast_p50']:+.6f} "
+              f"CI95 [{b['contrast_ci95'][0]:+.6f}, {b['contrast_ci95'][1]:+.6f}]  "
+              f"P(pseudo>baseline) = {b['prob_candidate_beats_reference']}")
+        print(f"              per fold: " + ", ".join(
+            f"f{r['fold']} {r['contrast']:+.4f}({r['scoreable_blocks']}blk)" for r in c["per_fold"]))
+        print(f"              bars: {c['bars_reason']}")
+        for m in c.get("missing", []):
+            print(f"              MISSING fold {m['fold']}: {m['reason']}")
+    print(f"  VERDICT (derived): {rep['verdict']} - {rep['verdict_reason']}")
+    print(f"  shippable on this evidence: {rep['shippable_evidence']}")
+
+
 def print_report(gaps: dict, contrast: Optional[dict]) -> None:
     g = gaps["gap"]
     print(f"\nblock-holdout generalisation gap over {gaps['n_folds_committed']} committed fold(s)"
@@ -565,6 +927,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="write only the fold-gap summary, no paired contrast (block-holdout.yml "
                          "uses this: at the moment a fold lands there is no pseudo-label arm to "
                          "contrast it with, and the summary must still count that fold)")
+    ap.add_argument("--pool", action="store_true",
+                    help="ALSO write the pooled multi-fold pseudo-label contrast (EXECUTIVE_SUMMARY "
+                         "§11 item 7): every committed fold's two arms concatenated into one paired "
+                         "block bootstrap, so the union arm clears the scorer's 12-unit readability "
+                         "bar. Folds default to the partition's full fold set.")
+    ap.add_argument("--pool-folds", default=None,
+                    help="comma-separated folds to pool (default: every fold in the partition, read "
+                         "from configs/config_block_holdout.yaml)")
+    ap.add_argument("--pool-blocks", choices=["scoreable", "all"], default="scoreable",
+                    help="'scoreable' (default) pools each fold's own scoreable held-out blocks; "
+                         "'all' pools the full 56-block partition (reproduces a committed "
+                         "single-fold CI exactly)")
+    ap.add_argument("--pool-out", default=None,
+                    help="default data/evidence/pseudo_labels/pooled_two_population_contrast.json")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args(argv)
 
@@ -572,6 +948,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     contrast = None
     if not a.gaps_only:
         contrast = contrast_report(a.fold, load_json(DECISION), pseudo_provenance())
+
+    pooled = None
+    if a.pool:
+        exp = expected_folds()
+        if a.pool_folds:
+            pool_folds = [int(x) for x in a.pool_folds.split(",") if x.strip()]
+        else:
+            pool_folds = exp.get("all_folds") or [a.fold]
+        pooled = pooled_contrast(pool_folds, load_json(DECISION), pseudo_provenance(),
+                                 block_mode=a.pool_blocks)
 
     problems = [] if contrast is None else self_check(contrast, a.fold)
     if problems:
@@ -589,6 +975,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if not a.quiet:
         print_report(gaps, contrast)
+        if pooled is not None:
+            print_pooled(pooled)
 
     if a.check:
         print("\n--check: nothing written")
@@ -598,6 +986,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if contrast is not None:
         outputs.append((Path(a.contrast_out or PL / f"fold{a.fold}_two_population_contrast.json"),
                         contrast))
+    if pooled is not None:
+        outputs.append((Path(a.pool_out or PL / "pooled_two_population_contrast.json"), pooled))
     for path, payload in outputs:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=1))

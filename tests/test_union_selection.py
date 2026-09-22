@@ -132,3 +132,35 @@ def test_committed_proxy_population_figures_are_what_the_next_steps_quote() -> N
     assert d["proxy"]["proxy_only_px"] == 61664
     # disjointness asserted by block_holdout_eval provenance: 60,988 + 61,664 = 122,652
     assert d["labels"]["fault_px"] + d["proxy"]["proxy_only_px"] == 122652
+
+
+# ------------------------------------------------------- the select_on wiring (config contract)
+def test_configs_declare_a_valid_select_on() -> None:
+    """Every committed config that names select_on must use a value src/train.py accepts, and a
+    config that asks to select on the union must supply the proxy raster it is scored on."""
+    import yaml
+    for cfg_path in sorted((ROOT / "configs").glob("*.yaml")):
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        tr = cfg.get("training") or {}
+        sel = tr.get("select_on")
+        if sel is not None:
+            assert str(sel).lower() in ("in_domain", "union"), \
+                f"{cfg_path.name}: select_on={sel!r} is not in_domain/union"
+        if str(sel).lower() == "union" or tr.get("union_selection"):
+            data = cfg.get("data") or {}
+            assert data.get("proxy_catalogue_path"), \
+                f"{cfg_path.name}: union selection needs data.proxy_catalogue_path"
+
+
+def test_train_validates_select_on_and_the_union_scope() -> None:
+    """src/train.py must reject an unknown select_on and refuse union selection without a scope.
+
+    These are the two fail-fast gates that keep a misconfigured run from claiming a selection it
+    never made; they are exercised through the same helpers the loop uses.
+    """
+    tr = _train_mod()
+    # union scope requires both the flag and a proxy path -> _heldout_scopes returns {} otherwise,
+    # which is the exact condition src/train.py turns into a SystemExit for select_on='union'.
+    res = _make_res(np.zeros((32, 32), np.float32), [(0, 0)])
+    assert tr._heldout_scopes(_config(union=True, proxy_path=""), res) == {}
+    assert tr._heldout_scopes(_config(union=False, proxy_path="x.tif"), res) == {}

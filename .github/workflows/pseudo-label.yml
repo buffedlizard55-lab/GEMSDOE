@@ -332,7 +332,7 @@ jobs:
         run: |
           set -euo pipefail
           K=${{ needs.params.outputs.fold }}
-          python scripts/read_landed_reports.py --fold "$K" --strict \
+          python scripts/read_landed_reports.py --fold "$K" --strict --pool \
             2>&1 | tee "data/evidence/pseudo_labels/fold${K}_derived_reading.log"
 
       - name: Keep the trainer's logs when the fold fails
@@ -353,6 +353,9 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f "$D"/fold${K}_*.json "$D"/fold${K}_*.log || true
+          # the pooled multi-fold contrast is refreshed by --pool above; it is named for the pool,
+          # not the fold, so it needs its own add (EXECUTIVE_SUMMARY §11 item 7)
+          git add -f "$D"/pooled_two_population_contrast.json || true
           B=data/evidence/block_holdout
           git add -f "$B"/fold${K}_heldout_combined.json "$B"/fold${K}_complement_combined.json \
                      "$B"/fold${K}_heldout_combined.log "$B"/fold${K}_complement_combined.log \
@@ -371,6 +374,7 @@ jobs:
             outputs/prob_raw.tif
             outputs/manifest.json
             data/evidence/pseudo_labels/
+            data/evidence/pseudo_labels/pooled_two_population_contrast.json
             data/evidence/block_holdout/fold${{ needs.params.outputs.fold }}_heldout_combined.json
             data/evidence/block_holdout/fold${{ needs.params.outputs.fold }}_complement_combined.json
             train_pseudo_labels.log

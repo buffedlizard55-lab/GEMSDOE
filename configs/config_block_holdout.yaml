@@ -29,9 +29,25 @@ data:
   clip_percentile: [1.0, 99.0]
   use_external_dem: false
   use_ingenious_extra: false
+  # Coded proxy raster (code 2 = the 61,664 px of SGMC trace the labels do not contain). Only read
+  # when training.union_selection is on; it defines the per-epoch union hold-out population that
+  # training.select_on='union' can maximise. Off here by default (in_domain selection unchanged).
+  proxy_catalogue_path: "data/evidence/proxy/proxy_catalogue.tif"
 
 training:
   holdout: "spatial_blocks"     # <- the only structural difference from config_ci_ensemble.yaml
+  # MODEL SELECTION POPULATION (EXECUTIVE_SUMMARY §11 item 4).
+  #   select_on: in_domain  -> early stopping / checkpoint / manifest DTI maximise the SHAPED
+  #                            in-domain DTI (the labels the model trained near); the default and
+  #                            the reference solution's behaviour.
+  #   select_on: union      -> they maximise the UNION-population DTI logged each epoch
+  #                            (labels | proxy code 2), the closest local surrogate for the Phase-2
+  #                            scored set. Requires union_selection: true (below) + proxy path above.
+  # The manifest 'dti' the ensemble weighting (blend_submission.py --weights dti) reads is this
+  # same selected statistic, so choosing 'union' feeds the union signal into BOTH early stopping
+  # and the ensemble weights, which is the wiring item 4 asks for.
+  select_on: in_domain
+  union_selection: false        # true -> score the union population on the hold-out each epoch
   block_px: 512                 # 51.2 km squares; MUST equal block_holdout_eval.block_px
   block_folds: 4                # whole blocks held out, one fold per job
   block_fold: null              # null -> mc_id % block_folds (workflows set mc_id per job)
