@@ -1,4 +1,54 @@
-# Project status — 2026-09-21 (sessions 11–21)
+# Project status — 2026-09-22 (sessions 11–22)
+
+## Session 22 (2026-09-22) — the union-selection signal is wired end to end into early stopping + ensemble weights, and item 7's pooled multi-fold contrast reader is built and disjointness-verified
+
+The two half-finished items the previous session's queue named first were: (4) *the union DTI is
+logged per epoch — the remaining half is wiring `training.select_on` into the early-stopping
+comparator / ensemble weights*, and (7) *single-fold noise (±0.036) swamps the +0.0313 union
+effect — the pooled multi-fold contrast is what would settle it*. This session built both, and
+verified them against the committed evidence and a live fixture run.
+
+1. **`training.select_on` now drives selection, not just logging (item 4, the comparator half).**
+   `src/train.py` already logged `DTI_union` every epoch; this session made the early-stopping
+   comparator, the saved checkpoint AND the manifest `dti` maximise whichever population
+   `training.select_on` names (`in_domain` default, or `union`). Because `blend_submission.py
+   --weights dti` reads that same manifest `dti`, choosing `union` feeds the union signal into
+   **both** early stopping and the ensemble weights — exactly the two consumers item 4 named.
+   Fail-fast: a `union` run with no proxy scope raises before the first epoch (never silently
+   selects in-domain), and an unknown `select_on` is rejected. **Demonstrated on the real-data
+   fixture:** `in_domain` selects epoch 2 (shaped 0.1206) while `union` selects epoch 1 (union
+   0.1081 > 0.1015) — a genuine behavioural difference, not a no-op. New config keys documented in
+   `configs/config_block_holdout.yaml` and `configs/config_pseudo_labels.yaml` (both default
+   `in_domain`, so no committed run changes behaviour). Pinned by `tests/test_union_selection.py`
+   (7 tests, +2 this session).
+2. **The pooled multi-fold pseudo-label contrast reader is built (item 7, the power fix).**
+   `scripts/read_landed_reports.py --pool` concatenates every committed fold's two arms into ONE
+   paired block bootstrap. It is derivation-only like the rest of the script: it recomposes each
+   fold's committed per-block metric components (TP_w/FP_w/FN_w are sums), never re-scores a
+   raster. The legitimacy of pooling rests on the four block folds partitioning the same 56-block
+   grid into DISJOINT sets, so the reader **verifies** the pooled block ids are disjoint (raises if
+   a block id repeats across folds), refuses folds scored on different partitions or the same
+   probability field on both arms, and marks the pool COARSE below the scorer's own 12-unit bar.
+   On the one committed fold it reproduces fold 0 exactly (combined +0.031263 at P = 0.9515 over 7
+   units) and its derived verdict is `POOL_POSITIVE_BUT_UNDER_POWERED`, which names the exact
+   blocker: the pseudo arm exists for fold 0 only. `data/evidence/pseudo_labels/pooled_two_population_contrast.json`
+   committed. Pinned by 6 new tests in `tests/test_read_landed_reports.py` (disjointness refusal,
+   partition-mismatch refusal, same-field refusal, missing-fold accounting, a readable pool
+   clearing the bars, and single-fold reproduction). The `pseudo-label.yml` workflow now runs
+   `--pool` and commits the pooled file, so firing folds 1–3 will cross 12 units automatically.
+3. **Verification.** Fresh venv from `requirements.verified.txt` + torch/smp/timm: full suite
+   **445 passed, 1 skipped** (was 430+2; +13 tests this session, and the reportlab-gated test now
+   runs because reportlab is installed here). `scripts/audit_docs.py` **PASS** (0 cited-but-missing
+   artefacts, 0 uncatalogued hosts). Site rebuilt from `scripts/build_site.py`; §11 items 4 and 7
+   updated to WIRED/BUILT with the fixture demonstration and the pool verdict rendered from the
+   evidence. `EXECUTIVE_SUMMARY.md` §11 and the next-session ordering updated to match.
+
+**Next session:** the ordering stands with items 4 and 7 now machine-ready. **8 (human: enroll +
+first upload — the only unbiased signal; the bar it reports against is 0.2854 as of 2026-09-21) →
+3 (1 m DEM derivatives, code ready, needs tile download + ~50 GB) → 6 (GPU EfficientNet-B5 full
+config — also the first environment where item 4's `select_on=union` switch actually trains) →
+fire the pseudo-label workflow for folds 1–3 so item 7's pool crosses 12 units before the runner
+artifacts expire ~2026-10-03.**
 
 ## Session 21 (2026-09-21) — the data-placement blocker is closed in-sandbox, the CPU route is proven byte-reproducible, and the submission subpage was re-verified line by line against the official sources
 

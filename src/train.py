@@ -415,6 +415,19 @@ def main():
         best = dict(dti=-1.0, epoch=-1)
         best_state = None
         best_maps = None
+        # WHICH population early stopping / checkpointing maximise. "in_domain" (default) keeps the
+        # reference solution's behaviour; "union" consumes the per-epoch union DTI (labels | proxy
+        # code 2) that _heldout_scopes already logs - EXECUTIVE_SUMMARY §11 item 4. Validated on
+        # the config alone before the loop so a mis-set run fails fast rather than after an epoch.
+        select_on = str(cfg["training"].get("select_on", "in_domain")).strip().lower()
+        if select_on not in ("in_domain", "union"):
+            raise SystemExit(f"training.select_on={select_on!r} is not one of 'in_domain'/'union'")
+        union_scope_configured = "union" in _heldout_scopes(cfg, res)
+        if select_on == "union" and not union_scope_configured:
+            raise SystemExit(
+                "training.select_on='union' needs the union scope: set training.union_selection=true "
+                "and data.proxy_catalogue_path to the coded proxy raster "
+                "(data/evidence/proxy/proxy_catalogue.tif)")
         patience = int(cfg["training"].get("early_stopping_patience", 0) or 0)
         bad = 0
         aborted_by_budget = False
@@ -444,6 +457,37 @@ def main():
                 d0 = float(compute_distance_weighted_tversky(
                     optimize_submission(pc, R=R_px, t0=0.5, thin=True), gc, R_pixels=R_px))
                 dti_shaped, sh_best = d0, (0.5, True, d0)
+            # ---- the selection statistic --------------------------------------------------
+            # training.select_on picks WHICH population early stopping / checkpointing maximise:
+            #   "in_domain" (default, unchanged): the SHAPED in-domain DTI (dti_shaped) - the object
+            #                the reference solution's MC ensemble selects on;
+            #   "union":     the union-population DTI logged this epoch (labels | new-fault-like proxy
+            #                trace, the closest local surrogate for the Phase-2 scored population,
+            #                EXECUTIVE_SUMMARY §11 item 4).  This is the OTHER half of the union
+            #                signal: the per-epoch logging was the feed-in, this comparator is what
+            #                consumes it.  FP_w is a sum over prediction pixels, so the union DTI is
+            #                scored from the raw field on the union truth (score_within_mask), never
+            #                inferred from the in-domain number.
+            # A run that asks to select on the union but supplies no union truth is a configuration
+            # error, not a silent fall-back to in-domain: it would claim a selection it did not make.
+            union_dti = None
+            if comps.get("scopes"):
+                union_dti = (comps["scopes"].get("union") or {}).get("dti")
+            if select_on == "union":
+                if not union_scope_configured:
+                    raise SystemExit(
+                        "training.select_on='union' needs the union scope: set "
+                        "training.union_selection=true and data.proxy_catalogue_path to the coded "
+                        "proxy raster (data/evidence/proxy/proxy_catalogue.tif)")
+                if union_dti is None:
+                    # this fold's held-out windows contain no union truth this epoch: it cannot be
+                    # the selection epoch (would select on nothing), but it is not a fatal error -
+                    # a later epoch/fold may carry union truth. Warn once per occurrence.
+                    print("  WARNING select_on=union but this epoch's hold-out carries no union "
+                          "truth (n_gt=0); epoch not eligible to be the selected checkpoint")
+                sel_stat = -1.0 if union_dti is None else float(union_dti)
+            else:
+                sel_stat = dti_shaped
             scope_bits = ""
             if comps.get("scopes"):
                 sc = comps["scopes"].get("union") or {}
@@ -453,23 +497,28 @@ def main():
             print(f"epoch {ep + 1}/{epochs}  loss={tr:.4f}  DTI_raw={dti_g:.4f}  "
                   f"DTI_shaped={dti_shaped:.4f} (t0={sh_best[0]:.4g},thin={sh_best[1]})  "
                   f"TP={comps['TP_w']:.0f} FP={comps['FP_w']:.0f} "
-                  f"FN={comps['FN_w']:.0f}{scope_bits}  [{time.time() - t0:.0f}s]")
+                  f"FN={comps['FN_w']:.0f}{scope_bits}  select_on={select_on}"
+                  f"(={sel_stat:.4f})  [{time.time() - t0:.0f}s]")
             hist.append(dict(mc=mc, epoch=ep + 1, loss=tr, dti_raw=dti_g, dti_shaped=dti_shaped,
+                             select_on=select_on, selection_stat=float(sel_stat),
+                             dti_union=(None if union_dti is None else float(union_dti)),
                              **{k: v for k, v in comps.items() if k != "scopes"}))
             if comps.get("scopes"):
                 hist[-1]["scopes"] = {(n): {k: (None if v is None else float(v))
                                             for k, v in s.items()}
                                       for n, s in comps["scopes"].items()}
-            # model selection on the SHAPED metric: that is the object that gets scored
-            if dti_shaped > best["dti"]:
-                best = dict(dti=dti_shaped, epoch=ep + 1)
+            # model selection on the chosen population's statistic (select_on above): that is the
+            # object the checkpoint, early stopping and the manifest DTI all track.
+            if sel_stat > best["dti"]:
+                best = dict(dti=sel_stat, epoch=ep + 1, dti_shaped=float(dti_shaped),
+                            dti_union=(None if union_dti is None else float(union_dti)))
                 best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 best_maps = (pc.copy(), gc.copy())
                 bad = 0
             else:
                 bad += 1
                 if patience and bad >= patience:
-                    print(f"early stop: no shaped-DTI improvement for {patience} epochs")
+                    print(f"early stop: no {select_on}-DTI improvement for {patience} epochs")
                     break
         if cfg["training"].get("calibrate_shaping", True) and best_maps is not None:
             calib_maps.append(best_maps)            # pooled search over all splits, below
@@ -485,6 +534,9 @@ def main():
         torch.save(best_state, ck)
         manifest["models"].append(dict(file=ck.name, arch=arch, encoder=enc, in_channels=int(in_ch),
                                        classes=1, dti=best["dti"], epoch=best["epoch"], mc=mc,
+                                       select_on=select_on,
+                                       dti_shaped=best.get("dti_shaped"),
+                                       dti_union=best.get("dti_union"),
                                        patch_size=cfg["training"]["patch_size"],
                                        minutes_used=round((time.time() - job_t0) / 60.0, 1),
                                        budget_hit=aborted_by_budget,

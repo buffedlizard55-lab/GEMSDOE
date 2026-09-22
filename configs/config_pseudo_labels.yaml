@@ -54,9 +54,17 @@ data:
   # coded raster, code 2 = the 61,664 px of SGMC trace the labels do not contain
   pseudo_label_path: "data/evidence/proxy/proxy_catalogue.tif"
   pseudo_code: 2
+  # The same coded raster also defines the union hold-out population (code 2 only) when
+  # training.union_selection is on. Off by default so this pseudo-label EXPERIMENT keeps its
+  # committed selection behaviour (selection_mode: raw, select_on: in_domain).
+  proxy_catalogue_path: "data/evidence/proxy/proxy_catalogue.tif"
 
 training:
   holdout: "spatial_blocks"     # <- the only structural difference from config_ci_ensemble.yaml
+  # See configs/config_block_holdout.yaml for the select_on/union_selection contract; left at the
+  # defaults here so the pseudo-label arm's selection is not changed by this experiment.
+  select_on: in_domain
+  union_selection: false
   block_px: 512                 # 51.2 km squares; MUST equal block_holdout_eval.block_px
   block_folds: 4                # whole blocks held out, one fold per job
   block_fold: null              # null -> mc_id % block_folds (workflows set mc_id per job)

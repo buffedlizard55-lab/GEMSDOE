@@ -1,0 +1,354 @@
+{
+ "generated_utc": "2026-09-21T23:59:37+00:00",
+ "generated_by": "scripts/read_landed_reports.py --pool",
+ "purpose": "the SGMC pseudo-label contrast POOLED over every committed block-holdout fold: one fold carries 7-9 scoreable 51.2 km blocks, below the scorer's own 12-unit bar for a readable interval, and its replicate noise (~0.036 between two fires of the same fold/seed/config) is larger than the effect it is asked to resolve (+0.031 on fold 0).  Pooling the four DISJOINT fold partitions is the only reading that can settle EXECUTIVE_SUMMARY \u00a711 item 7; every number here is recomposed from the committed per-block components of both arms.",
+ "scope": "heldout",
+ "policy": {
+  "floor": 0.1,
+  "width": 0,
+  "policy": "sweep_best_t0_0.1_width0px",
+  "candidate_label": "floor0.1_w0px",
+  "measured_dti": 0.136452,
+  "source": "data/evidence/emission_decision.json"
+ },
+ "pseudo_provenance": {
+  "config": "configs/config_pseudo_labels.yaml",
+  "pseudo_label_path": "data/evidence/proxy/proxy_catalogue.tif",
+  "pseudo_code": 2,
+  "pseudo_weight": 1.0,
+  "holdout": "spatial_blocks",
+  "block_fold": null,
+  "seed": 42,
+  "circular_source": true,
+  "circular_source_meaning": "the pseudo-label mask is the code-2 layer of data/evidence/proxy/proxy_catalogue.tif, which is ALSO the raster the 'proxy_only' truth population is cut from - so a gain on that population is measured against the same catalogue the extra training signal came from (spatially held out, but not source-held-out).  The 'labels' population is independent of that source and is the non-circular arm of the same measurement."
+ },
+ "block_convention": "scoreable",
+ "block_convention_note": "'scoreable' pools only the blocks each fold could actually score (its own held-out blocks with truth and prediction); 'all' pools the full 56-block partition the per-fold reports bootstrap over, and exists to reproduce a committed single-fold number exactly before the pooled reading is trusted",
+ "folds_requested": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "partitions": [
+  "(512, 0, 4, 'balanced')"
+ ],
+ "fields": [
+  {
+   "fold": 0,
+   "population": "combined",
+   "baseline_field_sha256": "dbd946d30360c9ea83d98b481aaa1bf65ec7ea3c6fa241e850f4255e1b87c487",
+   "pseudo_field_sha256": "6caeef39d9c7ec1d806d20d65168ebc2a5ef697f7fd965ad818fed48a77fd13b",
+   "baseline_report": "data/evidence/block_holdout/fold0_heldout_combined.json",
+   "pseudo_report": "data/evidence/pseudo_labels/fold0_heldout.json"
+  },
+  {
+   "fold": 0,
+   "population": "proxy_only",
+   "baseline_field_sha256": "dbd946d30360c9ea83d98b481aaa1bf65ec7ea3c6fa241e850f4255e1b87c487",
+   "pseudo_field_sha256": "6caeef39d9c7ec1d806d20d65168ebc2a5ef697f7fd965ad818fed48a77fd13b",
+   "baseline_report": "data/evidence/block_holdout/fold0_heldout.json",
+   "pseudo_report": "data/evidence/pseudo_labels/fold0_heldout.json"
+  },
+  {
+   "fold": 0,
+   "population": "labels",
+   "baseline_field_sha256": "dbd946d30360c9ea83d98b481aaa1bf65ec7ea3c6fa241e850f4255e1b87c487",
+   "pseudo_field_sha256": "6caeef39d9c7ec1d806d20d65168ebc2a5ef697f7fd965ad818fed48a77fd13b",
+   "baseline_report": "data/evidence/block_holdout/fold0_heldout.json",
+   "pseudo_report": "data/evidence/pseudo_labels/fold0_heldout.json"
+  }
+ ],
+ "populations": {
+  "combined": {
+   "status": "MEASURED",
+   "folds_pooled": [
+    0
+   ],
+   "missing": [
+    {
+     "fold": 1,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold1_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold1_heldout.json"
+    },
+    {
+     "fold": 2,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold2_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold2_heldout.json"
+    },
+    {
+     "fold": 3,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold3_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold3_heldout.json"
+    }
+   ],
+   "per_fold": [
+    {
+     "fold": 0,
+     "reference_dti": 0.197183,
+     "candidate_dti": 0.228463,
+     "contrast": 0.03128,
+     "scoreable_blocks": 7
+    }
+   ],
+   "first_pooled_fold_block_ids": [
+    3,
+    4,
+    5,
+    6,
+    10,
+    15,
+    29
+   ],
+   "reference": "baseline_no_pseudo",
+   "candidate": "pseudo",
+   "block_convention": "scoreable",
+   "n_folds_pooled": 1,
+   "n_blocks_drawn": 7,
+   "resampling_units": 7,
+   "n_scoreable_blocks": 7,
+   "interval_readable": false,
+   "pooled_reference_dti": 0.197603,
+   "pooled_candidate_dti": 0.228865,
+   "pooled_contrast": 0.031263,
+   "reference_components": {
+    "TP_w": 8784.296874253569,
+    "FP_w": 74955.43711991081,
+    "FN_w": 25848.70312574643,
+    "n_gt": 34633
+   },
+   "candidate_components": {
+    "TP_w": 26649.289095436383,
+    "FP_w": 417023.4785467817,
+    "FN_w": 7983.710904563619,
+    "n_gt": 34633
+   },
+   "reference_support_px": 90433,
+   "candidate_support_px": 471988,
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 0,
+    "reference_ci95": [
+     0.182171,
+     0.209792
+    ],
+    "candidate_ci95": [
+     0.186845,
+     0.282811
+    ],
+    "contrast_p50": 0.031328,
+    "contrast_ci95": [
+     -0.003399,
+     0.078187
+    ],
+    "prob_candidate_beats_reference": 0.9515
+   },
+   "adoption_bars": {
+    "prob_bar": 0.95,
+    "contrast_bar": 0.01,
+    "min_resampling_units": 12,
+    "source": "docs/FIELD_SELECTION_RULE.md R1/R3; scripts/block_holdout_eval.py::MIN_BLOCKS_FOR_A_READABLE_CI"
+   },
+   "clears_pre_registered_bars": false,
+   "bars_reason": "P(pseudo > baseline) = 0.9515 (bar >= 0.95), pooled contrast p50 = +0.031328 (bar > +0.010), resampling units = 7 (bar >= 12) - at least one bar is not cleared"
+  },
+  "proxy_only": {
+   "status": "MEASURED",
+   "folds_pooled": [
+    0
+   ],
+   "missing": [
+    {
+     "fold": 1,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold1_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold1_heldout.json"
+    },
+    {
+     "fold": 2,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold2_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold2_heldout.json"
+    },
+    {
+     "fold": 3,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold3_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold3_heldout.json"
+    }
+   ],
+   "per_fold": [
+    {
+     "fold": 0,
+     "reference_dti": 0.080584,
+     "candidate_dti": 0.148303,
+     "contrast": 0.067719,
+     "scoreable_blocks": 7
+    }
+   ],
+   "first_pooled_fold_block_ids": [
+    3,
+    4,
+    5,
+    6,
+    10,
+    15,
+    29
+   ],
+   "reference": "baseline_no_pseudo",
+   "candidate": "pseudo",
+   "block_convention": "scoreable",
+   "n_folds_pooled": 1,
+   "n_blocks_drawn": 7,
+   "resampling_units": 7,
+   "n_scoreable_blocks": 7,
+   "interval_readable": false,
+   "pooled_reference_dti": 0.080809,
+   "pooled_candidate_dti": 0.148585,
+   "pooled_contrast": 0.067776,
+   "reference_components": {
+    "TP_w": 2737.0785597607382,
+    "FP_w": 85852.88904185485,
+    "FN_w": 17453.921440239264,
+    "n_gt": 20191
+   },
+   "candidate_components": {
+    "TP_w": 15983.05704411704,
+    "FP_w": 441094.2093473524,
+    "FN_w": 4207.94295588296,
+    "n_gt": 20191
+   },
+   "reference_support_px": 90433,
+   "candidate_support_px": 471988,
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 0,
+    "reference_ci95": [
+     0.063434,
+     0.101256
+    ],
+    "candidate_ci95": [
+     0.08737,
+     0.226239
+    ],
+    "contrast_p50": 0.069832,
+    "contrast_ci95": [
+     0.01818,
+     0.129382
+    ],
+    "prob_candidate_beats_reference": 0.998
+   },
+   "adoption_bars": {
+    "prob_bar": 0.95,
+    "contrast_bar": 0.01,
+    "min_resampling_units": 12,
+    "source": "docs/FIELD_SELECTION_RULE.md R1/R3; scripts/block_holdout_eval.py::MIN_BLOCKS_FOR_A_READABLE_CI"
+   },
+   "clears_pre_registered_bars": false,
+   "bars_reason": "P(pseudo > baseline) = 0.998 (bar >= 0.95), pooled contrast p50 = +0.069832 (bar > +0.010), resampling units = 7 (bar >= 12) - at least one bar is not cleared"
+  },
+  "labels": {
+   "status": "MEASURED",
+   "folds_pooled": [
+    0
+   ],
+   "missing": [
+    {
+     "fold": 1,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold1_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold1_heldout.json"
+    },
+    {
+     "fold": 2,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold2_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold2_heldout.json"
+    },
+    {
+     "fold": 3,
+     "reason": "an arm is not committed for this fold/scope",
+     "baseline_report": "data/evidence/block_holdout/fold3_heldout.json",
+     "pseudo_report": "data/evidence/pseudo_labels/fold3_heldout.json"
+    }
+   ],
+   "per_fold": [
+    {
+     "fold": 0,
+     "reference_dti": 0.211259,
+     "candidate_dti": 0.103369,
+     "contrast": -0.10789,
+     "scoreable_blocks": 7
+    }
+   ],
+   "first_pooled_fold_block_ids": [
+    3,
+    4,
+    5,
+    6,
+    10,
+    15,
+    29
+   ],
+   "reference": "baseline_no_pseudo",
+   "candidate": "pseudo",
+   "block_convention": "scoreable",
+   "n_folds_pooled": 1,
+   "n_blocks_drawn": 7,
+   "resampling_units": 7,
+   "n_scoreable_blocks": 7,
+   "interval_readable": false,
+   "pooled_reference_dti": 0.21196,
+   "pooled_candidate_dti": 0.103574,
+   "pooled_contrast": -0.108385,
+   "reference_components": {
+    "TP_w": 6047.218314492806,
+    "FP_w": 78835.02051873572,
+    "FN_w": 8394.781685507194,
+    "n_gt": 14442
+   },
+   "candidate_components": {
+    "TP_w": 10666.232051319039,
+    "FP_w": 446473.08864086226,
+    "FN_w": 3775.767948680961,
+    "n_gt": 14442
+   },
+   "reference_support_px": 90433,
+   "candidate_support_px": 471988,
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 0,
+    "reference_ci95": [
+     0.183829,
+     0.24529
+    ],
+    "candidate_ci95": [
+     0.07529,
+     0.126972
+    ],
+    "contrast_p50": -0.109868,
+    "contrast_ci95": [
+     -0.153615,
+     -0.074375
+    ],
+    "prob_candidate_beats_reference": 0.0
+   },
+   "adoption_bars": {
+    "prob_bar": 0.95,
+    "contrast_bar": 0.01,
+    "min_resampling_units": 12,
+    "source": "docs/FIELD_SELECTION_RULE.md R1/R3; scripts/block_holdout_eval.py::MIN_BLOCKS_FOR_A_READABLE_CI"
+   },
+   "clears_pre_registered_bars": false,
+   "bars_reason": "P(pseudo > baseline) = 0.0 (bar >= 0.95), pooled contrast p50 = -0.109868 (bar > +0.010), resampling units = 7 (bar >= 12) - at least one bar is not cleared"
+  }
+ },
+ "verdict": "POOL_POSITIVE_BUT_UNDER_POWERED",
+ "verdict_reason": "contrast +0.031328 (> +0.010) at P = 0.9515 (>= 0.95), but only 7 pooled resampling units are committed (< 12); the pseudo-label arm exists for folds [0] only - fire the remaining folds to reach a readable pool",
+ "shippable_evidence": false,
+ "shipping_note": "no shipping decision is made here.  A pseudo-labelled field reaches the leaderboard only through docs/FIELD_SELECTION_RULE.md as a new reblend.yml RUN_ID with R1-R5 measured on both fields' raw probability rasters; this pooled contrast is the power fix for the union arm, not an adoption",
+ "caveat": "the proxy_only arm is source-circular (see pseudo_provenance.circular_source): its truth is cut from the same raster the pseudo-labels came from, so the combined and labels arms are the readings that can move a decision.  FP_w is a sum over PREDICTION pixels, so the combined population's DTI is never inferable from its two components - it is scored here from each arm's own committed combined rows."
+}
