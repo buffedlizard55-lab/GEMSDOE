@@ -127,8 +127,13 @@ jobs:
           if [ -n "$recorded" ] && [ "$recorded" != "$actual" ]; then
             echo "::error title=hash mismatch::the committed artifact no longer matches its own sidecar"; exit 1
           fi
+          # The status is recorded BEFORE it is re-raised, so the evidence file exists even when the
+          # gate fails (a green job that never wrote its measurement is the failure mode here).
+          st=0
           python scripts/validate_submission.py --pred out/submission.tif \
-            --sample data/sample_submission.tif --train data/training_features.tif | tee out/validation.log
+            --sample data/sample_submission.tif --train data/training_features.tif | tee out/validation.log || st=$?
+          echo "$st" > out/validation.rc
+          test "$st" -eq 0
 
       - name: Route C - CPU-only classifier (trains on the official bands, no GPU, no torch)
         if: ${{ env.ROUTE == 'baseline' || env.ROUTE == 'both' }}
@@ -145,8 +150,11 @@ jobs:
           set -euo pipefail
           cp -f outputs/baseline/submission.tif out/baseline.tif
           sha256sum out/baseline.tif | tee out/baseline.sha256
+          st=0
           python scripts/validate_submission.py --pred out/baseline.tif \
-            --sample data/sample_submission.tif --train data/training_features.tif | tee out/baseline_validation.log
+            --sample data/sample_submission.tif --train data/training_features.tif | tee out/baseline_validation.log || st=$?
+          echo "$st" > out/baseline_validation.rc
+          test "$st" -eq 0
 
       - name: Site payload consistency (the in-browser generator on docs/how_to_submit.html)
         run: |
@@ -155,10 +163,19 @@ jobs:
             python scripts/build_submission_payload.py
           fi
           # --check is the drift gate: the payload the page ships must still reproduce the artifact.
-          python scripts/build_submission_payload.py --check | tee out/payload_check.log
+          # Exit statuses are the evidence, never a grep of the scripts' prose: an earlier version
+          # looked for the word "matches" in the output, and the script says "reproduce", so a
+          # perfectly good payload was reported as payload_check=false by run 35805002447.
+          st=0
+          python scripts/build_submission_payload.py --check 2>&1 | tee out/payload_check.log || st=$?
+          echo "$st" > out/payload_check.rc
           # and the generator itself, executed headlessly, judged by rasterio and by this repo's gate
-          python scripts/check_site_generator.py --out data/evidence/site_generator.json | tail -12
+          gs=0
+          python scripts/check_site_generator.py --out data/evidence/site_generator.json 2>&1 \
+            | tee out/generator_check.log | tail -12 || gs=$?
+          echo "$gs" > out/generator_check.rc
           cp -f data/evidence/site_generator.json out/site_generator.json
+          test "$st" -eq 0 -a "$gs" -eq 0
 
       - name: Package the container the submit dialog accepts
         run: |
@@ -242,6 +259,18 @@ jobs:
               q = Path(p)
               return hashlib.sha256(q.read_bytes()).hexdigest() if q.exists() and q.stat().st_size else None
 
+          def rc(p):
+              """A recorded exit status, or None when that gate never ran (route skips, early fail)."""
+              q = Path(p)
+              try:
+                  return int(q.read_text().strip())
+              except Exception:
+                  return None
+
+          def flag(p):
+              v = rc(p)
+              return None if v is None else v == 0
+
           gen = Path("out/site_generator.json")
           verdict = None
           if gen.exists():
@@ -262,12 +291,10 @@ jobs:
               zip_sha256=h("out/submission.zip"),
               zip_bytes=Path("out/submission.zip").stat().st_size if Path("out/submission.zip").exists() else None,
               baseline_sha256=h("out/baseline.tif"),
-              validator_passed=("Validation PASSED" in Path("out/validation.log").read_text())
-                               if Path("out/validation.log").exists() else None,
-              baseline_validator_passed=("Validation PASSED" in Path("out/baseline_validation.log").read_text())
-                               if Path("out/baseline_validation.log").exists() else None,
-              payload_check=("matches" in Path("out/payload_check.log").read_text())
-                            if Path("out/payload_check.log").exists() else None,
+              validator_passed=flag("out/validation.rc"),
+              baseline_validator_passed=flag("out/baseline_validation.rc"),
+              payload_check=flag("out/payload_check.rc"),
+              generator_check_exit=flag("out/generator_check.rc"),
               generator_verdict=verdict,
               committed_artifact_unchanged=(h(ev) == h("out/submission.tif")) if (ev.exists() and Path("out/submission.tif").exists()) else None,
               note=("evidence only: the .tif itself is delivered as the run artefact, retention 90 days; "

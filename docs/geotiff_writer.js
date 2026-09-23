@@ -9,7 +9,7 @@
  * need nothing at all: the browser decodes docs/submission_field.bin, writes the TIFF container,
  * and re-reads its own bytes to prove the result before it is offered as a download.
  *
- * The test suite runs THIS FILE under node (tests/test_submission_generator.py calls it as a CLI),
+ * The test suite runs THIS FILE under node (tests/test_site_generator.py calls it as a CLI),
  * so "verified in CI" and "what your browser does" are literally the same JavaScript, not a
  * Python re-implementation of it.
  *

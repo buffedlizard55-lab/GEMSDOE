@@ -47,6 +47,14 @@ def test_it_can_be_fired_by_hand_and_by_a_trigger_file(doc):
     push = on.get("push")
     assert push and ".github/triggers/make-submission" in str(push), \
         "the branch-trigger convention this repository uses for bot-fired runs must apply here too"
+    trig = ROOT / ".github/triggers/make-submission"
+    assert trig.exists(), \
+        ("the workflow's own push trigger path does not exist, so the route can never fire: the "
+         "automation token cannot dispatch (`actions: write` is absent), which is exactly what that "
+         "file is for")
+    body = trig.read_text()
+    assert "does not upload anything to DrivenData" in body, "the trigger file must state the limit"
+    assert "route=adopted" in body, "a push-run gets the dispatch defaults; the file must say which"
 
 
 def test_every_piping_step_uses_pipefail(doc):
@@ -148,3 +156,25 @@ def test_the_workflow_has_no_step_that_would_run_a_model_it_cannot_run(doc):
     header = WF.read_text().split("on:")[0]
     for phrase in ("does not upload anything to DrivenData", "does not claim a score"):
         assert phrase in header, f"the header must state the limit: {phrase}"
+
+
+def test_evidence_flags_come_from_exit_statuses_never_from_prose():
+    """The first real run (35805002447) was green and still reported `payload_check: false`: the
+    evidence builder grepped the word "matches" in a script whose success line says "reproduce". A
+    grep of prose is a second source of truth, and it drifts the way this one did. So: record the
+    exit status, read the number."""
+    text = WF.read_text()
+    assert 'in Path("out/' not in text, "an evidence flag is being derived by grepping a log"
+    for name in re.findall(r'flag\("out/([\w.]+\.rc)"\)', text):
+        assert f"> out/{name}" in text, f"out/{name} is read by the evidence builder but never written"
+        assert f'echo "$st" > out/{name}' in text or f'echo "$gs" > out/{name}' in text, \
+            f"out/{name} is written outside a recorded-status block"
+    assert "test \"$st\" -eq 0" in text, \
+        "a recorded status that is never re-raised turns a failed gate into a green run"
+
+
+def test_a_failing_run_still_reports_itself(doc):
+    """The measurement matters most on the run that failed, so reporting must not be skipped with it."""
+    for frag in ("Job summary", "Commit the measurement", "Upload the artefacts"):
+        step = next(s for s in _steps(doc) if frag in (s.get("name") or ""))
+        assert step.get("if") == "always()", f"{frag} is skipped on a failing run"

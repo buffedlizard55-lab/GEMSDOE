@@ -83,14 +83,50 @@ never renders is still a claim a reviewer has to read.
 allowlist, and those tests run in CI's Tests workflow, which installs the CPU wheel.
 `scripts/audit_docs.py` PASS. `check_submission_readiness.py`: 9 gates, 8 PASS, 1 HUMAN.
 
+### Route F executed on a real runner (same session) — two defects found that no local test could see
+
+`gh workflow run` is refused by this sandbox's token (`HTTP 403: Resource not accessible by
+integration` — `contents: write`, not `actions: write`), so the trigger path the workflow watches got
+its file: pushing `.github/triggers/make-submission` starts the job. Run **35805002447** on
+`arena/01a0cb96-gemsdoe` completed **success in 90 s**, CPU-only, and committed
+`data/evidence/make_submission/35805002447.json`: `route=adopted`, `package=both`,
+`submission_sha256 a3dcd6d51303f312…` (569,531 B — the artifact, byte-identical to the committed
+one), `zip_sha256 d20d2e9fa38bbb6b…` (569,657 B — **the same archive the local packager produced**, so
+the container is reproducible across machines), `validator_passed true`, `generator_verdict "PASS"`
+(the browser generator verified on a clean checkout), `committed_artifact_unchanged true`.
+
+Two real bugs came out of reading that JSON rather than the green tick:
+
+1. **`payload_check: false`.** The evidence builder decided it by grepping the word *"matches"* in
+   `out/payload_check.log`, and `build_submission_payload.py --check` says *"reproduce … float32 bits
+   identical"*. A gate's verdict is its **exit status**; a prose grep is a second source of truth and
+   it drifts. Now each gate records `out/*.rc` (`echo "$st"`) and re-raises it
+   (`test "$st" -eq 0`), and the builder reads the numbers — so a failing gate still writes its
+   evidence. `if: always()` was added to the summary, the evidence commit and the artefact upload for
+   the same reason. Pinned by
+   `tests/test_make_submission_workflow.py::test_evidence_flags_come_from_exit_statuses_never_from_prose`
+   and `…::test_a_failing_run_still_reports_itself`.
+2. **`--check` was environment-dependent** (first CI failure, run 35803568817): it compared the whole
+   manifest including `checks.sample_submission`, which is measured against the *uncommitted* 418 MB
+   `data/`. On a runner with no placement that is DRIFT for a payload that is fine. `--check` now
+   compares the fields a submission actually depends on and reports a differing `checks` block as
+   INFO; the matching test re-derives the sample pins only when `data/` exists locally, instead of
+   dying on a missing raster.
+
 ### Next steps, in order (for session 24)
 
-1. **Fire `.github/workflows/make-submission.yml` once from this branch** (push a commit touching
-   `.github/triggers/make-submission`, or `gh workflow run make-submission.yml -f route=adopted
-   -f package=both`). It has never executed; the 11 structure tests prove the YAML is well-formed
-   and honest, not that the runner agrees. Expect ~6–8 minutes, CPU-only, and the first file in
-   `data/evidence/make_submission/`. If `check_site_generator.py` FAILs on the runner, that is the
-   finding — the page would have been shipping an unverified generator.
+1. ~~Fire `make-submission.yml` once~~ **done twice.** Run 35805300948 (after the `.rc` fix) came
+   back `payload_check: true`, `generator_verdict: "PASS"`, `validator_passed: true`, and
+   `zip_sha256 d20d2e9fa38bbb6b…` — the same archive bytes as run 35805002447 and as this sandbox's
+   own packager, i.e. the container is reproducible across three executions on two machines.
+   `data/evidence/make_submission/{35805002447,35805300948}.json` are the artifacts of that.
+   Still open for a human, because no tool here can reach the CDN: one `curl -I` on
+   `https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission_field.bin` (expect `200`,
+   `content-length: 532174`). The `.json` twin was fetched and renders; a `404` on the `.bin` would
+   mean the browser generator degrades to its "payload did not load" message on Pages while working
+   from every clone. (Note for whoever checks: the Pages CDN serves freshly published assets with a
+   cached `404` for several minutes — a first `404` is not evidence. Add `?cb=<n>` and look again,
+   which is exactly how this was settled here.)
 2. **Human: enrol, upload, first score** (unchanged, still the only unbiased signal — bar 0.2854 as
    of the 2026-09-21 snapshot). Now unblocked in a new way: the file can be produced by the browser
    on the published site, so the upload needs no environment.

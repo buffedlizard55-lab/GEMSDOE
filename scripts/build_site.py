@@ -3979,7 +3979,20 @@ fold nothing touched, and the measurement <b>re-executed and diffed</b> inside t
      "the gates this checkout passes right now.", tail=GENERATOR_TAIL)
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    # --out-dir exists so the *test* can build a copy without mutating the tree: regenerating the
+    # site in place left `git status` dirty after every suite run (the build stamp moves), and a test
+    # that rewrites the thing it is supposed to be checking cannot see staleness at all.
+    import argparse
+    ap = argparse.ArgumentParser(prog="scripts/build_site.py",
+                                 description="regenerate the GitHub Pages site in docs/ from the "
+                                             "evidence JSON in this repository")
+    ap.add_argument("--out-dir", default=None, metavar="DIR",
+                    help="write the pages here instead of docs/ (inputs are still read from docs/)")
+    a = ap.parse_args(list(argv) if argv is not None else None)
+    out = Path(a.out_dir).resolve() if a.out_dir else DOCS
+    if a.out_dir:
+        out.mkdir(parents=True, exist_ok=True)
     ev = {
         "inventory": load(ROOT / "data/evidence/inventory.json"),
         "placement": load(ROOT / "data/evidence/data_placement.json"),
@@ -4077,7 +4090,7 @@ def main() -> int:
             })
 
     DOCS.mkdir(exist_ok=True)
-    (DOCS / "style.css").write_text(CSS)
+    (out / "style.css").write_text(CSS)
     pages = {
         "index.html": build_index(ev),
         "executive_summary.html": build_executive_summary(ev),
@@ -4093,9 +4106,13 @@ def main() -> int:
                              "What was re-checked on 2026-09-17, what changed, and what remains blocked."),
         "reproduce.html": build_reproduce(ev),
     }
+    try:                    # the message must name the real target, and an --out-dir may be anywhere
+        rel = out.relative_to(ROOT)
+    except ValueError:
+        rel = out
     for name, content in pages.items():
-        (DOCS / name).write_text(content)
-        print(f"wrote docs/{name} ({len(content):,} bytes)")
+        (out / name).write_text(content)
+        print(f"wrote {rel / name} ({len(content):,} bytes)")
 
     have = [k for k, v in ev.items() if v]
     print(f"\nevidence present: {', '.join(have)}")

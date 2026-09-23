@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -342,3 +343,25 @@ def test_the_files_the_page_loads_are_the_files_the_tests_run():
     assert 'id="tif-generator"' in html
     meta_html = ROOT / "docs" / "submission_meta.json"
     assert meta_html.exists() and BLOB.exists()
+
+
+def test_every_repository_path_the_manifest_names_actually_exists():
+    """The manifest is the page's only source of facts, and it names the scripts that made it. When
+    one of those files was renamed, the pointer kept pointing at the old name in the shipped payload
+    and on the live page (`tests/test_submission_generator.py`, which never existed) — a citation the
+    reader cannot follow is worse than no citation. So: walk the manifest, and check the paths."""
+    meta = json.loads(META.read_text())
+    text = json.dumps(meta)
+    cited = set(re.findall(r"[\w./-]+\.(?:json|yaml|yml|html|py|js|md|bin|csv|tif|txt|pdf)", text))
+    assert cited, "the manifest cites no files at all? that is also a bug"
+    missing = sorted(rel for rel in cited
+                     if not rel.startswith(("http", "folds", "model_")) and not (ROOT / rel).exists())
+    assert not missing, f"the manifest points at files that are not in the repo: {missing}"
+
+
+def test_the_writer_js_cites_tests_that_exist():
+    """Same rule for the comments in the shipped JS: a reader follows them."""
+    js = (ROOT / "docs" / "geotiff_writer.js").read_text() + (ROOT / "docs" / "generate_submission.js").read_text()
+    cited = set(re.findall(r"tests/[\w./-]+\.py", js))
+    missing = sorted(rel for rel in cited if not (ROOT / rel).exists())
+    assert not missing, f"the shipped JS cites non-existent tests: {missing}"
