@@ -18,5 +18,5 @@ score requires a human enrolment and upload — the one gate
 
 To fire it: `git commit --allow-empty -m "…" ` after editing the timestamp below, then push.
 
-last_touched_utc: 2026-09-23T01:15:00Z
-touched_by: session 23 — first execution of route F
+last_touched_utc: 2026-09-23T01:25:00Z
+touched_by: session 23 — second execution (evidence flags from exit statuses)
