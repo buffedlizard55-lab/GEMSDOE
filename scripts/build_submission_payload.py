@@ -264,7 +264,7 @@ def build_meta(root: Path, artifact: Path, band: np.ndarray, info: dict,
         how_this_was_made=dict(
             builder="python scripts/build_submission_payload.py",
             writer="docs/geotiff_writer.js (same code path runs under node in the test suite)",
-            parity_test="tests/test_submission_generator.py",
+            parity_test="tests/test_site_generator.py",
             evidence="data/evidence/site_generator.json",
         ),
     )

@@ -1,10 +1,10 @@
 {
- "generated_utc": "2026-09-23T00:41:01Z",
+ "generated_utc": "2026-09-23T01:15:50Z",
  "script": "scripts/check_submission_readiness.py",
  "purpose": "every gate on docs/how_to_submit.html is a measurement from this checkout",
  "root": "/home/user/GEMSDOE",
  "data_dir": "data",
- "seconds": 12.96,
+ "seconds": 12.78,
  "checks": [
   {
    "id": "data_placed",
@@ -157,8 +157,8 @@
      "variant: whole grid in one strip"
     ],
     "failed": [],
-    "generated_utc": "2026-09-23T00:40:52Z",
-    "seconds": 9.1,
+    "generated_utc": "2026-09-23T01:15:41Z",
+    "seconds": 9.11,
     "container_note": "the generated file declares nan like the template; the committed artifact declares no NODATA tag - a container difference, not a pixel one"
    },
    "source": "scripts/check_site_generator.py -> data/evidence/site_generator.json",

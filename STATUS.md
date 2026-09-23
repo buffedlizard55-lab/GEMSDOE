@@ -115,11 +115,18 @@ Two real bugs came out of reading that JSON rather than the green tick:
 
 ### Next steps, in order (for session 24)
 
-1. ~~Fire `make-submission.yml` once~~ **done** (run 35805002447, success, 90 s; two defects found
-   and fixed — see above). Remaining: confirm the *second* run after the `.rc` fix reports
-   `payload_check: true`, and that the merged site on Pages serves `docs/submission_meta.json` +
-   `docs/submission_field.bin` (the generator's two fetches) — a 404 on either means Jekyll is not
-   publishing the asset and the browser route silently degrades to its "payload did not load" error.
+1. ~~Fire `make-submission.yml` once~~ **done twice.** Run 35805300948 (after the `.rc` fix) came
+   back `payload_check: true`, `generator_verdict: "PASS"`, `validator_passed: true`, and
+   `zip_sha256 d20d2e9fa38bbb6b…` — the same archive bytes as run 35805002447 and as this sandbox's
+   own packager, i.e. the container is reproducible across three executions on two machines.
+   `data/evidence/make_submission/{35805002447,35805300948}.json` are the artifacts of that.
+   Still open for a human, because no tool here can reach the CDN: one `curl -I` on
+   `https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission_field.bin` (expect `200`,
+   `content-length: 532174`). The `.json` twin was fetched and renders; a `404` on the `.bin` would
+   mean the browser generator degrades to its "payload did not load" message on Pages while working
+   from every clone. (Note for whoever checks: the Pages CDN serves freshly published assets with a
+   cached `404` for several minutes — a first `404` is not evidence. Add `?cb=<n>` and look again,
+   which is exactly how this was settled here.)
 2. **Human: enrol, upload, first score** (unchanged, still the only unbiased signal — bar 0.2854 as
    of the 2026-09-21 snapshot). Now unblocked in a new way: the file can be produced by the browser
    on the published site, so the upload needs no environment.

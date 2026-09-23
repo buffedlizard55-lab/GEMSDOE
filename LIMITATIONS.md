@@ -629,3 +629,22 @@ claim is made:
    logged-in human; rules §3.2 documents only the GeoTIFF form. `drivendata.org` is not reachable
    from the sandbox, so this cannot be re-verified here (irregularity 7 on `docs/submission.html`).
    The `.tif` route is the one whose requirement is checkable from the repository alone.
+
+## What could not be verified about the *published* site (added 2026-09-22, session 23)
+
+The browser generator is verified **in this checkout** (the writer runs under node, rasterio agrees
+on the pixels, the repository validator passes the file, and route F re-ran all of it on a clean
+runner twice). What is *not* verified from here is one hop further out:
+
+* **Serving of `docs/submission_field.bin` by GitHub Pages.** `github.com` is in this sandbox's
+  egress allowlist and `*.github.io` is not reachable from `bash` at all, so the only probe available
+  was the fetch proxy. It confirms `docs/submission_meta.json` is live (full manifest returned) and
+  `docs/style.css` carries the generator styles, i.e. the merged build is the one being served — but a
+  532 KB binary was not retrievable through that path, and the first `submission_meta.json` probe
+  returned a **cached 404** that a query-string cache-buster disproved. Treat any first `404` on a
+  just-pushed Pages asset as unproven. One `curl -I` by a person settles it; the glue's behaviour on
+  a failed fetch is a visible "the payload did not load" error, never a silent wrong file.
+* **The Pages *build* status, not just its commit.** `gh api repos/…/pages/builds` shows `built` for
+  the merge SHA, which is the check to run if the site looks stale after a merge.
+* **The submit dialog's wording**, unchanged from before: transcribed by a logged-in human, not
+  fetchable here (rules §3.2 documents only the single-GeoTIFF form).
