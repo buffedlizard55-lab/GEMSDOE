@@ -339,11 +339,19 @@ def main(argv=None) -> int:
             got = p.read_bytes()
             want_b = want.encode() if isinstance(want, str) else want
             if got != want_b:
-                # meta carries a timestamp, so compare its content with that field removed
+                # The manifest carries two kinds of field, and only one of them is a pin:
+                #   * grid / artifact / blob / encoding / field / round_trip / generator describe
+                #     THE PAYLOAD and must match a rebuild anywhere, or the payload has drifted;
+                #   * `generated_utc` is a stamp, and `checks` records what the *build machine*
+                #     measured against data/ -- the 418 MB placed stack, which is not committed.
+                #     A fresh clone or a CI runner without that placement cannot reproduce those
+                #     numbers, so demanding them here reported DRIFT on a payload that was fine
+                #     (found by the Tests workflow on run 35803568817, not by reading).
                 if rel.endswith(".json"):
                     gj, wj = json.loads(got), json.loads(want)
                     for d in (gj, wj):
                         d.pop("generated_utc", None)
+                        d.pop("checks", None)
                     drift_ok = gj != wj
                 else:
                     drift_ok = True
@@ -360,6 +368,10 @@ def main(argv=None) -> int:
         print(f"OK — {META_REL} + {BLOB_REL} reproduce {a.artifact} "
               f"({meta['encoding']['n_runs']:,} runs, {meta['field']['one_px']:,} px at 1.0, "
               f"float32 bits identical after a decode round trip)")
+        if meta["checks"] != json.loads((root / META_REL).read_text()).get("checks", {}):
+            print("INFO — the `checks` block (this checkout's data/, the validator log) differs from "
+                  "the committed one because this machine has a different environment; the payload "
+                  "pins above are what a submission depends on")
         return 0
 
     out_dir = Path(a.out_dir) if a.out_dir else root / "docs"

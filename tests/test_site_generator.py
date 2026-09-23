@@ -147,9 +147,18 @@ def test_manifest_pins_agree_with_the_bytes_on_disk():
         assert meta["grid"]["width"] == src.width and meta["grid"]["height"] == src.height
         assert meta["grid"]["epsg"] == src.crs.to_epsg()
         assert [float(x) for x in meta["grid"]["transform"]] == [float(x) for x in src.transform]
-    with rasterio.open(SAMPLE) as s:
-        assert meta["checks"]["sample_submission"]["shape_matches"] is True
-        assert meta["checks"]["sample_submission"]["transform_matches"] is True
+    # The sample-derived row is a measurement of the build machine's data/, which is NOT committed
+    # (418 MB placed by scripts/assemble_data_bridge.py). Assert the recorded pins always; open the
+    # file and re-derive them only where the data actually exists, so a CI runner without a
+    # placement exercises the claim instead of erroring on a missing file.
+    assert meta["checks"]["sample_submission"]["shape_matches"] is True
+    assert meta["checks"]["sample_submission"]["transform_matches"] is True
+    assert meta["checks"]["sample_submission"]["epsg"] == 32611
+    if SAMPLE.exists():
+        with rasterio.open(SAMPLE) as s:
+            assert (s.width, s.height) == tuple(meta["checks"]["sample_submission"]["grid"])
+            assert [float(x) for x in s.transform] == [float(x) for x in
+                                                        meta["checks"]["sample_submission"]["transform"]]
 
 
 # --------------------------------------------------------------------- the writer, run by node
