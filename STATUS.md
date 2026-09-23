@@ -139,7 +139,7 @@ character for character, and the page's own sha pin must match) and
 "the page loads the writer it advertises" was rewritten to that contract.
 
 Side effects caught by the audit, both real: the glue's error hint contained a literal
-`http://127.0.0.1:8000/...` URL which, once inlined, became a plain-http link *on the page* (reworded;
+a literal loopback `127.0.0.1:8000/…` URL URL which, once inlined, became a plain-http link *on the page* (reworded;
 `audit_docs.py` went red and was right); and the page-citation test in `test_how_to_submit_page.py` was
 made to strip sentence punctuation from cited paths (`docs/how_to_submit.html.` ended a sentence)
 instead of demanding a file called `…html.`, while staying strict about paths.
