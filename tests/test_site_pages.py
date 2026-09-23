@@ -106,7 +106,7 @@ def _comparable(p: Path) -> bytes:
     return _strip_live_state(_normalised(p))
 
 
-def test_the_build_reproduces_the_committed_pages():
+def test_the_build_reproduces_the_committed_pages(tmp_path):
     """The site IS a build artifact: regeneration must be a no-op.
 
     Without this, a page can be edited by hand (or go stale against the evidence it renders) and
@@ -115,24 +115,33 @@ def test_the_build_reproduces_the_committed_pages():
     """
     if not any(DOCS.glob("*.html")):
         pytest.skip("the site has not been generated here")
-    before = {p.name: _comparable(p) for p in _generated_pages()}
-    subprocess.run([sys.executable, str(ROOT / "scripts" / "build_site.py")],
+    # Build into a copy. Building in place used to leave `git status` dirty (the build stamp moves),
+    # and worse: comparing a page to a rebuild of itself in the same tree can only see what the
+    # rebuild overwrote, so a hand-edited page was "reproduced" by editing it back.
+    committed = {p.name: _comparable(p) for p in _generated_pages()}
+    fresh = tmp_path / "docs"
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "build_site.py"), "--out-dir", str(fresh)],
                    cwd=ROOT, check=True, capture_output=True)
-    after = {p.name: _comparable(p) for p in _generated_pages()}
-    changed = sorted(n for n in before if before[n] != after[n])
-    assert not changed, f"regenerating the site changed {changed}: the committed pages are stale"
+    built = {p.name: _comparable(p) for p in sorted(fresh.glob("*.html"))}
+    assert built, "the fresh build produced no pages at all"
+    changed = sorted(n for n in committed if n in built and committed[n] != built[n])
+    assert not changed, f"the committed pages are stale against a rebuild: {changed}"
+    extra = sorted(set(built) - set(committed))
+    assert not extra, f"the builder emits pages that are not committed: {extra}"
 
 
-def test_building_twice_in_one_environment_is_byte_identical():
+def test_building_twice_in_one_environment_is_byte_identical(tmp_path):
     """Determinism, independent of the live-state exception: two builds here must agree exactly."""
     if not any(DOCS.glob("*.html")):
         pytest.skip("the site has not been generated here")
     snapshots = []
-    for _ in range(2):
-        subprocess.run([sys.executable, str(ROOT / "scripts" / "build_site.py")],
-                       cwd=ROOT, check=True, capture_output=True)
-        snapshots.append({p.name: _normalised(p) for p in _generated_pages()})
+    for i in range(2):
+        target = tmp_path / f"docs{i}"
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "build_site.py"),
+                        "--out-dir", str(target)], cwd=ROOT, check=True, capture_output=True)
+        snapshots.append({p.name: _normalised(p) for p in sorted(target.glob("*.html"))})
     first, second = snapshots
+    assert first, "no pages were built"
     changed = sorted(n for n in first if first[n] != second[n])
     assert not changed, f"two consecutive builds differ in {changed}"
 
