@@ -47,6 +47,14 @@ def test_it_can_be_fired_by_hand_and_by_a_trigger_file(doc):
     push = on.get("push")
     assert push and ".github/triggers/make-submission" in str(push), \
         "the branch-trigger convention this repository uses for bot-fired runs must apply here too"
+    trig = ROOT / ".github/triggers/make-submission"
+    assert trig.exists(), \
+        ("the workflow's own push trigger path does not exist, so the route can never fire: the "
+         "automation token cannot dispatch (`actions: write` is absent), which is exactly what that "
+         "file is for")
+    body = trig.read_text()
+    assert "does not upload anything to DrivenData" in body, "the trigger file must state the limit"
+    assert "route=adopted" in body, "a push-run gets the dispatch defaults; the file must say which"
 
 
 def test_every_piping_step_uses_pipefail(doc):
