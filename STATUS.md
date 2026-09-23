@@ -1,4 +1,112 @@
-# Project status — 2026-09-22 (sessions 11–22)
+# Project status — 2026-09-22 (sessions 11–23)
+
+## Session 23 (2026-09-22) — the site can now generate the submission file itself, in the browser, with no install and no GPU
+
+The standing ask was narrow and it was about capability rather than analysis: **make it possible to
+generate a submission into the competition from the site**, i.e. the reader of
+`docs/how_to_submit.html` should be able to end up holding the single-band float32 GeoTIFF the
+DrivenData dialog asks for, without cloning the repo. That is what this session built, plus the two
+routes (CLI, CI) that produce the same bytes, and the tests that make all three honest.
+
+1. **The payload the page renders, measured rather than typed.** `scripts/build_submission_payload.py`
+   encodes the adopted artifact's field into `docs/submission_field.bin` (a `gems-rle-v1` uleb128
+   run-length stream, 532,174 bytes for 259,549 runs) and writes `docs/submission_meta.json` with
+   every number the page is allowed to show: grid, transform, EPSG, resolution, value counts, the
+   blob hash, the artifact hash, and 17 named checks. `--check` re-derives the manifest from the
+   raster and refuses if any pin drifted; `--verify` decodes the blob and compares float32 bits to
+   the artifact. Both pass in this checkout.
+2. **`docs/geotiff_writer.js` — a TIFF/ZIP writer in plain JS.** No dependency, no network, no
+   `fetch`; header | IFD | extras | data, one pass, 4-byte aligned, values ≤ 4 bytes stored inline in
+   the IFD entry (libtiff will not dereference an offset there), and real deflate via
+   `CompressionStream('deflate')` with the zlib wrapper GDAL's `Compression: 8` expects (an early
+   draft used raw deflate under tag 32946 and libtiff rejected it). Its reader parses the file it
+   wrote, the 17 self-checks run on that parse, and the CLI **writes nothing when a check fails** —
+   a failed build must not leave a plausible artifact behind.
+3. **`docs/generate_submission.js` + the DOM harness.** The page's Build button produces
+   `submission.tif` or `submission.zip` and withholds the download unless the self-checks pass.
+   `tests/support/generator_ui_harness.js` runs the real glue against a shimmed DOM with Node's real
+   `Blob`/`Response`/`CompressionStream`, in `tif`, `zip` and `broken` (tampered blob) modes. It
+   caught a genuine bug the unit tests could not see: after the page's own preload set
+   `state.meta`, a single `if (!state.meta)` guard skipped the field fetch and the *first* click
+   failed with "the payload did not load". Two independently cached stages fixed it.
+4. **Byte-for-byte agreement, and the limits of that claim.** The browser route writes
+   358,184 bytes — 59 strips of 64 rows, deflate, sha256 `fa8f4245e34323bf…4037d9a`, identical from
+   the CLI and from the harness and stable across re-runs. Its **float32 pixels are identical** to
+   `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`, `validate_submission.py` says
+   "✅ Validation PASSED - Ready for submission!", and rasterio's container matches
+   `data/sample_submission.tif`. It is *not* byte-identical to the artifact (the artifact is
+   256×256 LZW *tiled*, 569,531 bytes) and the page says so in those words; the score remains
+   unknown, because scoring requires the human upload.
+5. **`scripts/check_site_generator.py` — a headless judge with teeth.** Payload `--check`, the Node
+   run, rasterio bit-compare against the artifact, container compare against the sample, the official
+   validator, the zip container, and four container variants (rows-per-strip 1/512/3730 and
+   `--no-deflate`) → `data/evidence/site_generator.json`, verdict PASS, 8 PASS / 2 INFO. A crash in
+   any step is recorded as a FAIL rather than aborting the report. The two INFO rows are the
+   NODATA-tag difference from the artifact (the artifact declares no NODATA tag; the official
+   template declares `nan`; we declare `nan`) and are surfaced, not hidden. This became gate 9
+   (`site_generator`) of `scripts/check_submission_readiness.py` — 9 gates, 8 PASS, 1 HUMAN.
+6. **`scripts/package_submission.py`** mirrors the browser's `buildZip`: one stored member
+   `submission.tif`, fixed 2020-01-01 timestamp, `--check` re-extracts and re-reads the member with
+   GDAL before comparing, and the packager re-packages itself to prove determinism. The lesson
+   reused from the writer: *assert the knob moves an observable* — `--method deflate` is recorded and
+   `--check` refuses the mismatch rather than quietly accepting either.
+7. **`.github/workflows/make-submission.yml`** — route F, the third way to get the file. Routes
+   `adopted|baseline|both`, packages `tif|zip|both`, optionally rebuilds the payload; CPU-only
+   dependency set (no torch), no DrivenData login, no mirror fetch; a stub-size guard fails the job
+   under 100,000 bytes; the job summary carries the sha256 to check after download plus a
+   paste-ready submit note that is *not* the §3.2 disclosure; the measurement JSON is committed to
+   `data/evidence/make_submission/<run>.json`, never the rasters.
+8. **Docs rebuilt from the top.** `docs/how_to_submit.html` is now ten sections: the file, where it
+   comes from, **the browser generator**, the CLI/CI routes (six, labelled A–F), validation (+ 5.1
+   for the `.zip`), the click-by-click upload path, what is measured vs asserted, the rules quotes,
+   and the claims table naming the evidence file behind each claim. `scripts/build_site.py` renders
+   `IN SYNC` / `STALE` by comparing the manifest's pinned artifact hash to the artifact in the tree,
+   and the section is gone (not faked) if the payload files are absent.
+
+**Bugs this session fixed, all of them found by running something:** the two-stage payload cache
+above; `package_submission.verify()` asking rasterio to open a `.zip` (GDAL has no `/vsizip/` magic
+here — extract, then open); a second inline write path that differed from the real one only by
+`force_zip64` (consolidated into `write_zip()`); the JS `buildZip` stamping `Date.now()` under a
+comment claiming a fixed date; Python `decode_runs` raising a bare `IndexError` on a truncated
+stream where the JS raised `ValueError` (the twins now raise the same messages); a `| tee` without
+`pipefail` in the new workflow; a `|| true` that masked a packaging failure; and a shell-built JSON
+summary replaced by a `python - <<'PY'` heredoc. Also removed: a duplicated `upload_steps` block in
+`build_how_to_submit` whose dead copy asserted an unverified "≤ 100 MB" size limit — a claim that
+never renders is still a claim a reviewer has to read.
+
+**Verification.** `tests/test_site_generator.py` (22), `tests/test_package_submission.py` (7),
+`tests/test_make_submission_workflow.py` (11), `tests/test_how_to_submit_generator.py` (11):
+477 passed, 2 skipped locally. The 8 failures + 1 collection error are all
+`ModuleNotFoundError: No module named 'torch'` (`test_metric`, `test_union_selection`,
+`test_ensemble::test_compact_window_subset_picks_contiguous_faulty_run`,
+`test_inference_adopted_shaping`) — `download.pytorch.org` is outside this sandbox's egress
+allowlist, and those tests run in CI's Tests workflow, which installs the CPU wheel.
+`scripts/audit_docs.py` PASS. `check_submission_readiness.py`: 9 gates, 8 PASS, 1 HUMAN.
+
+### Next steps, in order (for session 24)
+
+1. **Fire `.github/workflows/make-submission.yml` once from this branch** (push a commit touching
+   `.github/triggers/make-submission`, or `gh workflow run make-submission.yml -f route=adopted
+   -f package=both`). It has never executed; the 11 structure tests prove the YAML is well-formed
+   and honest, not that the runner agrees. Expect ~6–8 minutes, CPU-only, and the first file in
+   `data/evidence/make_submission/`. If `check_site_generator.py` FAILs on the runner, that is the
+   finding — the page would have been shipping an unverified generator.
+2. **Human: enrol, upload, first score** (unchanged, still the only unbiased signal — bar 0.2854 as
+   of the 2026-09-21 snapshot). Now unblocked in a new way: the file can be produced by the browser
+   on the published site, so the upload needs no environment.
+3. Then the quality queue from session 22, unchanged: 1 m DEM derivatives → GPU EfficientNet-B5 full
+   config → pseudo-label folds 1–3 so the pooled contrast crosses 12 units before the runner
+   artifacts expire (~2026-10-03).
+4. Optional, low cost: add a "Build it here" deep link from `index.html`; today the generator lives on
+   `how_to_submit.html` alone.
+
+### Blockers / access needed (unchanged, restated because it bounds item 2)
+
+❌ No DrivenData credentials in this sandbox: the data tab, the leaderboard and the submit dialog are
+login-gated, so the dialog's exact wording ("a single-band GeoTIFF (.tif), or a .zip containing a
+single GeoTIFF") is **transcribed by the team** and is flagged as irregularity 7 on
+`docs/submission.html`; the rules PDF §3.2 documents only the GeoTIFF form. No automated download and
+no automated upload is possible from here, and none is claimed.
 
 ## Session 22 (2026-09-22) — the union-selection signal is wired end to end into early stopping + ensemble weights, and item 7's pooled multi-fold contrast reader is built and disjointness-verified
 

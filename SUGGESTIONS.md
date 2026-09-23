@@ -598,3 +598,15 @@ five forward in its own queue above.
 8. **Human-only (unchanged):** DrivenData account + enrolment, first upload (3/week), eligibility
    check (§1.3), Pages source setting (legacy-vs-Actions race still open), generative-AI + code
    assets at the deadline.
+
+## Session 23 — suggestions implemented, and one for next time
+
+| # | Suggestion | Status |
+|---|---|---|
+| 1 | **Let the site produce the artifact, not just describe it.** The submit dialog wants a file; every previous route required a clone, Python and GDAL. | ✅ Implemented — `docs/geotiff_writer.js` + `docs/generate_submission.js` + `docs/submission_meta.json`/`submission_field.bin`, mounted as §3 of `docs/how_to_submit.html`. No dependency, no network, self-checked before download. |
+| 2 | **Give the CLI and CI the same exit condition as the page.** | ✅ `scripts/build_submission_payload.py --check/--verify`, `scripts/check_site_generator.py` (now gate 9 of the readiness check), `scripts/package_submission.py --check`, `.github/workflows/make-submission.yml` with a 100,000-byte stub guard. |
+| 3 | **A harness must be able to see the page's own state machine.** Unit tests on the writer passed while the glue still failed the first click. | ✅ `tests/support/generator_ui_harness.js` drives the real `generate_submission.js` against a shimmed DOM with Node's real `Blob`/`Response`/`CompressionStream`, in `tif`/`zip`/`broken` modes; the `broken` mode asserts the download is withheld. |
+| 4 | **Refuse to write rather than write and warn.** | ✅ The writer CLI exits 1 and leaves no `.tif`/`.zip` on disk when any check fails; the page never triggers the anchor click. |
+| 5 | **Render "stale" instead of pretending.** | ✅ `build_site.py` compares the manifest's pinned artifact hash with the artifact in the tree and prints `IN SYNC` / `STALE`; the generator section disappears (does not fake a green) when the payload files are absent. |
+| 6 | Run `make-submission.yml` once on a real runner and read its committed evidence. | ⏳ Open — the file has never executed; the 11 structure tests in `tests/test_make_submission_workflow.py` are not a substitute for one green run. Push a commit touching `.github/triggers/make-submission`, or `gh workflow run make-submission.yml -f route=adopted -f package=both`. |
+| 7 | Consider a "Build it here" link from the site root. | ⏳ Open, cosmetic — today the generator is reachable only from `how_to_submit.html`. |

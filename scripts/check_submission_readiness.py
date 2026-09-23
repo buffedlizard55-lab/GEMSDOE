@@ -24,8 +24,10 @@ CHECKS
   4. artifact format validated    - the committed validator log parsed for its PASSED line
   5. rules quotes verified        - data/evidence/rules_quotes.json counts + source sha256
   6. CPU baseline route           - data/evidence/baseline/baseline_report.json (the no-GPU path)
-  7. human steps remaining        - enroll / upload / read the leaderboard / pick the final entry
-  8. artifact candidates          - every committed raster that could be uploaded, with its hash
+  7. in-browser generator         - runs docs/geotiff_writer.js under node and judges its output,
+                                    via scripts/check_site_generator.py (the site can hand over a file)
+  8. human steps remaining        - enroll / upload / read the leaderboard / pick the final entry
+  9. artifact candidates          - every committed raster that could be uploaded, with its hash
 
 USAGE
     python scripts/check_submission_readiness.py                    # writes the evidence JSON
@@ -211,6 +213,48 @@ def check_baseline() -> dict:
 
 
 # ------------------------------------------------------------------ 7. human steps
+def check_generator(skip: bool) -> dict:
+    """Re-run scripts/check_site_generator.py rather than trusting its last committed report.
+
+    Why this is a gate at all: docs/how_to_submit.html offers a button that writes the GeoTIFF in
+    the reader's browser, so "the site can generate the file" is a claim the repository has to
+    measure. The generator check executes that exact JavaScript under node and judges the output
+    with rasterio plus the repository's own validator; ~10 s, and it fails if the shipped payload
+    drifts from the artifact.
+    """
+    src = "scripts/check_site_generator.py -> data/evidence/site_generator.json"
+    if skip:
+        ev = ROOT / "data/evidence/site_generator.json"
+        det = json.loads(ev.read_text()) if ev.exists() else {}
+        return _check("site_generator", "The site can generate the .tif itself (in-browser writer)",
+                      str(det.get("verdict", "SKIPPED")).upper() if det else "MISSING",
+                      dict(skipped=True, committed_verdict=det.get("verdict"),
+                           steps=len(det.get("steps") or [])), src,
+                      "re-check omitted by --skip-generator; the verdict shown is the last committed one")
+    proc = subprocess.run([sys.executable, "scripts/check_site_generator.py"], cwd=str(ROOT),
+                          capture_output=True, text=True)
+    ev = ROOT / "data/evidence/site_generator.json"
+    det = json.loads(ev.read_text()) if ev.exists() else {}
+    steps = det.get("steps") or []
+    passed = [s["name"] for s in steps if s["status"] == "PASS"]
+    failed = [s["name"] for s in steps if s["status"] == "FAIL"]
+    status = ("PASS" if proc.returncode == 0 and det.get("verdict") == "PASS" else
+              "MISSING" if proc.returncode == 2 or det.get("verdict") == "MISSING" else "FAIL")
+    return _check("site_generator", "The site can generate the .tif itself (in-browser writer)", status,
+                  dict(exit_code=proc.returncode, verdict=det.get("verdict"),
+                       node=(det.get("summary") or {}).get("node"),
+                       steps=len(steps), passed=passed, failed=failed,
+                       generated_utc=det.get("generated_utc"), seconds=det.get("seconds"),
+                       container_note=next((s["note"] for s in steps
+                                            if "NODATA" in s["name"]), None)),
+                  src,
+                  "" if status == "PASS" else
+                  ("no node in this environment - the browser route cannot be verified headlessly; "
+                   "the artifact route (curl) still works" if status == "MISSING"
+                   else "the shipped payload or the writer does not reproduce the artifact: "
+                        + "; ".join(failed[:3])))
+
+
 def check_human() -> dict:
     return _check("human_steps", "Steps only a person can complete", "HUMAN",
                   dict(steps=[dict(action=a, source=s) for a, s in HUMAN_STEPS]),
@@ -241,6 +285,8 @@ def main(argv=None) -> int:
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--out", default="data/evidence/submission_readiness.json")
     ap.add_argument("--skip-preflight", action="store_true")
+    ap.add_argument("--skip-generator", action="store_true",
+                    help="do not re-run the in-browser generator check; quote the last committed verdict")
     ap.add_argument("--print", dest="do_print", action="store_true")
     a = ap.parse_args(argv)
 
@@ -248,6 +294,7 @@ def main(argv=None) -> int:
     checks = [check_data_placed(ROOT / a.data_dir),
               check_preflight(ROOT / a.data_dir, a.skip_preflight),
               check_artifact(), check_validation(), check_rules(), check_baseline(),
+              check_generator(a.skip_generator),
               check_human(), check_candidates()]
     failing = [c["id"] for c in checks if c["status"] in ("FAIL",)]
     report = dict(
