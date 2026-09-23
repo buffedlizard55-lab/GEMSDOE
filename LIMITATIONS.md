@@ -606,3 +606,26 @@ can be done autonomously; each is listed in `SUGGESTIONS.md` §7.1 item 7.
 
 ## Session 19 (2026-09-19) — what the third population and the four-fold gap do and do not license
 
+
+## The browser generator: what it does not cover (added 2026-09-22)
+
+`docs/how_to_submit.html` §3 can now write the submission raster in the reader's own browser, and
+`data/evidence/site_generator.json` records that its bytes parse, validate and match the adopted
+artifact's float32 pixels exactly. Four limits stay true, and the page states each of them where the
+claim is made:
+
+1. **It ships one field, not any field.** `docs/submission_field.bin` is the run-length encoding of
+   the *adopted artifact's* prediction (`data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`),
+   and the codec is ternary by construction — 0.0, 1.0 and NaN only. A continuous field is refused
+   ("not binary"), not silently quantised, so generating *your* model's output in the browser needs
+   the payload rebuilt (`scripts/build_submission_payload.py --tif …`), which is a repository step.
+2. **Identical pixels, not identical bytes.** The artifact is 256×256 LZW-tiled; the page writes
+   64-row deflate strips (358,184 B vs 569,531 B). Scoring reads pixels, so this is cosmetic — but
+   "byte-identical" would be false, and the page does not say it.
+3. **No score, ever, from here.** The page cannot know the leaderboard's number: the score exists
+   only after a human enrols and uploads (`human_upload`, the one `HUMAN` gate of the 9).
+4. **The `.zip` half of the container rule is a transcription.** The dialog's wording — "a
+   single-band GeoTIFF (.tif) file, or a .zip file containing a single GeoTIFF" — was read by a
+   logged-in human; rules §3.2 documents only the GeoTIFF form. `drivendata.org` is not reachable
+   from the sandbox, so this cannot be re-verified here (irregularity 7 on `docs/submission.html`).
+   The `.tif` route is the one whose requirement is checkable from the repository alone.

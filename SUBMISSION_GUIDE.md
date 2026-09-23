@@ -101,6 +101,54 @@ For finalists, for chosen algorithm, must submit:
 9. Before deadline **Dec 3, 2026 11:59pm UTC**, select ONE submission as final for both prize rounds
 10. If finalist, prepare code + docs per template
 
+### 6a. Generating the file itself — three ways, one verdict (added 2026-09-22)
+
+Everything above says *what* the file must be. These are the ways to *make* it, and all three end at
+the same gate (`scripts/validate_submission.py` + `scripts/check_site_generator.py`).
+
+**1. In the browser, from the published site** — no clone, no install, no GPU.
+[`docs/how_to_submit.html` §3](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html)
+loads `docs/submission_meta.json` (grid, transform, EPSG, value pins) and `docs/submission_field.bin`
+(a 532,174-byte `gems-rle-v1` run-length encoding of the field, 259,549 runs) and writes the GeoTIFF
+locally with `docs/geotiff_writer.js`. Nothing is uploaded and no network call is made: the writer's
+17 self-checks run against the file it just parsed, and the download is withheld if any fails. The
+result is **pixel-identical** to the adopted artifact (float32 bits equal) — *not* byte-identical,
+because the artifact is 256×256 LZW-tiled and the page writes 64-row deflate strips; the page states
+this rather than hiding it.
+
+**2. From a clone, with one command** (same code, Node CLI):
+
+```bash
+python scripts/build_submission_payload.py --check       # the payload still describes the artifact
+node docs/geotiff_writer.js docs/submission_meta.json docs/submission_field.bin \
+     submission.tif submission.zip --rows-per-strip 64   # exits 1 and writes NOTHING if a check fails
+python scripts/validate_submission.py --pred submission.tif \
+       --sample data/sample_submission.tif --train data/training_features.tif
+```
+
+**3. On a CI runner, no login** — `.github/workflows/make-submission.yml`
+(`route=adopted|baseline|both`, `package=tif|zip|both`): places `data/` from the sha256-pinned git
+bridge, validates, rebuilds the payload if asked, runs the site generator check, packages the
+`.zip`, refuses any artifact under 100,000 bytes (the run-35042805806 stub bug), prints the sha256s
+and a paste-ready submit note, and commits only the measurement JSON to
+`data/evidence/make_submission/`.
+
+```bash
+gh workflow run make-submission.yml -f route=adopted -f package=both
+```
+
+**If you prefer to hand over the `.zip`** the dialog accepts (the dialog's wording, transcribed by
+the team; rules §3.2 documents only the GeoTIFF form — irregularity 7):
+
+```bash
+python scripts/package_submission.py --tif submission.tif --out submission.zip --json
+python scripts/package_submission.py --tif submission.tif --out submission.zip --check
+```
+
+`--check` re-extracts the member, reads it back through GDAL, and compares bytes; a second member, a
+recompressed member, or a member that differs by one bit fails the command. Packaging is verified to
+be deterministic by re-running it and comparing hashes.
+
 ## 7. Submission Format Validation (Our Implementation)
 
 `scripts/validate_submission.py` checks:

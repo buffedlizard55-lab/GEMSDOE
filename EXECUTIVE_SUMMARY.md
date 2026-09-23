@@ -33,7 +33,7 @@
 
 ## 0. TL;DR — Submit in 5 Commands (Fastest Verified Path, 2026-09-18)
 
-> **If you need a valid submission today, this is the fastest measured path — no training, no GPU, fully validated and ready to upload.** All commands below were re-executed in the sandbox on 2026-09-18 (see `data/evidence/data_placement.json` and `data/evidence/runs/ens12-adopted-floor0.1-w0/`).
+> **If you need a valid submission today, this is the fastest measured path — no training, no GPU, fully validated and ready to upload. There is now a shorter one for the file itself: the [How-to-submit page §3](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html#generate) writes the submission `.tif` (or the `.zip` the dialog also accepts) in the browser, with no clone, no install and no network call — the pixels it produces are the artifact's, verified bit for bit by `data/evidence/site_generator.json`.** All commands below were re-executed in the sandbox on 2026-09-18 (see `data/evidence/data_placement.json` and `data/evidence/runs/ens12-adopted-floor0.1-w0/`).
 
 ```bash
 git pull
