@@ -332,14 +332,21 @@ def test_generator_evidence_verdict_is_pass_when_it_exists():
 
 
 def test_the_files_the_page_loads_are_the_files_the_tests_run():
-    """One code path, not two: the page's <script> src list must resolve to files that exist here."""
+    """One code path, not two: the page must carry the very files the CLI and the harness execute.
+
+    It carries them *inline* rather than by URL — this repository's Pages build does not serve a newly
+    added `docs/*.js`, so a `src=` reference resolved from a clone but 404ed on the site. Inlining is
+    only equivalent if the bytes are the same, which tests/test_how_to_submit_generator.py
+    ::test_the_page_ships_exactly_the_code_the_tests_run checks against these files.
+    """
     assert WRITER.exists() and GLUE.exists() and HARNESS.exists()
     page = ROOT / "docs" / "how_to_submit.html"
     if not page.exists():
         pytest.skip("the site has not been generated in this checkout")
     html = page.read_text()
-    assert 'src="geotiff_writer.js"' in html, "the page no longer loads the writer it advertises"
-    assert 'src="generate_submission.js"' in html
+    assert 'data-inlined-from="geotiff_writer.js"' in html, "the page no longer carries the writer it advertises"
+    assert 'data-inlined-from="generate_submission.js"' in html
+    assert '<script src=' not in html, "a referenced script is not published by Pages; see the docstring"
     assert 'id="tif-generator"' in html
     meta_html = ROOT / "docs" / "submission_meta.json"
     assert meta_html.exists() and BLOB.exists()

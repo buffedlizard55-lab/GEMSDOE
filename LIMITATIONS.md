@@ -630,21 +630,26 @@ claim is made:
    from the sandbox, so this cannot be re-verified here (irregularity 7 on `docs/submission.html`).
    The `.tif` route is the one whose requirement is checkable from the repository alone.
 
-## What could not be verified about the *published* site (added 2026-09-22, session 23)
+## The published site does not serve every asset (measured 2026-09-23, session 23)
 
-The browser generator is verified **in this checkout** (the writer runs under node, rasterio agrees
-on the pixels, the repository validator passes the file, and route F re-ran all of it on a clean
-runner twice). What is *not* verified from here is one hop further out:
+GitHub Pages, as this repository is configured (legacy Jekyll build from the repo root), publishes
+`docs/*.html`, `docs/*.css`, `docs/*.json` and `docs/*.bin` — but **not** a newly added `docs/*.js`:
+`docs/geotiff_writer.js` returned GitHub's 404 page on the live site while its payload siblings beside
+it returned 200 with current content. So the generator carries its JavaScript **inline** in
+`docs/how_to_submit.html`, tagged with the sha256 of the file it was copied from. Two consequences:
 
-* **Serving of `docs/submission_field.bin` by GitHub Pages.** `github.com` is in this sandbox's
-  egress allowlist and `*.github.io` is not reachable from `bash` at all, so the only probe available
-  was the fetch proxy. It confirms `docs/submission_meta.json` is live (full manifest returned) and
-  `docs/style.css` carries the generator styles, i.e. the merged build is the one being served — but a
-  532 KB binary was not retrievable through that path, and the first `submission_meta.json` probe
-  returned a **cached 404** that a query-string cache-buster disproved. Treat any first `404` on a
-  just-pushed Pages asset as unproven. One `curl -I` by a person settles it; the glue's behaviour on
-  a failed fetch is a visible "the payload did not load" error, never a silent wrong file.
-* **The Pages *build* status, not just its commit.** `gh api repos/…/pages/builds` shows `built` for
-  the merge SHA, which is the check to run if the site looks stale after a merge.
+* the page's code cannot be cached or updated independently of the page, and every rebuild re-emits
+  ~44 KB of JS inside the HTML (the page is 78 KB, still small);
+* what is *tested* (the file, run under node) and what is *served* (the inlined copy) are equivalent
+  only because `tests/test_how_to_submit_generator.py::test_the_page_ships_exactly_the_code_the_tests_run`
+  compares them character for character. Re-separating the script tags makes that test fail, on purpose.
+
+Still unverifiable from the sandbox, in the same area:
+
+* **The Pages *build* status, not just its commit.** `gh api repos/…/pages/builds` showing `built` for
+  the merge SHA is the check to run if the site looks stale after a merge. And a **cached 404 is not a
+  finding**: the CDN served `docs/submission_meta.json` as 404 for several minutes after it was
+  published, and a `?cb=<random>` query returned the full file. Anything concluded about a just-pushed
+  asset needs the cache-buster.
 * **The submit dialog's wording**, unchanged from before: transcribed by a logged-in human, not
   fetchable here (rules §3.2 documents only the single-GeoTIFF form).

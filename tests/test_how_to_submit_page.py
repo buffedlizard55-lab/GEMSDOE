@@ -183,7 +183,11 @@ def test_no_repository_path_on_the_page_is_missing():
     mod = _site_mod()
     html = mod.build_how_to_submit(_full_ev())
     cited = set(re.findall(r"(?<![\w./-])((?:scripts|configs|docs|data)/[A-Za-z0-9_./-]+)", html))
-    missing = sorted(c for c in cited
+    # Prose ends sentences with a path ("… on `docs/how_to_submit.html`."), so a trailing punctuation
+    # mark is part of the sentence, not of the path. Stripping it here keeps the rule strict about
+    # *paths* while letting the page be written in English.
+    trimmed = {c.rstrip(".,;:)") for c in cited}
+    missing = sorted(c for c in trimmed
                      if not (ROOT / c).exists() and not c.endswith((".tif", ".csv")))
     assert not missing, f"the page cites paths that do not exist: {missing}"
     assert "scripts/baseline_submission.py" in cited

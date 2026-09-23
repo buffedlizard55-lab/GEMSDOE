@@ -3544,10 +3544,35 @@ def _deadline_from_catalog() -> dict:
     return {}
 
 
-GENERATOR_TAIL = (
-    '<script src="geotiff_writer.js"></script>\n'
-    '<script src="generate_submission.js" defer></script>\n'
-)
+GENERATOR_JS = ("geotiff_writer.js", "generate_submission.js")
+
+
+def _inline_js(rel: str) -> str:
+    """Ship the generator's JavaScript *inside* the page instead of referencing it.
+
+    Measured on the published site 2026-09-23: `/GEMSDOE/docs/submission_meta.json` and
+    `/GEMSDOE/docs/submission_field.bin` return 200 (and `style.css` carries the panel styles, so the
+    build being served is the current one), but `/GEMSDOE/docs/geotiff_writer.js` returns GitHub's
+    Pages 404 — even with a cache-busting query, and both under `/docs/` and at the site root. This
+    repository's Pages build therefore does not serve a newly added `.js` file, so `<script src=...>`
+    meant a generator that worked from a clone and died on the site: the one place it has to work.
+    The writer and the glue stay as files in `docs/` — `node docs/geotiff_writer.js` is the CLI the
+    tests run, and the DOM harness loads the real files — and the build refuses to emit a page whose
+    JS is missing rather than a page with a broken reference.
+    """
+    src = DOCS / rel
+    if not src.exists():
+        return ""
+    js = src.read_text(encoding="utf-8").replace("</script", "<\\/script")
+    digest = hashlib.sha256(src.read_bytes()).hexdigest()[:12]
+    return f'<script data-inlined-from="{rel}" data-sha256-12="{digest}">\n{js}\n</script>\n'
+
+
+def generator_tail() -> str:
+    """The two inline blocks, writer first (the glue calls into it); empty if either is absent, so a
+    partial checkout gets a page without the generator rather than one with a dead script tag."""
+    parts = [_inline_js(rel) for rel in GENERATOR_JS]
+    return "".join(parts) if all(parts) else ""
 
 
 def _generator_section(ev: dict) -> str:
@@ -3635,6 +3660,14 @@ artifact hashes to <code>{e(live[:16])}…</code> · both re-hashed at build tim
 <table><thead><tr><th>What the page ships for this</th><th>Bytes</th><th>sha256</th></tr></thead><tbody>
 {file_rows}
 </tbody></table>
+<p class="small">The two scripts run <b>inside this page</b> — they are inlined here, not fetched from a
+<code>.js</code> URL, because this site's build does not publish a newly added
+<code>docs/*.js</code> (measured: <code>submission_meta.json</code> and <code>submission_field.bin</code>
+next to them return 200 on the live site while <code>geotiff_writer.js</code> returns GitHub's 404). Each
+inline block carries the <code>sha256</code> of the file it was copied from, and
+<code>tests/test_how_to_submit_generator.py</code> fails if the page's copy differs by one character from
+the file <code>node</code> executes in the tests — so "works in CI, dead on the site" cannot happen
+quietly. View source to read the code you are running.</p>
 <p class="small">Payload: {enc.get("format", "?")} · {int(enc.get("n_runs") or 0):,} runs ·
 {int(blob.get("bytes") or 0):,} B (sha256 <code>{e(str(blob.get("sha256"))[:16])}…</code>) ·
 grid {int(grid.get("width") or 0):,} × {int(grid.get("height") or 0):,} · EPSG:{e(grid.get("epsg"))} ·
@@ -3976,7 +4009,7 @@ fold nothing touched, and the measurement <b>re-executed and diffed</b> inside t
 {e(str((base_c or {}).get("measured", {}).get("audit_max_delta", "?")))}).</td></tr>
 </tbody></table>
 """, "Executive summary › how to submit: the exact file, the exact commands, the exact clicks, and "
-     "the gates this checkout passes right now.", tail=GENERATOR_TAIL)
+     "the gates this checkout passes right now.", tail=generator_tail())
 
 
 def main(argv=None) -> int:

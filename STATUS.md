@@ -113,6 +113,37 @@ Two real bugs came out of reading that JSON rather than the green tick:
    INFO; the matching test re-derives the sample pins only when `data/` exists locally, instead of
    dying on a missing raster.
 
+### Probing the *published* site found the generator could not load — now it is inlined (same session)
+
+Deploying the merge let me fetch the live Pages site through the sandbox's only path to it (the fetch
+proxy — `*.github.io` is not reachable from `bash`). Results, all on `https://buffedlizard55-lab.github.io/GEMSDOE/`:
+
+| asset | live |
+|---|---|
+| `docs/how_to_submit.html` | 200, and `docs/style.css` carries the new `#tif-generator` rules → the deployed build is the merged one |
+| `docs/submission_meta.json` | 200, full manifest (after one **cached 404** that a `?cb=` query disproved) |
+| `docs/submission_field.bin` | 200, 532,174 B of real bytes, 52 chunks |
+| `docs/geotiff_writer.js` | **404** — GitHub's Pages 404 page, with a cache-buster, both under `/docs/` and at the site root |
+
+So the page's two `<script src="…js">` tags referenced files the deployment does not publish: the
+generator worked from a clone (where the tests run it) and did nothing on the site. That is the exact
+failure mode "verified locally, broken in production", and no local test could see it.
+
+Fix: `build_site.py` now **inlines both scripts** into `how_to_submit.html` (`_inline_js` /
+`generator_tail()`), each tagged `data-inlined-from` + `data-sha256-12`, and emits **no** `<script src>`
+at all — if a JS file is missing from a partial checkout the generator section is not shipped rather
+than shipped broken. Two new tests make the inlining honest:
+`test_the_page_ships_exactly_the_code_the_tests_run` (the inlined bytes must equal the file bytes
+character for character, and the page's own sha pin must match) and
+`test_a_page_with_no_js_on_disk_has_no_dead_script_reference`. `test_site_generator.py`'s
+"the page loads the writer it advertises" was rewritten to that contract.
+
+Side effects caught by the audit, both real: the glue's error hint contained a literal
+`http://127.0.0.1:8000/...` URL which, once inlined, became a plain-http link *on the page* (reworded;
+`audit_docs.py` went red and was right); and the page-citation test in `test_how_to_submit_page.py` was
+made to strip sentence punctuation from cited paths (`docs/how_to_submit.html.` ended a sentence)
+instead of demanding a file called `…html.`, while staying strict about paths.
+
 ### Next steps, in order (for session 24)
 
 1. ~~Fire `make-submission.yml` once~~ **done twice.** Run 35805300948 (after the `.rc` fix) came
@@ -120,13 +151,10 @@ Two real bugs came out of reading that JSON rather than the green tick:
    `zip_sha256 d20d2e9fa38bbb6b…` — the same archive bytes as run 35805002447 and as this sandbox's
    own packager, i.e. the container is reproducible across three executions on two machines.
    `data/evidence/make_submission/{35805002447,35805300948}.json` are the artifacts of that.
-   Still open for a human, because no tool here can reach the CDN: one `curl -I` on
-   `https://buffedlizard55-lab.github.io/GEMSDOE/docs/submission_field.bin` (expect `200`,
-   `content-length: 532174`). The `.json` twin was fetched and renders; a `404` on the `.bin` would
-   mean the browser generator degrades to its "payload did not load" message on Pages while working
-   from every clone. (Note for whoever checks: the Pages CDN serves freshly published assets with a
-   cached `404` for several minutes — a first `404` is not evidence. Add `?cb=<n>` and look again,
-   which is exactly how this was settled here.)
+   ~~Confirm Pages serves the two payload assets~~ **done**: both are 200 on the live site (the
+   `404`-then-`200` on the `.json` was the CDN caching a first miss — see the paragraph above, and
+   remember it before concluding anything from one probe). What the probe *did* find is that `.js`
+   is not published, which is why the generator's scripts are now inlined into the page.
 2. **Human: enrol, upload, first score** (unchanged, still the only unbiased signal — bar 0.2854 as
    of the 2026-09-21 snapshot). Now unblocked in a new way: the file can be produced by the browser
    on the published site, so the upload needs no environment.

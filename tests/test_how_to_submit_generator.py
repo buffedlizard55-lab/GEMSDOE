@@ -60,9 +60,63 @@ def test_the_generator_has_its_own_numbered_section_and_mount_point():
     h = mod.build_how_to_submit(_ev())
     assert '<h2 id="generate">3.' in h, "the generator lost its section (and its anchor)"
     assert 'id="tif-generator"' in h, "the mount point the glue looks for is gone"
-    assert 'src="geotiff_writer.js"' in h and 'src="generate_submission.js"' in h
-    # the writer must load BEFORE the glue that calls it
-    assert h.index("geotiff_writer.js") < h.index("generate_submission.js")
+    # The JS is INLINED, not referenced: this repository's Pages build does not serve a newly added
+    # docs/*.js (measured 2026-09-23 - the .json and .bin next to it return 200, the .js returns
+    # GitHub's 404), so <script src> would ship a generator that only works from a clone.
+    assert 'data-inlined-from="geotiff_writer.js"' in h
+    assert 'data-inlined-from="generate_submission.js"' in h
+    assert '<script src=' not in h, "a referenced script tag would 404 on the published site"
+    # the writer must come before the glue that calls it
+    assert h.index('data-inlined-from="geotiff_writer.js"') < h.index('data-inlined-from="generate_submission.js"')
+
+
+def _inlined(h: str, name: str):
+    m = re.search(r'<script data-inlined-from="' + re.escape(name) +
+                  r'" data-sha256-12="([0-9a-f]{12})">\n(.*?)\n</script>', h, re.S)
+    return (m.group(1), m.group(2).replace("<\\/script", "</script")) if m else (None, None)
+
+
+def test_the_page_ships_exactly_the_code_the_tests_run():
+    """Inlining is only honest if the inlined bytes ARE the file's bytes.
+
+    The Node CLI and the DOM harness execute `docs/geotiff_writer.js` and `docs/generate_submission.js`
+    from disk; a browser executes what the page carries. If those two ever differ, every green tick in
+    tests/test_site_generator.py describes a file nobody downloads. So the page pins each block's
+    sha256 (12 hex) AND this test compares the decoded block to the file, character for character.
+    """
+    import hashlib
+    mod = _mod()
+    h = mod.build_how_to_submit(_ev())
+    for name in ("geotiff_writer.js", "generate_submission.js"):
+        want = (ROOT / "docs" / name).read_text()
+        digest, got = _inlined(h, name)
+        assert got is not None, f"{name} is not inlined in the page"
+        assert got == want, f"the page's inlined {name} differs from the file the tests run"
+        assert digest == hashlib.sha256(want.encode()).hexdigest()[:12], \
+            f"the page's own sha pin for {name} is wrong"
+
+
+def test_a_page_with_no_js_on_disk_has_no_dead_script_reference():
+    """build_site must not emit `<script src=...>` for a file it could not inline."""
+    import shutil
+    import subprocess
+    tmp = ROOT / ".tmp-nofiles"
+    (tmp / "docs").mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(ROOT / "scripts" / "build_site.py", tmp / "scripts_build_site.py")
+        # the builder reads DOCS relative to its own ROOT; run it with an emptied docs dir instead
+        # by pointing it at a scratch tree through the module, not by mutating this checkout.
+        spec = importlib.util.spec_from_file_location("bs_scratch", ROOT / "scripts" / "build_site.py")
+        bs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bs)
+        saved = bs.DOCS
+        bs.DOCS = tmp / "docs"
+        try:
+            assert bs.generator_tail() == "", "a missing writer still produced a script block"
+        finally:
+            bs.DOCS = saved
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_routes_now_include_the_browser_and_the_workflow_and_stay_ordered():

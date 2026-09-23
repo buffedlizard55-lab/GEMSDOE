@@ -258,7 +258,7 @@
   if (typeof window.fetch !== 'function' || typeof window.GemsGeoTIFF !== 'object') {
     var why = typeof window.GemsGeoTIFF !== 'object'
       ? 'geotiff_writer.js did not load (open the page from the deployed site, or run ' +
-        '`python -m http.server` in docs/ and open http://127.0.0.1:8000/how_to_submit.html)'
+        '`python -m http.server` in docs/, then open that folder\'s how_to_submit.html on port 8000)'
       : 'this browser has no fetch(); use route A on the page instead';
     els.btnTif.disabled = els.btnZip.disabled = true;
     say('Generator unavailable: ' + why, 'bad');
