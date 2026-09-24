@@ -81,9 +81,9 @@ def compare_with_artifact(gen_path: Path, art_path: Path, sample_path: Path | No
     * the CONTAINER (grid, CRS, resolution, geotransform, dtype, NODATA) is judged against
       `sample_submission.tif`, the official format template, because the platform's sentence is
       "it must match the submission format's CRS, shape, and geotransform".  Judging the container
-      against the artifact would be wrong in one specific, measured way: the artifact carries no
-      NODATA tag at all while the template declares `nan` (see `container_note`), so a file equal
-      to the artifact in every declared tag would differ from the format the platform describes.
+      against the artifact would have been wrong while the artifact carried no NODATA tag at all
+      (true until the 2026-09-25 template conformance fix, see `container_note`); it is judged
+      against the template either way, so a future container drift is caught the same manner.
     """
     with rasterio.open(gen_path) as g:
         ga, prof = g.read(1), _profile(g)
@@ -105,7 +105,10 @@ def compare_with_artifact(gen_path: Path, art_path: Path, sample_path: Path | No
                one_px=int(np.count_nonzero(np.isfinite(ga) & (ga == 1.0))),
                nan_px=int(np.isnan(ga).sum()),
                container_note=(f"generated NODATA={prof['nodata']!r}, artifact NODATA="
-                               f"{art_prof['nodata']!r} (the artifact declares none)"))
+                               f"{art_prof['nodata']!r}"
+                               + (" (the artifact declares none)"
+                                  if art_prof["nodata"] is None else
+                                  " (matches the template since the 2026-09-25 conformance fix)")))
     if sample_path and Path(sample_path).exists():
         with rasterio.open(sample_path) as s:
             want = _profile(s)
@@ -237,8 +240,12 @@ def main(argv=None) -> int:
              dict(generated=s3_detail.get("measured", {}).get("nodata"),
                   artifact=s3_detail.get("artifact", {}).get("nodata"),
                   sample=(s3_detail.get("container_vs_sample") or {}).get("sample", {}).get("nodata")),
-             "rasterio profiles", "the generated file declares nan like the template; the "
-             "committed artifact declares no NODATA tag - a container difference, not a pixel one")
+             "rasterio profiles",
+             ("the generated file declares nan like the template; the committed artifact "
+              "declares no NODATA tag - a container difference, not a pixel one"
+              if s3_detail.get("artifact", {}).get("nodata") is None else
+              "generated, artifact and template all declare nan since the 2026-09-25 "
+              "template-conformance fix"))
 
         # ---- 4. the repository's own format gate ------------------------------------------
         def _s4():

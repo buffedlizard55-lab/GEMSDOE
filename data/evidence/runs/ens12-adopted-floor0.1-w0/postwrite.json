@@ -1,6 +1,6 @@
 {
  "path": "submission.tif",
- "bytes": 569531,
+ "bytes": 570890,
  "width": 3292,
  "height": 3730,
  "count": 1,
@@ -10,7 +10,8 @@
   100.0,
   100.0
  ],
- "nodata": null,
+ "nodata": "nan",
+ "nodata_label": "nan",
  "tiled": true,
  "block_shapes": [
   [
@@ -18,7 +19,7 @@
    256
   ]
  ],
- "finite_px": 5165852,
+ "finite_px": 5167373,
  "nonzero_px": 172974,
  "prob_mass": 172974.0,
  "min": 0.0,

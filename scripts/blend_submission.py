@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.metrics import (GtContext, compute_distance_weighted_tversky,        # noqa: E402
                          score_arrays_blocked)
 from src.submission_optim import optimize_submission, shaping_thresholds  # noqa: E402
-from src.submission_io import clean_profile, sha256_pixels, write_submission  # noqa: E402
+from src.submission_io import clean_profile, conform_to_template, sha256_pixels, write_submission  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -497,7 +497,9 @@ def main():
         with rasterio.open(args.sample) as src:
             sgrid = dict(width=src.width, height=src.height, crs=str(src.crs),
                          transform=list(src.transform), res=[float(src.res[0]), float(src.res[1])])
-            profile = clean_profile(src.profile.copy(), dtype="float32")
+            sref = src.read(1)
+            # nodata must survive: clean_profile's default would drop the template's "nan"
+            profile = clean_profile(src.profile.copy(), dtype="float32", nodata=src.nodata)
         if sgrid["width"] != grid["width"] or sgrid["height"] != grid["height"]:
             print(f"WARNING sample grid {sgrid['width']}x{sgrid['height']} != fold grid "
                   f"{grid['width']}x{grid['height']} — writing on the SAMPLE grid (crop/pad)")
@@ -505,10 +507,21 @@ def main():
             hh, ww = min(sgrid["height"], q.shape[0]), min(sgrid["width"], q.shape[1])
             buf[:hh, :ww] = q[:hh, :ww]
             q = buf
+        # Template conformance (added 2026-09-25 after a real platform rejection):
+        # NaN holes inside the sample's valid region are read by the platform as values
+        # outside [0, 1] ("Predicted values must be in range [0, 1]"), and finite px
+        # outside it violate "data outside the bounds is null or nan".  conform_to_template
+        # fixes both and reports the counts; scoring is unaffected (np.nan_to_num semantics).
+        q, conf = conform_to_template(q, sref)
+        if conf["filled_inside"] or conf["masked_outside"] or conf["clipped"]:
+            print(f"template conformance: filled {conf['filled_inside']} NaN px inside the "
+                  f"sample's valid region, masked {conf['masked_outside']} px outside it, "
+                  f"clipped {conf['clipped']} px to [0,1]")
     else:
         profile = clean_profile(None, dtype="float32", crs=grid["crs"],
                                 transform=rasterio.Affine(*grid["transform"]),
-                                height=q.shape[0], width=q.shape[1])
+                                height=q.shape[0], width=q.shape[1],
+                                nodata=float("nan"))
 
     # Optional: persist the pre-shaping ensemble mean.  Policy questions (floor, emission width,
     # thinning) can only be re-asked on the map shaping actually consumed; re-deriving it from the

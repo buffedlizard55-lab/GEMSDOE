@@ -134,6 +134,8 @@ jobs:
             --sample data/sample_submission.tif --train data/training_features.tif | tee out/validation.log || st=$?
           echo "$st" > out/validation.rc
           test "$st" -eq 0
+          # and the runner-side gate on this module's own contract (same invariant, JSON verdict)
+          python -m src.submission_io validate-conformant out/submission.tif
 
       - name: Route C - CPU-only classifier (trains on the official bands, no GPU, no torch)
         if: ${{ env.ROUTE == 'baseline' || env.ROUTE == 'both' }}
@@ -155,6 +157,7 @@ jobs:
             --sample data/sample_submission.tif --train data/training_features.tif | tee out/baseline_validation.log || st=$?
           echo "$st" > out/baseline_validation.rc
           test "$st" -eq 0
+          python -m src.submission_io validate-conformant out/baseline.tif
 
       - name: Site payload consistency (the in-browser generator on docs/how_to_submit.html)
         run: |
@@ -176,6 +179,13 @@ jobs:
           echo "$gs" > out/generator_check.rc
           cp -f data/evidence/site_generator.json out/site_generator.json
           test "$st" -eq 0 -a "$gs" -eq 0
+
+      - name: Rebuild the site pages (fresh sha + evidence so Pages never ships stale links)
+        run: |
+          set -euo pipefail
+          # Runs AFTER check_site_generator (previous step) so the pages embed this run's
+          # evidence, and BEFORE the measurement commit so docs/ ships in the same push.
+          python scripts/build_site.py | tail -4
 
       - name: Package the container the submit dialog accepts
         run: |
@@ -307,9 +317,9 @@ jobs:
           PY
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/evidence/make_submission data/evidence/site_generator.json || true
+          git add -f data/evidence/make_submission data/evidence/site_generator.json docs || true
           git diff --cached --quiet && echo "nothing to commit" || {
-            git commit -m "make-submission: run ${GITHUB_RUN_ID} evidence [skip ci]"
+            git commit -m "make-submission: run ${GITHUB_RUN_ID} evidence + site rebuild [skip ci]"
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
           }
 

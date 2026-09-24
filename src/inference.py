@@ -38,7 +38,7 @@ from .dataset import (apply_norm_stats, band_names, fit_norm_stats, load_feature
                       load_norm_stats, resolve_path, FEATURE_NAME_CANDIDATES, SAMPLE_NAME_CANDIDATES)
 from .models import get_model
 from .postprocess import postprocess_pipeline
-from .submission_io import clean_profile, write_submission
+from .submission_io import clean_profile, conform_to_template, write_submission
 
 
 def _gaussian_weight(p: int, sigma_frac: float = 0.25) -> np.ndarray:
@@ -332,11 +332,22 @@ def main():
     if sample:
         with rasterio.open(sample) as src:
             source_profile = src.profile.copy()
+            template = src.read(1)
+            sample_nodata = src.nodata
+        # Template conformance (2026-09-25): `final[~valid]` above NaNs the FEATURE
+        # footprint, which does not exactly equal the sample's valid region - NaN inside
+        # that region is what the platform rejects as "Predicted values must be in range
+        # [0, 1]".  Align to the template, keep its nodata tag, report what changed.
+        final, conf = conform_to_template(final, template)
+        if conf["filled_inside"] or conf["masked_outside"] or conf["clipped"]:
+            print(f"template conformance: filled {conf['filled_inside']} NaN px inside the "
+                  f"sample's valid region, masked {conf['masked_outside']} px outside it, "
+                  f"clipped {conf['clipped']} px to [0,1]")
         profile = clean_profile(source_profile, height=h, width=w, crs=crs, transform=tr,
-                                dtype="float32")
+                                dtype="float32", nodata=sample_nodata)
     else:
         profile = clean_profile(None, height=h, width=w, crs=crs, transform=tr,
-                                dtype="float32")
+                                dtype="float32", nodata=float("nan"))
     written = write_submission(
         args.out, final, profile,
         band_description="fault-presence probability (distance-weighted Tversky submission)",

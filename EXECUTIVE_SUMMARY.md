@@ -27,7 +27,7 @@
 | **Raster Data Type** | **Single-band 32-bit float (`float32`)** | Values in `[0.0, 1.0]` representing fault presence probability |
 | **NoData Mask** | **NaN / null** outside GeoDAWN survey footprint | **57.92% NaN**; finite values strictly inside valid survey area |
 | **Shipped Winning Policy** | **Floor 0.1, thin, width 0 px** | Pre-registered decision rule; Rank 1 of 132 candidates |
-| **Shipped Raster Artifact** | `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif` | sha256 `a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009` (569.5 KB) |
+| **Shipped Raster Artifact** | `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif` | sha256 `7f00890a62878d612fb5eef67a9a364a2df819433dde74b6762ce4fc0fc4fe15` (570.9 KB; conformed to the template mask 2026-09-25 — see `sanitize.json`) |
 
 ---
 
@@ -45,8 +45,8 @@ python scripts/validate_submission.py --pred data/evidence/runs/ens12-adopted-fl
 
 **Pre-computed, validated submission artifact (11-fold ensemble, adopted winning policy `floor 0.1, thin, width 0 px` — rank 1 of 132):**
 - **Path:** `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`
-- **sha256:** `a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009` (569,531 bytes)
-- **Format:** 3292×3730, single-band float32, EPSG:32611, 100 m, NaN outside GeoDAWN footprint (57.93%), values in [0,1]
+- **sha256:** `7f00890a62878d612fb5eef67a9a364a2df819433dde74b6762ce4fc0fc4fe15` (570,890 bytes)
+- **Format:** 3292×3730, single-band float32, EPSG:32611, 100 m, NaN outside GeoDAWN footprint (57.92%), values in [0,1], finite on **every** pixel of the sample submission's valid region (template conformance, enforced by `scripts/validate_submission.py` since 2026-09-25)
 
 **Then on DrivenData (requires account + enrollment):**
 1. Go to **https://www.drivendata.org/competitions/306/competition-doe-gems/submissions/** → **Make new submission** → upload the `.tif`
@@ -175,8 +175,8 @@ python scripts/prepare_data.py
 #### Route A: Use the Pre-Computed Winning Ensemble Raster (Fastest & Fully Verified)
 The repository contains an already generated, 11-fold ensemble mean submission with the adopted policy applied:
 - **Path:** `data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`
-- **sha256:** `a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009`
-- **Size:** 569,531 bytes
+- **sha256:** `7f00890a62878d612fb5eef67a9a364a2df819433dde74b6762ce4fc0fc4fe15`
+- **Size:** 570,890 bytes
 - **Status:** Format verified, ready for immediate upload.
 
 #### Route B: Run Local Pipeline Inference
@@ -299,6 +299,7 @@ The same files appear under different names on different official pages (flagged
 | **Training-induced threshold (t0≈0.47) on known faults** | Collapses to DTI 0.0247 on new-fault proxy (in-domain trap) | Adopted policy `floor 0.1, thin, w=0` measured +0.1118 over shipped on proxy, reproduced on 3 ensembles | `data/evidence/emission_decision.json` |
 | **Silently corrupted TIFF (110-byte stub)** | Workflow reported success, submission empty (run 35042805806) | `src/submission_io.py` read-back verifier + `pipefail` + 10 KB + non-empty guard; `FAILED.json` on failure | `tests/test_submission_writer.py` |
 | **Data not placed (empty data/)** | `prepare_data.py` fails, training cannot start | `data/bridge/` → `assemble_data_bridge.py` (sha256 pinned, tamper-refused, regression-tested) | `data/evidence/data_placement.json` (2026-09-17) + re-verified 2026-09-18 |
+| **Platform rejects with "Predicted values must be in range [0, 1]"** | Every finite value is in [0, 1] but NaN sits *inside* the sample submission's valid (scored) region — 3,061 px did, in the file rejected on 2026-09-24 | `src/submission_io.conform_to_template` aligns every written field to the template mask (finite inside / NaN outside / nodata=nan); `scripts/validate_submission.py` now fails any file with a non-finite pixel inside the valid region; check a candidate with `python scripts/sanitize_submission.py --pred FILE` (exit 1 = not conformant) | `data/evidence/runs/ens12-adopted-floor0.1-w0/sanitize.json` (before/after hashes) + `tests/test_template_conformance.py` |
 | **Forgetting GenAI disclosure** | Finalist verification risk (§3.2) | Template provided (§3 above); must be pasted into narrative | Rules PDF §3.2 verbatim |
 
 ## 8d. Data Placement — The Single Former Blocker, Now Resolved (2026-09-17)

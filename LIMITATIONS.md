@@ -620,7 +620,7 @@ claim is made:
    ("not binary"), not silently quantised, so generating *your* model's output in the browser needs
    the payload rebuilt (`scripts/build_submission_payload.py --tif …`), which is a repository step.
 2. **Identical pixels, not identical bytes.** The artifact is 256×256 LZW-tiled; the page writes
-   64-row deflate strips (358,184 B vs 569,531 B). Scoring reads pixels, so this is cosmetic — but
+   64-row deflate strips (358,332 B vs 570,890 B). Scoring reads pixels, so this is cosmetic — but
    "byte-identical" would be false, and the page does not say it.
 3. **No score, ever, from here.** The page cannot know the leaderboard's number: the score exists
    only after a human enrols and uploads (`human_upload`, the one `HUMAN` gate of the 9).

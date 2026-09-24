@@ -160,7 +160,9 @@ def test_the_page_renders_the_committed_validator_output_and_the_rules_quotes():
         rows, passed = mod._validation_rows(log.read_text())
         assert passed is True, "the committed log must be a PASS log for this artifact"
         for state, text in rows:
-            assert text in html, f"validator check {text!r} is not rendered"
+            # the page renders rows through e() (html.escape), so the raw log text with an
+            # apostrophe or quote only appears in its escaped form
+            assert mod.e(text) in html, f"validator check {text!r} is not rendered"
         assert "Validation PASSED" in html
     by_id = {q["id"]: q for q in ev["rules_quotes"]["quotes"]}
     for qid in QUOTE_IDS:

@@ -371,8 +371,11 @@ def build_executive_summary(ev: dict) -> str:
     shipped_path = "data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif"
     nextsteps_bar = (f"the public best was <b>{top_lb_dti:.4f}</b> ({lb_n} ranked entrants) "
                      f"when this file last read it ({lb_utc})")
-    shipped_sha = "a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009"
-    shipped_bytes = 569531
+    # measured at build time from the committed bytes (a typed hash here went stale the moment
+    # the artifact was conformed to the template on 2026-09-25 - see _sha_bytes)
+    _art = _sha_bytes(shipped_path)
+    shipped_sha = _art.get("sha256") or "artifact-not-committed"
+    shipped_bytes = int(_art.get("bytes") or 0)
 
     cand_policy = best_cand.get("policy", "sweep_best_t0_0.1_width0px")
     cand_dti = best_cand.get("measured_dti", 0.136452)
@@ -387,7 +390,8 @@ def build_executive_summary(ev: dict) -> str:
         ("Official Deadline", "<b>Dec 3, 2026</b>",
          "platform close 11:59 PM UTC · §A.1 form due 5:00 PM ET (22:00 UTC) the same day — act on the earlier"),
         ("Recommended Policy", "<b>Floor 0.1 / thin / w=0</b>", f"Rank 1 of 132 candidates · +{cand_contrast:.4f} contrast"),
-        ("Shipped Submission", "<b>569.5 KB GeoTIFF</b>", "11-fold ensemble mean · sha256 a3dcd6d5…"),
+        ("Shipped Submission", f"<b>{shipped_bytes/1000:.1f} KB GeoTIFF</b>",
+         f"11-fold ensemble mean · sha256 {shipped_sha[:8]}…"),
     ]
     grid = "".join(
         f'<div class="stat"><div class="k">{e(k)}</div><div class="v">{v}</div>'
@@ -407,7 +411,7 @@ python scripts/assemble_data_bridge.py   # re-verify &amp; place 418 MB feature 
 python scripts/prepare_data.py           # PASS: 3292×3730, 19 bands, EPSG:32611, 100 m
 python scripts/validate_submission.py --pred data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif --sample data/sample_submission.tif --train data/training_features.tif
 # → ✅ Validation PASSED — upload data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif at https://www.drivendata.org/competitions/306/competition-doe-gems/submissions/</code></pre>
-<strong>Artifact:</strong> <code>data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif</code> — 569.5 KB, sha256 <code>a3dcd6d5…</code>, 11-fold ensemble mean with adopted policy <code>floor 0.1, thin, width 0 px</code> (rank 1 of 132).<br>
+<strong>Artifact:</strong> <code>data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif</code> — {shipped_bytes/1000:.1f} KB, sha256 <code>{shipped_sha[:8]}…</code>, 11-fold ensemble mean with adopted policy <code>floor 0.1, thin, width 0 px</code> (rank 1 of 132).<br>
 <strong>Then:</strong> paste the Generative AI disclosure (§3.2) into the submission narrative, and before <strong>Dec 3, 2026 11:59 PM UTC</strong> select this as your single final submission (3/week limit). <a href="#generate-here">Or skip the commands entirely:</a> the generator <b>directly below</b> writes this exact file in your browser, with nothing installed — no Python, no GPU, no download of the 418 MB feature stack — and refuses to hand it over unless its own re-read of the bytes matches every pinned check. <a href="how_to_submit.html">The full subpage</a> lists six routes to the file, their costs, and the gates this checkout passes.</div>
 """)
     out.append(_submission_builder(ev))
@@ -615,7 +619,7 @@ Generative AI assistance (LLM agent workflows) was utilized during the developme
 
 <div class="note ok">
   <strong>Fastest Route to Submit:</strong> The repository includes a pre-computed, fully validated submission raster that applies the adopted winning policy to the 11-fold ensemble mean:
-  <code>data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif</code> (sha256: <code>a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009</code>, 569,531 bytes). It is verified and ready for immediate upload to DrivenData.
+  <code>data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif</code> (sha256: <code>{shipped_sha}</code>, {shipped_bytes:,} bytes). It is verified and ready for immediate upload to DrivenData — its template conformance (finite inside the sample's valid region, NaN outside, GDAL_NODATA=nan) is enforced by <code>scripts/validate_submission.py</code> and was added 2026-09-25 after the platform rejected a pre-fix file with "Predicted values must be in range [0, 1]".
 </div>
 
 <p>To generate, validate, and submit from scratch, follow these exact steps:</p>
@@ -2499,6 +2503,19 @@ smoke test that scored <em>below</em> the trivial blanket-coverage baseline, whi
 a negative result rather than dressed up. And every DTI on this page is computed against the
 <em>known</em> catalogue, which is not the scored universe (see <a href="metric.html">Metric</a>).''')}"""]
 
+    _cur = _sha_bytes(SHIPPED_SUBMISSION)
+    if _cur.get("exists"):
+        body.append(
+            note("ok",
+                 f"<b>Current shipped bytes, measured at build time:</b> "
+                 f"<code>{e(_cur['path'])}</code> — {fmt_bytes(_cur['bytes'])}, "
+                 f"sha256 <span class='mono small'>{e(_cur['sha256'])}</span>. "
+                 "The run tables below are <i>historical records</i> of what each run wrote "
+                 "<i>then</i>: the 2026-09-25 template-conformance sanitation re-wrote the "
+                 "shipped file, so pre-fix blend hashes no longer match it (the pixels it "
+                 "scored on are unchanged — see <a href='how_to_submit.html#rejection'>"
+                 "How to submit &sect;6b</a>)."))
+
     if runs:
         for r in runs:
             s = r.get("summary", {})
@@ -3121,6 +3138,13 @@ def build_submission(ev: dict) -> str:
     blend = load(ROOT / f"{SHIPPED_EVIDENCE_DIR}/blend_report.json") or {}
     usable = _read(f"{SHIPPED_EVIDENCE_DIR}/usable_folds.txt")
     placement = ev.get("placement") or {}
+    pf = ev.get("site_payload") or {}
+    pgrid = pf.get("grid") or {}
+    pblob_b = int((pf.get("blob") or {}).get("bytes") or 0)
+    pbuf_b = int(pgrid.get("width") or 0) * int(pgrid.get("height") or 0) * 4
+    sgen = ev.get("site_generator") or {}
+    sgen_verdict = str(sgen.get("verdict") or "NOT RUN HERE")
+    sgen_steps = len(sgen.get("steps") or [])
     bs = ev.get("block_stratified") or {}
     fg = ev.get("fold_gaps") or {}
     pc = ev.get("pseudo_contrast") or {}
@@ -3277,14 +3301,14 @@ ensemble ships. Current committed verdict:
 <p><a href="how_to_submit.html#generate">docs/how_to_submit.html §3</a> carries a generator that
 runs entirely in the reader's browser. <code>scripts/build_submission_payload.py</code> measured the
 artifact and wrote its pixel field into this site as a run-length stream
-(<code>docs/submission_field.bin</code>, 532,174 B for a 49,116,640 B float32 buffer);
+(<code>docs/submission_field.bin</code>, {pblob_b:,} B for a {pbuf_b:,} B float32 buffer);
 <code>docs/geotiff_writer.js</code> rebuilds a single-band float32 GeoTIFF on the grid the platform
 asks for, then re-reads its own bytes and refuses to hand over a download unless every pinned check
 agrees — and the command-line twin of it writes nothing at all when a check fails, so a refused
 build cannot be picked up later by mistake.</p>
 <p class="small">A browser cannot be driven by CI, so the same JavaScript is executed headlessly under
 node and judged by rasterio plus <code>scripts/validate_submission.py</code>:
-<code>data/evidence/site_generator.json</code> (verdict <b>PASS</b>, 10 measured steps).
+<code>data/evidence/site_generator.json</code> (verdict <b>{e(sgen_verdict)}</b>, {sgen_steps} measured steps).
 <code>tests/test_site_generator.py</code> re-runs it in every container the writer can emit (deflate
 and uncompressed strips, one-row strips, a single strip for the whole grid), because a raster proven
 only in the shape it was authored in is not proven.</p>
@@ -3764,7 +3788,10 @@ def _submission_builder(ev: dict) -> str:
         f'GeoTIFF locally with <code>docs/geotiff_writer.js</code>, <b>re-reads its own bytes</b> '
         f'against the pinned pixels, and offers the download only when every self-check passes. No '
         f'install, no GPU, no download of the 418 MB feature stack, and nothing is uploaded — the '
-        f'file appears in your Downloads folder. {pill_html} <span class="small">payload pins '
+        f'file appears in your Downloads folder, under a <b>name unique to that build</b> '
+        f'(<code>gems-submission-&lt;UTC instant&gt;-&lt;artifact sha8&gt;.tif</code>), with a '
+        f'suggested short <b>Note</b> to paste into the dialog beside it — the comment that tells '
+        f'your team\'s submissions apart later. {pill_html} <span class="small">payload pins '
         f'<code>{e(f["pinned"][:16])}&hellip;</code> &middot; this checkout\'s artifact hashes to '
         f'<code>{e(f["live"][:16])}&hellip;</code> &middot; both re-hashed at build time</span></p>'
     )
@@ -3777,7 +3804,12 @@ def _submission_builder(ev: dict) -> str:
         f'<code>{e(SHIPPED_SUBMISSION)}</code> in a container your browser wrote, so it passes the '
         f'format gate and it is the same field whose surrogate scores are on '
         f'<a href="results.html">results</a>; only the platform\'s hidden new-fault labels can '
-        f'score it. The full recipe — six routes to the same file, the validation gate, the '
+        f'score it. <b>If the platform answers <code>Predicted values must be in range [0, 1]</code>:</b> '
+        f'that means NaN sat inside the template\'s valid (scored) region — this payload is conformed '
+        f'to the official template (finite inside it, NaN outside it, <code>GDAL_NODATA=nan</code>), '
+        f'the conformance is enforced by <code>scripts/validate_submission.py</code> since '
+        f'2026-09-25, and <a href="how_to_submit.html#rejection">how to submit §6</a> explains it. '
+        f'The full recipe — six routes to the same file, the validation gate, the '
         f'click-by-click upload, and the rules sentences that bind it: '
         f'<a href="how_to_submit.html">How to submit</a> (this panel is that page\'s &sect;3, and '
         f'its claims table names the evidence behind every number). Shipped with the page: '
@@ -3949,7 +3981,12 @@ def build_how_to_submit(ev: dict) -> str:
          "containing a single GeoTIFF\" - is transcribed by the team from the logged-in page and is "
          "<b>not</b> verifiable from this sandbox; rules \u00a73.2 states the single-GeoTIFF form, so "
          "the .tif is the container whose requirement can be checked from here. The platform "
-         "validates the format on receipt and returns either a score or a format error.",
+         "validates the format on receipt and returns either a score or a format error. "
+         "<b>Use the Note field</b> (optional but worth using): a short comment such as the one "
+         "the builder above suggests — policy + build sha8 + UTC instant — is how you or your "
+         "team tell submissions apart later, exactly like \"clustering with k=25\" identifies an "
+         "experiment. The file the builder downloads is already named uniquely per build "
+         "(<code>gems-submission-&lt;UTC instant&gt;-&lt;sha8&gt;.tif</code>).",
          "single_geotiff"),
         ("Read the returned score", scores_note, None),
         ("Keep exactly one entry",
@@ -4043,6 +4080,9 @@ interchangeable — and the packager is re-packaged once to show it is determini
 
 <h2 id="upload">6. Uploading, click by click</h2>
 <ol>{step_html}</ol>
+
+<h3 id="rejection">6b. If the platform rejects the file: &quot;Predicted values must be in range [0, 1]&quot;</h3>
+<div class="note warn"><b>The error, its one real cause, and the fix.</b> On 2026-09-24 a file generated from this project's own site was rejected by the submit dialog with the platform's exact words: <code>Predicted values must be in range [0, 1]</code>. Every <i>finite</i> value of that file was in [0, 1]; what was wrong was the placement of NaN &mdash; <b>3,061 px inside the official sample submission's valid region</b> (which is exactly the labels raster's valid mask, i.e. the region the platform scores) were NaN, and NaN is not in [0, 1]. The same file also carried 1,540 finite px outside that region where the template is NaN, and no <code>GDAL_NODATA</code> tag while the template declares <code>nan</code>. <b>Fix (applied and pinned):</b> <code>src/submission_io.conform_to_template</code> aligns any field to the template&rsquo;s mask (finite inside, NaN outside, clip to [0, 1], nodata=nan); the shipped artifact was conformed on 2026-09-25 (before/after hashes in <code>data/evidence/runs/ens12-adopted-floor0.1-w0/sanitize.json</code>), every write route (blend, inference) now conforms before writing, and <code>scripts/validate_submission.py</code> fails any file with a non-finite px inside the template&rsquo;s valid region or a mismatched nodata tag &mdash; the check whose absence let this through. Files from the builder above or route A are conformant; re-check any candidate with <code>python scripts/sanitize_submission.py --pred FILE</code> (exit 1 = not conformant).</div>
 
 <h2 id="after">7. After the upload</h2>
 <ul>
