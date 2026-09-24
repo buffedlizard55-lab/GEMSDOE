@@ -238,6 +238,8 @@ def test_glue_suggests_unique_name_and_note():
 
 
 # ------------------------------------------------------- the runner-side gate (cli_validate)
+@pytest.mark.skipif(not (SAMPLE.exists() and SHIPPED.exists()),
+                   reason="competition data not placed (scripts/assemble_data_bridge.py)")
 def test_runner_gate_accepts_the_shipped_artifact(capsys):
     assert cli_validate(["validate-conformant", str(SHIPPED)]) == 0
     out = json.loads(capsys.readouterr().out)
