@@ -137,7 +137,14 @@ def test_the_committed_artifact_packages_and_verifies(tmp_path):
     assert isinstance(seen, dict), seen
     assert seen["epsg"] == 32611 and seen["count"] == 1 and seen["dtype"] == "float32"
     assert seen["width"] == 3292 and seen["height"] == 3730
-    assert rep["member_sha256"] == "a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009"
+    # the invariant: the zip's member IS the artifact's bytes - re-hashed here, never typed
+    # (the artifact was conformed to the template on 2026-09-25; a typed pin would rot)
+    import hashlib
+    want = hashlib.sha256(ARTIFACT.read_bytes()).hexdigest()
+    assert rep["member_sha256"] == want
+    sidecar = ARTIFACT.with_name("submission.sha256")
+    if sidecar.exists():
+        assert sidecar.read_text().split()[0] == want, "sidecar must match the artifact"
 
 
 @pytest.mark.skipif(not (ROOT / "docs" / "geotiff_writer.js").exists(), reason="writer not built")

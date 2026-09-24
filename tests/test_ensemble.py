@@ -65,10 +65,13 @@ def test_inference_uses_the_fail_loud_submission_writer():
     cannot recreate the 110-byte stub failure.
     """
     src = (ROOT / "src" / "inference.py").read_text()
-    assert "from .submission_io import clean_profile, write_submission" in src
+    # the import line also carries conform_to_template since the 2026-09-25 template
+    # conformance fix; both names must still come from the fail-loud writer module
+    assert "from .submission_io import clean_profile, conform_to_template, write_submission" in src
     assert "write_submission(" in src
     assert 'TILED="YES"' not in src
     assert "clean_profile(source_profile" in src
+    assert "conform_to_template(final, template)" in src
 
 
 # --------------------------------------------------------------------------- 3
@@ -103,7 +106,12 @@ def test_blend_end_to_end(tmp_path):
         (fd / "manifest.json").write_text(json.dumps({"models": [{"file": f"m{fi}.pt", "dti": 0.5}]}))
         folds.append(str(fd))
 
-    _write_tif(tmp_path / "sample.tif", np.zeros((H, W), np.float32))
+    # the sample's validity mask is what wins (2026-09-25 template conformance): a hole
+    # INSIDE it is filled - NaN there is what the platform rejects with "Predicted values
+    # must be in range [0, 1]" - and finite pixels OUTSIDE it are masked to NaN.
+    sample_arr = np.zeros((H, W), np.float32)
+    sample_arr[:2, -2:] = np.nan                 # template says: outside the valid region
+    _write_tif(tmp_path / "sample.tif", sample_arr)
     _write_tif(tmp_path / "labels.tif", gt)
 
     cfg = tmp_path / "cfg.yaml"
@@ -124,7 +132,11 @@ metric: {R_meters: 300, resolution_m: 100, alpha: 0.2, beta: 0.8, epsilon: 1.0e-
         q = src.read(1)
         assert q.shape == (H, W)
         assert src.count == 1 and src.dtypes[0] == "float32" and src.crs.to_epsg() == 32611
-    assert np.isnan(q[:4, :4]).all(), "NaN footprint must be preserved through the blend"
+    assert np.isfinite(q[:4, :4]).all(), \
+        "a hole inside the template's valid region must be filled (platform rejects NaN there)"
+    assert (q[:4, :4] == 0).all(), "the filled hole is 0.0 - no data, no predicted fault"
+    assert np.isnan(q[:2, -2:]).all(), \
+        "pixels outside the template's valid region must be NaN (spec: null or nan outside)"
     fin = q[np.isfinite(q)]
     assert (fin >= 0).all() and (fin <= 1).all()
     assert fin.max() == 1.0 and (fin > 0).sum() > 0            # shaped hard map fires somewhere

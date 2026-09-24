@@ -1,15 +1,15 @@
 {
  "artifact": {
-  "bytes": 569531,
+  "bytes": 570890,
   "hash_matches": true,
   "path": "data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif",
   "recorded_in": "data/evidence/runs/ens12-adopted-floor0.1-w0/submission.sha256",
-  "recorded_sha256": "a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009",
-  "sha256": "a3dcd6d51303f312fd3e13667a1890d8eeab0752483432ddd46bc74231168009"
+  "recorded_sha256": "7f00890a62878d612fb5eef67a9a364a2df819433dde74b6762ce4fc0fc4fe15",
+  "sha256": "7f00890a62878d612fb5eef67a9a364a2df819433dde74b6762ce4fc0fc4fe15"
  },
  "blob": {
-  "bytes": 532174,
-  "sha256": "9032e91a269a636c3fd8dc5e0b45312eb54be776498a1808ff55ccda010cb97b"
+  "bytes": 532072,
+  "sha256": "b966d47c7c02b1c2de0d06553363bc8cccd887c697f760e63f49db9fd99a0351"
  },
  "checks": {
   "sample_submission": {
@@ -33,13 +33,13 @@
    "transform_matches": true
   },
   "validation": {
-   "lines": 14,
-   "log_sha256": "49d9aa5e2ccf7bf300ac44a72d8a114d0c0b3f357757f7608f88af6e203c859e",
+   "lines": 17,
+   "log_sha256": "a2030f9a785c80d61679f4a3899c1aae11c99f8c6353a3fb9f8a254ce39eda6d",
    "passed": true
   }
  },
  "encoding": {
-  "bytes": 532174,
+  "bytes": 532072,
   "codes": {
    "0": "float32 0.0",
    "1": "float32 1.0",
@@ -49,19 +49,19 @@
   "file": "docs/submission_field.bin",
   "format": "gems-rle-v1",
   "layout": "row-major runs: uleb128(length), u8(code)",
-  "n_runs": 259549
+  "n_runs": 259495
  },
  "field": {
   "float32_bytes": 49116640,
-  "float32_sha256": "c3e64c9cdcf8bbef5016d4828a09f9f67d76da7e9d7932dde84d9bb911f34e4c",
+  "float32_sha256": "cb2d2d5e0fedd3c8d0254e8df4c88c3b4c611c6e4223ddaac0e26229d8298500",
   "max": 1.0,
   "min": 0.0,
-  "nan_px": 7113308,
+  "nan_px": 7111787,
   "one_px": 172974,
   "pixels": 12279160,
-  "zero_px": 4992878
+  "zero_px": 4994399
  },
- "generated_utc": "2026-09-23T01:14:31Z",
+ "generated_utc": "2026-09-24T21:48:20Z",
  "generator": "scripts/build_submission_payload.py",
  "grid": {
   "band_description": "fault-presence probability (GEMSDOE MC ensemble, shaped)",
@@ -87,7 +87,7 @@
    "source": "GEMSDOE train-ensemble workflow"
   },
   "height": 3730,
-  "nodata": null,
+  "nodata": "nan",
   "origin": [
    243350.0,
    4508550.0

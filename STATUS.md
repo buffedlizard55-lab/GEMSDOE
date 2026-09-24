@@ -1,4 +1,64 @@
-# Project status — 2026-09-24 (sessions 11–24)
+# Project status — 2026-09-24/25 (sessions 11–25)
+
+## Session 25 (2026-09-24/25) — "Predicted values must be in range [0, 1]": root-caused, fixed at the writers, gated in the validator, and the site now hands over a unique name + Note
+
+The platform rejected a real upload of the shipped artifact with exactly one sentence —
+`Predicted values must be in range [0, 1]` — while every value in the file *was* in [0, 1].
+Root cause, measured on the bytes (`data/evidence/runs/ens12-adopted-floor0.1-w0/sanitize.json`):
+**3,061 NaN pixels sat inside the sample submission's valid (scored) region** and 1,540 finite
+pixels sat where the template is NaN; the independent community validator
+(`Gameassassin777/gems-eval` → `gems_eval/validate.py`) and a second team's README both require
+*finite values in [0,1] inside the valid region, NaN outside* — the platform applies the same rule
+and reports it as a range error. Everything below was executed, not planned:
+
+1. **The shipped artifact is now template-conformant.** `scripts/sanitize_submission.py` (new;
+   dry-run/`--write`/`--json`, before+after sha256) filled the 3,061 / masked the 1,540 / clipped 0
+   / left 12,274,559 untouched; GDAL_NODATA `None` → `nan` to match the template. New bytes:
+   sha256 `7f00890a62878d612fb5eef67a9a364a2df819433dde74b6762ce4fc0fc4fe15`, **570,890 B**
+   (finite 5,167,373 / nonzero 172,974 — the nonzero support is unchanged, so every score the
+   policy ever measured is unchanged; sanitation is neutral under the scorer, which maps
+   NaN→0.0). The sidecar, `validation.log`, `postwrite.json` and `sanitize.json` were refreshed.
+2. **The validator is the gate, not a one-off cleanup.** `scripts/validate_submission.py` gained
+   checks 16–17: **FAIL** on any non-finite pixel inside the sample's valid region (the exact
+   platform rejection) and **FAIL** on any finite pixel outside it; the runner-side gate
+   (`src/submission_io.py:cli_validate`) enforces the same invariant on CI and in
+   `make-submission.yml`.
+3. **`conform_to_template()` lives in `src/submission_io.py`** and every writer now calls it:
+   the ensembling/blend path conforms the blended field (fills holes the blend left, masks what
+   the template masks), and `src/inference.py` conforms `final` before the read-back verifier
+   sees it — the next artifact any run writes is conformant by construction. CLI:
+   `python -m src.submission_io validate-conformant FILE` (exit 1 + count when non-conformant).
+4. **The payload regenerated.** `docs/submission_meta.json` (22,366 B, strict JSON — `NaN` is not
+   JSON, the writer emits the string `"nan"` like the template) + `docs/submission_field.bin`
+   (532,072 B / 259,495 runs) now reproduce the sanitized bytes; `build_submission_payload.py
+   --check` exits 0 and `scripts/check_site_generator.py` is again **PASS** (8 PASS + 2 INFO of
+   10 measured steps, node v22.22.3, "pixels are the artifact's", no NODATA-tag caveat anymore — artifact and
+   generated file both declare `nan`).
+5. **The site answers the rejection.** `how_to_submit` §6 grew **§6b "If the platform rejects the
+   file…"**: the literal error string, why NaN-in-region produces it, the one-command probe
+   (`python scripts/sanitize_submission.py --pred FILE`, exit 1 = not conformant), the before/after
+   hashes, and the exact text to paste into a DrivenData support reply. The hero and executive
+   summary carry the same warning inline.
+6. **Unique name + Note, as asked.** The generator now hands over, next to the download button,
+   an identity block: file `gems-submission-<UTC instant>-<artifact sha8>.tif|.zip` (changes every
+   build — two downloads can never collide) and a suggested Note
+   `<policy> · build <sha8> · <UTC stamp>` ("clustering with k=25"-style disambiguation; the
+   workflow's job summary prints the same shape with its run id). Identity arithmetic lives in
+   one exported `submissionIdentity()`; `scripts/check_site_generator.py` asserts the exported
+   function carries no forbidden literals, and the 4 UI harnesses assert the block renders.
+7. **`make-submission.yml` rebuilds the site.** New step after the headless judge (so pages embed
+   that run's evidence) and before the measurement commit (docs/ now travels in the same push).
+8. **Evidence and docs re-measured, not hand-edited.** `data/evidence/submission_readiness.json`
+   re-run (8 PASS / 0 FAIL / 1 HUMAN, new sha); `EXECUTIVE_SUMMARY.md`, `SUBMISSION_GUIDE.md`,
+   `SUGGESTIONS.md`, `LIMITATIONS.md`, `docs/FIELD_SELECTION_RULE.md` updated to the measured
+   values (570,890 B / 532,072 B / 259,495 runs) and the executive summary's Common-Pitfalls
+   table gained the platform-rejection row; `docs/results.html` now opens with the build-time
+   sha and labels the run tables as historical. Full suite: **505 passed, 1 skipped** (4 tests
+   updated to the new contract + new `tests/test_template_conformance.py`, 14 tests).
+
+Pseudo-label fold-1 (run 36058099668) stayed `in_progress` throughout — no trigger file touched.
+This entry's claims were re-checked against the bytes by the Pass-3 verification run below.
+
 
 ## Session 24 (2026-09-24) — the file to submit leads the site: the in-browser builder is the first thing a visitor sees, the Pages CDN check closed, and the pseudo-label fold-1 fire is staged
 

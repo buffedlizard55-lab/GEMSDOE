@@ -14,7 +14,7 @@
   one or more committed Actions training runs (e.g. `mean12` = runs 35042805806 + 35249562910,
   11 live folds; `ens123` = + 35263581931, 16 live folds).
 - **Shipped field** — the field the current shipped submission
-  (`data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`, sha256 `a3dcd6d5…`) was blended
+  (`data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif`, sha256 `7f00890a…` — bytes re-written 2026-09-25 by the template-conformance sanitation; the blended *field* is unchanged) was blended
   from: **`mean12`**.
 - **Shipped support** — the pixel count the shipped submission actually writes: **172,974 px**
   (cross-checked: the adopted-policy row of `eval_sweep-mean12.json` and

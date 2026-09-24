@@ -112,7 +112,7 @@ the [executive summary](https://buffedlizard55-lab.github.io/GEMSDOE/docs/execut
 [`docs/how_to_submit.html` §3](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html) — the same mount, the same
 payload, the same self-checks. It loads `docs/submission_meta.json` (grid, transform, EPSG, value pins) and
 `docs/submission_field.bin`
-(a 532,174-byte `gems-rle-v1` run-length encoding of the field, 259,549 runs) and writes the GeoTIFF
+(a 532,072-byte `gems-rle-v1` run-length encoding of the field, 259,495 runs) and writes the GeoTIFF
 locally with `docs/geotiff_writer.js`. Nothing is uploaded and no network call is made: the writer's
 17 self-checks run against the file it just parsed, and the download is withheld if any fails. The
 result is **pixel-identical** to the adopted artifact (float32 bits equal) — *not* byte-identical,

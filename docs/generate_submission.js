@@ -227,15 +227,70 @@
     els.result.appendChild(box);
   }
 
+  // Unique-per-build identity for the download and for the dialog's Note field. Both parts
+  // are read (payload/artifact) or clocked, never typed into this file - the test suite
+  // fails the glue for any literal figure. The Note's stated purpose on the platform is
+  // "a short comment to help you or your team tell submissions apart later".
+  function buildIdentity(meta, res) {
+    var stamp = new Date().toISOString()
+      .replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');           // 20260924T215531Z
+    var sha8 = String(((meta.artifact || {}).sha256) || res.sha256 || '').slice(0, 8);
+    var tags = ((meta.grid || {}).gdal_tags) || {};
+    var policy = tags.shaping_t0
+      ? ('floor ' + tags.shaping_t0 + (tags.shaping_thin === 'True' ? ' thin' : ''))
+      : 'adopted policy';
+    return {
+      stamp: stamp,
+      sha8: sha8,
+      fileStem: 'gems-submission-' + stamp + '-' + sha8,
+      note: policy + ' · build ' + sha8 + ' · ' + stamp
+    };
+  }
+
+  function renderIdentity(id, mode) {
+    var wrap = el('div', 'gen-identity');
+    var file = id.fileStem + (mode === 'zip' ? '.zip' : '.tif');
+    wrap.appendChild(el('div', 'small', 'Suggested file name (unique per build):'));
+    var fn = el('div', 'mono gen-identity-v', file);
+    wrap.appendChild(fn);
+    var noteRow = el('div', 'small', 'Suggested text for the dialog\'s Note field — ' +
+      'a short comment that tells your team\'s submissions apart:');
+    wrap.appendChild(noteRow);
+    var noteVal = el('div', 'mono gen-identity-v', id.note);
+    wrap.appendChild(noteVal);
+    var copy = el('button', 'gen-btn gen-copy', 'Copy the note');
+    copy.type = 'button';
+    copy.addEventListener('click', function () {
+      var done = function () {
+        copy.textContent = 'Copied ✓';
+        setTimeout(function () { copy.textContent = 'Copy the note'; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(id.note).then(done, function () { done(); });
+      } else {
+        var r = document.createRange();
+        r.selectNodeContents(noteVal);
+        var sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(r);
+        done();
+      }
+    });
+    wrap.appendChild(copy);
+    els.result.appendChild(wrap);
+  }
+
   function renderDownload(res, meta) {
     var wrap = el('div', 'gen-download');
-    var bytes = res.bytes, name = 'submission.tif', type = 'image/tiff';
+    var bytes = res.bytes, type = 'image/tiff';
+    var id = buildIdentity(meta, res);
+    var name = id.fileStem + '.tif';
     if (state.mode === 'zip') {
       // no date: buildZip()'s default is the fixed 2020-01-01 instant that
       // scripts/package_submission.py uses, so the CLI and the browser write the same container
       // semantics (a stored member named submission.tif) rather than two near-identical ones.
+      // Only the ARCHIVE's own name is unique - the member stays submission.tif.
       bytes = window.GemsGeoTIFF.buildZip([{ name: 'submission.tif', data: res.bytes }]);
-      name = 'submission.zip'; type = 'application/zip';
+      name = id.fileStem + '.zip'; type = 'application/zip';
     }
     var blob = new Blob([bytes], { type: type });
     var url = URL.createObjectURL(blob);
@@ -251,6 +306,7 @@
       ((meta.grid || {}).source_tiff || {}).compression + ' tiled vs deflate stripped)'));
     wrap.appendChild(copy);
     els.result.appendChild(wrap);
+    renderIdentity(id, state.mode);
   }
 
   // ---------------------------------------------------------------- boot

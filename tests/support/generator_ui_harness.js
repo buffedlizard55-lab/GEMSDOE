@@ -140,12 +140,27 @@ function assert(name, cond, detail) {
   const resultRow = mount.children.find((c) => c.className === 'gen-result');
   const dl = resultRow && resultRow.children.find((c) => c.className === 'gen-download');
   const link = dl && dl.children.find((c) => c.tag === 'a');
-  const wantName = MODE === 'zip' ? 'submission.zip' : 'submission.tif';
-  assert('download link names the file', link && link.download === wantName,
+  // The download name is unique per build: UTC instant + the artifact's sha prefix, so a
+  // team's Downloads folder and the platform's Note field can always be told apart.
+  const wantName = /^gems-submission-\d{8}T\d{6}Z-[0-9a-f]{8}\.(tif|zip)$/;
+  const wantExt = MODE === 'zip' ? '.zip' : '.tif';
+  assert('download link names a unique per-build file',
+    link && wantName.test(link.download) && link.download.endsWith(wantExt),
     link && link.download);
   assert('download type matches the container',
     link && link.href.startsWith('blob:') &&
     blob.type === (MODE === 'zip' ? 'application/zip' : 'image/tiff'), blob && blob.type);
+
+  // 4b. the identity block: unique name + a Note the team can tell submissions apart by
+  const ident = resultRow && resultRow.children.find((c) => c.className === 'gen-identity');
+  assert('an identity block (unique name + suggested note) was rendered', !!ident,
+    ident ? 'present' : 'missing');
+  const identTxt = ident ? JSON.stringify(ident) : '';
+  assert('the suggested note is policy · build <sha8> · <UTC stamp>',
+    /· build [0-9a-f]{8} · \d{8}T\d{6}Z/.test(identTxt), identTxt.slice(0, 300));
+  assert('the identity repeats the download name stem',
+    new RegExp(link.download.replace(/\.(tif|zip)$/, '')).test(identTxt),
+    identTxt.slice(0, 300));
 
   const { createHash } = require('crypto');
   const bytes = await blobBytes(blob);

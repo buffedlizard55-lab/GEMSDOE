@@ -183,7 +183,12 @@ def read_artifact(root: Path, rel: str = ARTIFACT):
         info = dict(width=src.width, height=src.height, count=src.count, dtype=src.dtypes[0],
                     crs=str(src.crs), epsg=(src.crs.to_epsg() if src.crs else None),
                     transform=list(src.transform), res=[float(src.res[0]), float(src.res[1])],
-                    nodata=src.nodata, bounds=[float(x) for x in src.bounds],
+                    # NaN is not valid JSON (JSON.parse in a browser rejects the bare token);
+                    # the template writes its outside-footprint nodata as the string "nan".
+                    nodata=(None if src.nodata is None else
+                            ("nan" if isinstance(src.nodata, float) and np.isnan(src.nodata)
+                             else src.nodata)),
+                    bounds=[float(x) for x in src.bounds],
                     driver=src.driver, tiled=src.profile.get("tiled"),
                     blockxsize=src.profile.get("blockxsize"), blockysize=src.profile.get("blockysize"),
                     compression=src.profile.get("compress"),
@@ -330,7 +335,7 @@ def main(argv=None) -> int:
 
     if a.check:
         drift = []
-        for rel, want in ((META_REL, json.dumps(meta, indent=1, sort_keys=True)),
+        for rel, want in ((META_REL, json.dumps(meta, indent=1, sort_keys=True, allow_nan=False)),
                           (BLOB_REL, blob)):
             p = root / rel
             if not p.exists():
@@ -376,9 +381,11 @@ def main(argv=None) -> int:
 
     out_dir = Path(a.out_dir) if a.out_dir else root / "docs"
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "submission_meta.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
+    (out_dir / "submission_meta.json").write_text(
+        json.dumps(meta, indent=1, sort_keys=True, allow_nan=False))
     (out_dir / "submission_field.bin").write_bytes(blob)
-    print(f"wrote {out_dir / 'submission_meta.json'} ({len(json.dumps(meta, indent=1)):,} B)")
+    print(f"wrote {out_dir / 'submission_meta.json'} "
+          f"({len(json.dumps(meta, indent=1, allow_nan=False)):,} B)")
     print(f"wrote {out_dir / 'submission_field.bin'} ({len(blob):,} B, {meta['encoding']['n_runs']:,} runs)")
     print(f"round trip: float32 bits identical = {exact_bits}; "
           f"1.0 px = {meta['field']['one_px']:,}; NaN px = {meta['field']['nan_px']:,}")

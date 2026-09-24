@@ -19,6 +19,10 @@ So a submission writer has exactly two jobs, and this module does both:
   1. build a *clean* profile - never inherit block geometry from another file;
   2. prove the file it just wrote is readable, correctly gridded and non-degenerate, and
      raise if it is not (an empty/invalid submission must never look like success).
+
+A third job was added 2026-09-25 (defect found by an actual platform rejection, see
+``conform_to_template``): the field written to disk must be *conformant with the official
+sample submission's validity mask* - finite inside it, NaN outside it.
 """
 
 from __future__ import annotations
@@ -30,7 +34,8 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
-__all__ = ["TILE", "clean_profile", "write_submission", "sha256_file"]
+__all__ = ["TILE", "clean_profile", "write_submission", "sha256_file",
+           "conform_to_template", "conformance_findings", "cli_validate"]
 
 TILE = 256  # multiple of 16 -> always a legal TIFF tile dimension
 
@@ -173,3 +178,167 @@ def dump_json(obj, path) -> str:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(obj, indent=1))
     return str(p)
+
+
+def conform_to_template(array, template) -> tuple[np.ndarray, dict]:
+    """Align a prediction field to the official sample submission's validity mask.
+
+    WHY THIS EXISTS (platform rejection observed 2026-09-24)
+    ---------------------------------------------------------
+    DrivenData rejected the file this repository shipped, with the platform's own error
+    text: ``Predicted values must be in range [0, 1]``.  Every finite value of the
+    shipped raster was already in [0, 1] - what was wrong was *where* the NaNs were:
+
+    * 3,061 px inside the sample submission's valid region (which is exactly the labels
+      raster's valid mask, i.e. the scored region) were NaN, and NaN is not in [0, 1];
+    * 1,540 px outside that region were finite where the template is NaN;
+    * the raster carried no GDAL_NODATA tag while the template carries ``"nan"``.
+
+    The rule the platform's own template encodes (problem description, "Submission
+    format": *"the same bounds as the training data, and data outside the bounds is null
+    or nan"* and *"values between 0 and 1"*) is one mask, taken from the template itself:
+
+        template finite -> prediction must be finite and in [0, 1]
+        template NaN    -> prediction must be NaN
+
+    This function implements exactly that and reports what it changed.  The fill value
+    inside is 0.0 - "no predicted fault where the model had no data" - which is what
+    every scorer in this repository already counted (``src/metrics.py`` scores through
+    ``np.nan_to_num(..., nan=0.0)``, and the scored populations are subsets of the
+    template's valid region, measured 2026-09-24), so conforming a field never changes
+    a recorded measurement.
+
+    Returns ``(conformed, stats)``.  ``stats`` counts ``filled_inside``,
+    ``masked_outside``, ``clipped`` and ``unchanged`` pixels.  Raises ValueError on a
+    shape mismatch - silently aligning a differently-shaped grid is how off-by-one
+    submissions are born.
+    """
+    pred = np.asarray(array)
+    ref = np.asarray(template)
+    if pred.shape != ref.shape:
+        raise ValueError(f"prediction {pred.shape} does not match template {ref.shape}")
+    out = pred.astype(np.float32, copy=True)
+    ref_valid = np.isfinite(ref)
+    finite = np.isfinite(out)
+    filled = ref_valid & ~finite                  # NaN inside -> 0.0 (the platform error)
+    masked = ~ref_valid & finite                  # finite outside -> NaN (template mask)
+    clipped = ref_valid & finite & ((out < 0.0) | (out > 1.0))
+    changed = filled | masked | clipped
+    out[filled] = 0.0
+    out[masked] = np.nan
+    if clipped.any():
+        out[clipped] = np.clip(out[clipped], 0.0, 1.0)
+    stats = dict(
+        pixels=int(out.size),
+        template_valid_px=int(ref_valid.sum()),
+        filled_inside=int(filled.sum()),
+        masked_outside=int(masked.sum()),
+        clipped=int(clipped.sum()),
+        unchanged=int(out.size - int(np.count_nonzero(changed))),
+    )
+    return out, stats
+
+
+def conformance_findings(array, template) -> dict:
+    """Report (without changing anything) the violations ``conform_to_template`` would fix.
+
+    Used by check-only modes so a caller can *judge* a file - a gate - without ever
+    mutating it.  Same mask semantics as ``conform_to_template``.
+    """
+    pred = np.asarray(array)
+    ref = np.asarray(template)
+    if pred.shape != ref.shape:
+        raise ValueError(f"prediction {pred.shape} does not match template {ref.shape}")
+    ref_valid = np.isfinite(ref)
+    finite = np.isfinite(pred)
+    out_of_range = finite & ((pred < 0.0) | (pred > 1.0))
+    return dict(
+        pixels=int(pred.size),
+        template_valid_px=int(ref_valid.sum()),
+        nan_inside_px=int((ref_valid & ~finite).sum()),
+        finite_outside_px=int((~ref_valid & finite).sum()),
+        out_of_range_px=int(out_of_range.sum()),
+        conformant=bool(not (ref_valid & ~finite).any()
+                         and not (~ref_valid & finite).any()
+                         and not out_of_range.any()),
+    )
+
+
+# --------------------------------------------------------------------------
+# The runner-side gate: `python -m src.submission_io validate-conformant FILE`.
+# Exit 0 only when FILE is finite inside the official template's valid region,
+# NaN outside it, in [0, 1], and declares the same GDAL_NODATA tag as the
+# template.  This is the exact invariant whose absence let the 2026-09-24
+# platform rejection ("Predicted values must be in range [0, 1]") through;
+# scripts/validate_submission.py enforces the same rules with friendlier
+# output, and this entry point exists for CI and runners that already live
+# on this module's contract.
+def _same_nodata(a, b) -> bool:
+    """Nodata equality where NaN == NaN (the template's tag is 'nan')."""
+    if a is None or b is None:
+        return a is None and b is None
+    try:
+        if np.isnan(a) and np.isnan(b):
+            return True
+    except TypeError:
+        pass
+    return a == b
+
+
+def cli_validate(argv=None) -> int:
+    """Check-only conformance gate.  Returns 0 conformant, 1 not, 2 usage."""
+    import argparse
+    import sys
+
+    ap = argparse.ArgumentParser(
+        prog="python -m src.submission_io",
+        description="fail-loud checks for the submission writer contract",
+    )
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    v = sub.add_parser(
+        "validate-conformant",
+        help="exit 1 unless FILE is finite inside the sample template's valid "
+             "region, NaN outside it, in [0,1], with a matching GDAL_NODATA tag",
+    )
+    v.add_argument("pred", type=Path, help="GeoTIFF to judge (never modified)")
+    v.add_argument("--sample", type=Path, default=None,
+                   help="template mask (default: data/sample_submission.tif)")
+    args = ap.parse_args(argv)
+
+    pred: Path = args.pred
+    sample: Path = args.sample or (
+        Path(__file__).resolve().parents[1] / "data" / "sample_submission.tif")
+    if not pred.exists():
+        print(f"MISSING {pred}", file=sys.stderr)
+        return 2
+    if not sample.exists():
+        print(f"MISSING template {sample}", file=sys.stderr)
+        return 2
+    with rasterio.open(pred) as ds:
+        arr = ds.read(1)
+        nodata = ds.nodata
+    with rasterio.open(sample) as ds:
+        tpl = ds.read(1)
+        tpl_nodata = ds.nodata
+    findings = conformance_findings(arr, tpl)
+    findings["nodata"] = None if nodata is None else str(nodata)
+    findings["nodata_ok"] = _same_nodata(nodata, tpl_nodata)
+    findings["path"] = str(pred)
+    findings["conformant"] = bool(findings["conformant"] and findings["nodata_ok"])
+    print(json.dumps(findings, indent=1))
+    if not findings["conformant"]:
+        print(
+            "NOT CONFORMANT: "
+            f"{findings['nan_inside_px']} NaN inside the valid region, "
+            f"{findings['finite_outside_px']} finite outside, "
+            f"{findings['out_of_range_px']} out of [0,1], "
+            f"nodata_ok={findings['nodata_ok']} — fix: "
+            "python scripts/sanitize_submission.py --pred {pred} --write".format(pred=pred),
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised via cli_validate() in tests
+    raise SystemExit(cli_validate())
