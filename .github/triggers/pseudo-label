@@ -54,3 +54,33 @@ pseudo-label
 # leaderboard actually scores.  The pre-registered shipping thresholds are unchanged
 # (docs/FIELD_SELECTION_RULE.md): the union contrast must clear 0.95 / +0.010 before a
 # pseudo-labelled field may even be proposed to the field-selection gate.  Nothing here ships.
+
+# 2026-09-24 (session 24): THIRD fire - fold 1 with SGMC pseudo labels, seed 46.
+#
+# WHY NOW: the pooled reader (scripts/read_landed_reports.py --pool, built session 22) is the
+# verdict mechanism for item 7, and it marks a pool with <12 resampling units COARSE /
+# POOL_POSITIVE_BUT_UNDER_POWERED.  Fold 0 alone gives 7 units (8 held-out blocks, one not
+# scoreable in the combined scope); fold 1's held-out scope has 9 scoreable blocks
+# (data/evidence/block_holdout/fold_gap_summary.json), so fold 0 + fold 1 (>= 15 units) should
+# already cross the 12-unit bar.  Time box: the baseline arms' raw fields live on run
+# 35451858112's artifacts with 14-day retention from 2026-09-19 - until ~2026-10-03 (nine days
+# from this fire), after which every pseudo-vs-baseline contrast on the combined population for
+# those folds would cost a second 300-minute training run instead of a download.
+#
+# WHAT THIS FIRE DOES: trains fold 1 (configs/config_pseudo_labels.yaml, mc_id/block_fold=1,
+# seed 46 = the baseline's seed, pseudo weight 1.0) and scores the raw field on fold 1's
+# HELD-OUT blocks and its complement, on all three truth populations (--combined-population);
+# downloads the no-pseudo baseline field from run 35451858112's artifact block-holdout-fold-1,
+# verifies its sha256 against the committed report before re-scoring it (the paired contrast
+# needs both arms on the combined population, and FP_w is not decomposable - it must be scored
+# from the rasters); cross-checks with scripts/read_landed_reports.py --fold 1 --strict and
+# refreshes the pooled file (--pool); commits the evidence.  NO SHIPPING DECISION: adoption
+# still goes through docs/FIELD_SELECTION_RULE.md as a new reblend.yml RUN_ID.
+#
+# WHY SINGLE-FOLD AGAIN (not 1,2,3 at once): pseudo-label.yml trains ONE fold per run and its
+# concurrency group (cancel-in-progress: true) cancels a second fire while the first runs.
+# Folding 1,2,3 into one matrix run is a workflow rewrite with its own risk; the established
+# path is a params edit + trigger bump per fold, and fold 1 is the one that crosses the pool's
+# unit bar.  Folds 2-3 fire the same way once this run lands.
+#
+# Parameters: .github/triggers/pseudo-label-params (FOLD=1, BASELINE_RUN_ID=35451858112)

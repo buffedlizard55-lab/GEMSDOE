@@ -71,6 +71,12 @@ table.cmp td:nth-child(4){color:#44403c;font-size:.87rem}
 /* the in-browser .tif generator panel on docs/how_to_submit.html */
 #tif-generator{background:var(--card);border:1px solid var(--line);border-radius:12px;
   padding:18px 20px;margin:20px 0;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+/* the submission-builder hero: the first block on index.html and executive_summary.html,
+   so the file-to-submit is the most obvious thing on the site (session 24 ask) */
+.build-hero{border:2px solid var(--accent);border-radius:14px;padding:14px 24px 6px;margin:4px 0 30px;
+  background:linear-gradient(180deg,#fffbeb,#fff 260px)}
+.build-hero h2{margin:8px 0 6px;font-size:1.35rem}
+.build-hero #tif-generator{margin-top:14px}
 .gen-head h3{margin:0 0 4px;font-size:1.12rem}
 .gen-sub{color:var(--muted);font-size:.92rem;margin:0 0 14px}
 .gen-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:2px 18px;

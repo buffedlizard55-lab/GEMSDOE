@@ -107,8 +107,11 @@ Everything above says *what* the file must be. These are the ways to *make* it, 
 the same gate (`scripts/validate_submission.py` + `scripts/check_site_generator.py`).
 
 **1. In the browser, from the published site** — no clone, no install, no GPU.
-[`docs/how_to_submit.html` §3](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html)
-loads `docs/submission_meta.json` (grid, transform, EPSG, value pins) and `docs/submission_field.bin`
+The panel is the **first block on the [landing page](https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html)** and
+the [executive summary](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html) (added 2026-09-24), and
+[`docs/how_to_submit.html` §3](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html) — the same mount, the same
+payload, the same self-checks. It loads `docs/submission_meta.json` (grid, transform, EPSG, value pins) and
+`docs/submission_field.bin`
 (a 532,174-byte `gems-rle-v1` run-length encoding of the field, 259,549 runs) and writes the GeoTIFF
 locally with `docs/geotiff_writer.js`. Nothing is uploaded and no network call is made: the writer's
 17 self-checks run against the file it just parsed, and the download is withheld if any fails. The

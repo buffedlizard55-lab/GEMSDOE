@@ -319,6 +319,37 @@ def test_page_glue_refuses_a_tampered_manifest(tmp_path):
     assert out["ok"], out["assertions"]
 
 
+def test_without_placed_data_the_judge_names_the_gap_not_a_keyerror(tmp_path, monkeypatch):
+    """A fresh clone has no data/: the sample template is absent, so the container-vs-template
+    comparison CANNOT be made.  The judge must report that loudly (FAIL + the placement command),
+    not crash into a KeyError — a traceback that hides the real gap is exactly the failure mode
+    the judge exists to prevent (session 24: run on a checkout without data/)."""
+    _node()  # skip honestly if node is not on PATH (the judge cannot run without it)
+    spec = importlib.util.spec_from_file_location("check_site_generator",
+                                                 ROOT / "scripts" / "check_site_generator.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, "SAMPLE", "data/definitely_not_placed.tif")
+    out = tmp_path / "report.json"
+    rc = mod.main(["--out", str(out)])
+    assert rc == 1, "a FAIL verdict must exit 1 (2 = missing prerequisites, 0 = pass)"
+    rep = json.loads(out.read_text())
+    assert rep["verdict"] == "FAIL"
+    by_name = {s["name"]: s for s in rep["steps"]}
+    for step_name in ("rasterio reads it; pixels are the artifact's",
+                      "variant: uncompressed strips"):
+        s = by_name[step_name]
+        assert s["status"] == "FAIL"
+        err = str(s.get("measured", {}).get("error", ""))
+        assert "not placed in this checkout" in err and "assemble_data_bridge" in err, \
+            f"{step_name}: the gap must be named, got {err!r}"
+        assert "KeyError" not in err, f"{step_name}: a KeyError hides the real gap"
+    # the pixel-level judgment is unaffected by the missing template and must still have run
+    s3 = by_name["rasterio reads it; pixels are the artifact's"]
+    assert s3["measured"].get("float32_bits_identical") is True, \
+        "pixels are the artifact's even when the template is absent; that check must still report"
+
+
 def test_generator_evidence_verdict_is_pass_when_it_exists():
     """data/evidence/site_generator.json is what the page renders; a FAIL verdict there must break CI."""
     ev = ROOT / "data/evidence/site_generator.json"
@@ -343,6 +374,24 @@ def test_the_files_the_page_loads_are_the_files_the_tests_run():
     assert 'id="tif-generator"' in html
     meta_html = ROOT / "docs" / "submission_meta.json"
     assert meta_html.exists() and BLOB.exists()
+
+
+def test_every_page_that_ships_the_panel_loads_one_mount_and_the_writer():
+    """Session 24: the builder is no longer only on the subpage — the landing page (index) and the
+    executive summary carry the same panel, so a visitor can download the file to submit from the
+    first page they open.  Each of those pages must therefore load the SAME two scripts the tests
+    execute, with exactly ONE mount (the glue binds a single #tif-generator) and the writer before
+    the deferred glue."""
+    if not (ROOT / "docs" / "index.html").exists():
+        pytest.skip("the site has not been generated in this checkout")
+    for name in ("index.html", "executive_summary.html", "how_to_submit.html"):
+        html = (ROOT / "docs" / name).read_text()
+        assert html.count('id="tif-generator"') == 1, f"{name}: the glue binds one mount"
+        assert 'src="geotiff_writer.js"' in html, f"{name}: missing the writer it advertises"
+        assert 'src="generate_submission.js"' in html, f"{name}: missing the glue"
+        assert html.index('<script src="geotiff_writer.js">') \
+            < html.index('<script src="generate_submission.js" defer>'), \
+            f"{name}: writer must load before the deferred glue"
 
 
 def test_every_repository_path_the_manifest_names_actually_exists():

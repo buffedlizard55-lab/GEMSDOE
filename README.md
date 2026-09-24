@@ -1,8 +1,10 @@
 # GEMSDOE — Geologic Enhanced Mapping System Prize Challenge
 
+> **The file to submit, in one click → the published site leads with the in-browser submission builder** ([landing page](https://buffedlizard55-lab.github.io/GEMSDOE/docs/index.html), [executive summary](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)): click **Build submission.tif**, the browser writes the exact single-band float32 GeoTIFF the DrivenData dialog asks for, re-reads its own bytes, and hands over the download — no install, no GPU, nothing uploaded (added 2026-09-24).
+>
 > **Start here → [Executive summary: How to submit](https://buffedlizard55-lab.github.io/GEMSDOE/docs/executive_summary.html)** (markdown: [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md))
 >
-> **Subpage of the executive summary → [How to submit, exactly](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html)** — the recipe: the file, its sha256 (re-hashed at build time), **a generator that builds the submission `.tif` (or the `.zip` the dialog also accepts) in your browser, with no install, no GPU and no network call**, six routes to produce it (A–F, from clicking Build on the page to the CPU-only workflow), the validation gate, the click-by-click upload path, and a **gate table measured in this checkout** (`data/evidence/submission_readiness.json`) in which the human-only steps are labelled `HUMAN` rather than counted as done.
+> **Subpage of the executive summary → [How to submit, exactly](https://buffedlizard55-lab.github.io/GEMSDOE/docs/how_to_submit.html)** — the recipe: the file, its sha256 (re-hashed at build time), **the same browser generator** (that page's §3), six routes to produce it (A–F, from clicking Build on the page to the CPU-only workflow), the validation gate, the click-by-click upload path, and a **gate table measured in this checkout** (`data/evidence/submission_readiness.json`) in which the human-only steps are labelled `HUMAN` rather than counted as done.
 
 ### Top-Leaderboard Solution Framework
 

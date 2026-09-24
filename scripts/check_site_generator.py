@@ -216,12 +216,19 @@ def main(argv=None) -> int:
         def _s3():
             cmp = compare_with_artifact(tif, ROOT / ARTIFACT, ROOT / SAMPLE)
             s3_detail.update(cmp)
+            # compare_with_artifact omits container_vs_sample when the template is not placed
+            # (fresh clone, data/ absent).  That is a MISSING MEASUREMENT, not a match: name it
+            # loudly instead of crashing into a KeyError that hides the real gap.
+            cv = cmp.get("container_vs_sample")
             ok = (cmp["grid_and_crs_match"] and cmp["float32_bits_identical"]
                   and cmp["uint32_px_differing"] == 0
-                  and cmp["container_vs_sample"]["matches"])
+                  and bool(cv is not None and cv["matches"]))
             step("rasterio profile of the generated file", "INFO", cmp["measured"], "rasterio",
                  f"generated {tif.stat().st_size:,} B vs artifact "
                  f"{(ROOT / ARTIFACT).stat().st_size:,} B (container differs; pixels do not)")
+            if cv is None:
+                return ok, dict(error=f"container vs template not judged: {SAMPLE} is not placed "
+                                      "in this checkout (run scripts/assemble_data_bridge.py)", **cmp)
             return ok, cmp
         hard("rasterio reads it; pixels are the artifact's", _s3,
              "rasterio 1.x, independent of the writer")
@@ -270,12 +277,16 @@ def main(argv=None) -> int:
                 row = dict(name=label, args=extra, exit_code=p.returncode, path=str(vt))
                 if p.returncode == 0 and vt.exists():
                     c = compare_with_artifact(vt, ROOT / ARTIFACT, ROOT / SAMPLE)
+                    cv = c.get("container_vs_sample")
                     row.update(readable=True, bits_identical=c["float32_bits_identical"],
                                grid_ok=c["grid_and_crs_match"], bytes=vt.stat().st_size,
-                               container_ok=c["container_vs_sample"]["matches"],
+                               container_ok=bool(cv is not None and cv["matches"]),
                                self_reported_ok=bool(json.loads(p.stdout).get("ok")))
                     ok = (c["float32_bits_identical"] and c["grid_and_crs_match"]
-                          and c["container_vs_sample"]["matches"] and row["self_reported_ok"])
+                          and cv is not None and cv["matches"] and row["self_reported_ok"])
+                    if cv is None:
+                        row["error"] = (f"container vs template not judged: {SAMPLE} is not "
+                                        "placed in this checkout (run scripts/assemble_data_bridge.py)")
                 else:
                     ok, row["error"] = False, (p.stderr or "")[-300:]
                 variants.append(row)
