@@ -199,6 +199,75 @@ def test_executive_summary_without_evidence_handles_gracefully():
     assert "validate_submission.py" in html
 
 
+# --------------------------------------------------------------------------- submission builder
+# The 2026-09-24 (session 24) ask: the site must be able to generate the TIF required for
+# submission, as easy as clicking a file to download, and it must be obvious when you visit the
+# site.  That is the #tif-generator panel (docs/generate_submission.js) lifted out of
+# how_to_submit.html onto the two pages a reader lands on: the overview (docs/index.html) and
+# the executive summary.  These tests pin the PLACEMENT (it leads the page, it is the only mount,
+# the scripts it needs are loaded) and the HONESTY (no payload -> no live-looking panel).
+def _submission_ev():
+    def load(rel):
+        p = ROOT / rel
+        return json.loads(p.read_text()) if p.exists() else None
+    return {"site_payload": load("docs/submission_meta.json"),
+            "site_generator": load("data/evidence/site_generator.json"),
+            "rules_quotes": load("data/evidence/rules_quotes.json"),
+            "independent_verification": load("data/evidence/independent_verification.json"),
+            "inventory": load("data/evidence/inventory.json")}
+
+
+def test_index_opens_with_the_submission_builder():
+    mod = _site_mod()
+    html = mod.build_index(_submission_ev())
+    assert html.count('id="tif-generator"') == 1, "the glue binds ONE mount; a second would print nothing"
+    assert html.index('<script src="geotiff_writer.js">') < html.index('<script src="generate_submission.js" defer>'), \
+        "writer must load before the deferred glue"
+    # it is the first h2 of the page: a visitor sees the builder before the analysis
+    body = html.split("</header>", 1)[1]
+    first_h2 = body.index("<h2")
+    assert "generate-here" in body[first_h2:first_h2 + 80], "the builder no longer leads the overview"
+    assert body.index("build-submission") < body.index("<h2>The task</h2>")
+    # the grid card points at the hero instead of describing it
+    assert 'href="#build-submission"' in html
+
+
+def test_executive_summary_carries_the_builder_before_the_sections():
+    mod = _site_mod()
+    html = mod.build_executive_summary(_submission_ev())
+    assert html.count('id="tif-generator"') == 1
+    assert 'src="geotiff_writer.js"' in html and 'src="generate_submission.js" defer' in html
+    assert html.index("build-submission") < html.index("<h2>1. Executive Overview")
+    # the TL;DR now points at the in-page generator, not only at the subpage
+    assert 'href="#generate-here"' in html
+
+
+def test_builder_without_payload_shows_the_gap_not_a_panel():
+    """No payload -> no mount and no script: a dead panel that prints nothing on click would be
+    worse than a visible gap with the command that produces the payload."""
+    mod = _site_mod()
+    for fn in (mod.build_index, mod.build_executive_summary, mod.build_how_to_submit):
+        html = fn({})
+        assert 'id="tif-generator"' not in html, f"{fn.__name__}: a mount without a payload"
+        assert 'src="generate_submission.js"' not in html, f"{fn.__name__}: glue with no panel"
+        assert "Not available" in html, f"{fn.__name__}: the gap must be visible"
+
+
+def test_builder_numbers_come_from_the_payload_not_the_template():
+    """Every figure the hero prints must be derivable from docs/submission_meta.json: tamper the
+    payload and the rendered page must change with it (grid, run count, blob size, pins)."""
+    mod = _site_mod()
+    ev = _submission_ev()
+    html = mod.build_index(ev)
+    meta = json.loads((ROOT / "docs" / "submission_meta.json").read_text())
+    for token in (f'{int(meta["grid"]["width"]):,} &times; {int(meta["grid"]["height"]):,} px',
+                  f'{int(meta["encoding"]["n_runs"]):,} runs',
+                  f'{int(meta["blob"]["bytes"]):,} B',
+                  meta["blob"]["sha256"][:16],
+                  meta["artifact"]["sha256"][:16]):
+        assert token in html, f"hero does not render the measured value {token!r}"
+
+
 def test_nav_bar_links_to_executive_summary():
     mod = _site_mod()
     html = mod.page("Test", "test.html", "<p>content</p>")

@@ -161,9 +161,9 @@ def build_index(ev: dict) -> str:
         verdict = str(gen.get("verdict") or "not measured here")
         cards.append(("Submission file",
                       f'{fmt_bytes(art.get("bytes", 0))} GeoTIFF · '
-                      f'<span class="pill {"ok" if verdict == "PASS" else "warn"}">{e(verdict)}</span>',
-                      ("built in-browser by docs/geotiff_writer.js, judged headlessly by "
-                       "scripts/check_site_generator.py")))
+                      f'<a href="#build-submission"><b>build it above</b></a>',
+                      f'<span class="pill {"ok" if verdict == "PASS" else "warn"}">{e(verdict)}</span> · '
+                      "one click in your browser · judged headlessly by scripts/check_site_generator.py"))
 
     grid = "".join(
         f'<div class="stat"><div class="k">{e(k)}</div><div class="v">{v}</div>'
@@ -257,7 +257,13 @@ def build_index(ev: dict) -> str:
                                        "raise it &mdash; see the "
                                        "<a href='metric.html#width'>width measurement</a>.")))
 
-    return page("Overview", "index.html", rules_block + f"""
+    # The file-to-submit is the single most consequential object in the competition, so it leads
+    # the landing page: a visitor can build and download the exact GeoTIFF the platform asks for,
+    # in their browser, before reading a word of analysis. (Session 24 ask: "as easy as download
+    # to click a File to submit… obvious when you visit the site.")
+    hero = _submission_builder(ev)
+
+    return page("Overview", "index.html", hero + rules_block + f"""
 {note("ok", "<strong>How to read this site.</strong> Nothing here is written from memory. "
       "Every table is rendered by <code>scripts/build_site.py</code> from JSON that a GitHub "
       "Actions runner produced by downloading the real files and measuring them with "
@@ -341,7 +347,8 @@ fold artifacts produces the newest submission below. What remains for a competit
 (1) optimising against the <em>scored</em> universe rather than the catalogue and (2) GPU training at
 full capacity; see <a href="results.html">Results</a> for the honest current numbers, including runs
 that scored <em>below</em> the trivial baseline and one that reported success while writing nothing.</p>
-""", "A fault-detection entry for the DOE GEMS Prize, built so every claim can be checked.")
+""", "A fault-detection entry for the DOE GEMS Prize, built so every claim can be checked.",
+     tail=(GENERATOR_TAIL if (ev.get("site_payload") or {}) else ""))
 
 
 
@@ -401,7 +408,10 @@ python scripts/prepare_data.py           # PASS: 3292×3730, 19 bands, EPSG:3261
 python scripts/validate_submission.py --pred data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif --sample data/sample_submission.tif --train data/training_features.tif
 # → ✅ Validation PASSED — upload data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif at https://www.drivendata.org/competitions/306/competition-doe-gems/submissions/</code></pre>
 <strong>Artifact:</strong> <code>data/evidence/runs/ens12-adopted-floor0.1-w0/submission.tif</code> — 569.5 KB, sha256 <code>a3dcd6d5…</code>, 11-fold ensemble mean with adopted policy <code>floor 0.1, thin, width 0 px</code> (rank 1 of 132).<br>
-<strong>Then:</strong> paste the Generative AI disclosure (§3.2) into the submission narrative, and before <strong>Dec 3, 2026 11:59 PM UTC</strong> select this as your single final submission (3/week limit). <a href="how_to_submit.html#generate">Or skip the commands entirely:</a> the how-to-submit subpage carries a generator that writes this exact file in your browser, with nothing installed — no Python, no GPU, no download of the 418 MB feature stack — and refuses to hand it over unless its own re-read of the bytes matches every pinned check. <a href="how_to_submit.html">The full subpage</a> lists six routes to the file, their costs, and the gates this checkout passes.</div>
+<strong>Then:</strong> paste the Generative AI disclosure (§3.2) into the submission narrative, and before <strong>Dec 3, 2026 11:59 PM UTC</strong> select this as your single final submission (3/week limit). <a href="#generate-here">Or skip the commands entirely:</a> the generator <b>directly below</b> writes this exact file in your browser, with nothing installed — no Python, no GPU, no download of the 418 MB feature stack — and refuses to hand it over unless its own re-read of the bytes matches every pinned check. <a href="how_to_submit.html">The full subpage</a> lists six routes to the file, their costs, and the gates this checkout passes.</div>
+""")
+    out.append(_submission_builder(ev))
+    out.append(f"""
 
 <h2>1. Executive Overview &amp; Problem Context</h2>
 <p>The <b>Geologic Enhanced Mapping System (GEMS) Prize</b> is an open innovation challenge sponsored by the
@@ -1020,7 +1030,8 @@ Next: Upload to https://www.drivendata.org/competitions/306/competition-doe-gems
 """)
 
     return page("Executive Summary — How to Enter & Submit", "executive_summary.html", "\n".join(out),
-                "The definitive, line-by-line verified guide to eligibility, raster specifications, emission strategy, and competition submission.")
+                "The definitive, line-by-line verified guide to eligibility, raster specifications, emission strategy, and competition submission.",
+                tail=(GENERATOR_TAIL if (ev.get("site_payload") or {}) else ""))
 
 def build_data(ev: dict) -> str:
     rasters = ev.get("rasters")
@@ -2876,6 +2887,12 @@ table.cmp td:nth-child(4){color:#44403c;font-size:.87rem}
 /* the in-browser .tif generator panel on docs/how_to_submit.html */
 #tif-generator{background:var(--card);border:1px solid var(--line);border-radius:12px;
   padding:18px 20px;margin:20px 0;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+/* the submission-builder hero: the first block on index.html and executive_summary.html,
+   so the file-to-submit is the most obvious thing on the site (session 24 ask) */
+.build-hero{border:2px solid var(--accent);border-radius:14px;padding:14px 24px 6px;margin:4px 0 30px;
+  background:linear-gradient(180deg,#fffbeb,#fff 260px)}
+.build-hero h2{margin:8px 0 6px;font-size:1.35rem}
+.build-hero #tif-generator{margin-top:14px}
 .gen-head h3{margin:0 0 4px;font-size:1.12rem}
 .gen-sub{color:var(--muted);font-size:.92rem;margin:0 0 14px}
 .gen-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:2px 18px;
@@ -3550,22 +3567,23 @@ GENERATOR_TAIL = (
 )
 
 
-def _generator_section(ev: dict) -> str:
-    """The in-browser .tif generator: the panel markup plus the measurements behind it.
+def _payload_facts(ev: dict) -> dict:
+    """Every number the in-browser generator is allowed to print, measured once.
 
-    Nothing here is typed. The provenance block reads docs/submission_meta.json, which
-    scripts/build_submission_payload.py wrote by measuring the artifact; the panel itself is filled
-    by docs/generate_submission.js at click time from the same file. The consistency test is done
-    HERE, at build time: the hash the payload pins must equal the hash build_site re-computes from
-    the artifact bytes, so a stale payload cannot be shipped with a live-looking generator.
+    Shared by _generator_section (how_to_submit.html §3) and _submission_builder (the hero block
+    that opens index.html and executive_summary.html): the same panel, the same payload, the same
+    pinned checks — so the arithmetic lives here and the two renderers only format. Nothing in the
+    returned dict is typed: the provenance block reads docs/submission_meta.json, which
+    scripts/build_submission_payload.py wrote by measuring the artifact, and build_site re-hashes
+    the artifact and the four shipped files itself, so a stale payload cannot be published with a
+    live-looking generator.
     """
     payload = ev.get("site_payload") or {}
     gen = ev.get("site_generator") or {}
     art = _sha_bytes(SHIPPED_SUBMISSION)
+    facts = dict(payload=payload, gen=gen, art=art, present=bool(payload))
     if not payload:
-        return ('<h2 id="generate">3. Generate the file from this page, in your browser</h2>'
-                + missing("The site payload has not been built, so there is nothing to generate from.",
-                          "python scripts/build_submission_payload.py && python scripts/build_site.py"))
+        return facts
 
     pinned = str((payload.get("artifact") or {}).get("sha256") or "")
     live = str(art.get("sha256") or "")
@@ -3577,6 +3595,66 @@ def _generator_section(ev: dict) -> str:
     rt = payload.get("round_trip") or {}
     steps = gen.get("steps") or []
     verdict = str(gen.get("verdict") or "NOT RUN HERE")
+    n_pass = sum(1 for s in steps if s["status"] == "PASS")
+    n_fail = sum(1 for s in steps if s["status"] == "FAIL")
+
+    # the numbers the prose cites are pulled out of the evidence once, here, so the sentences
+    # below can only ever print what was measured (a "?" in a rendered page is a loud bug, not a
+    # guess)
+    node_step = next((s for s in steps if s["name"].startswith("node ran")), None) or {}
+    nm = node_step.get("measured") or {}
+    r3 = next((s for s in steps if s["name"].startswith("rasterio reads")), None) or {}
+    r3m = r3.get("measured") or {}
+    node = nm.get("node") or gen.get("summary", {}).get("node") or ""
+    gen_bytes = nm.get("bytes") or 0
+    gen_sha = str(nm.get("sha256") or "")
+    gen_compression = str(nm.get("compression") or "uncompressed strips")
+    # None = the rasterio step has no measurement in this checkout; False = measured different.
+    # The renderers must keep those apart: "not measured" is a gap, "false" is a defect.
+    bits_ok = r3m.get("float32_bits_identical") if r3 else None
+    art_source_tiff = grid.get("source_tiff") or {}
+
+    files = [f"docs/{k}" for k in ("geotiff_writer.js", "generate_submission.js",
+                                   "submission_meta.json", "submission_field.bin")]
+    present = {f: _sha_bytes(f) for f in files}
+    file_rows = "".join(
+        f'<tr><td class="mono small">{e(f)}</td><td class="num">{present[f].get("bytes", 0):,}</td>'
+        f'<td class="mono small">{e(str(present[f].get("sha256", "NOT COMMITTED"))[:64])}</td></tr>'
+        for f in files)
+
+    facts.update(pinned=pinned, live=live, in_sync=in_sync, enc=enc, grid=grid, fld=fld,
+                 blob=blob, rt=rt, steps=steps, verdict=verdict, n_pass=n_pass, n_fail=n_fail,
+                 node=node, gen_bytes=gen_bytes, gen_sha=gen_sha,
+                 gen_compression=gen_compression, bits_ok=bits_ok,
+                 art_source_tiff=art_source_tiff, files=files, present=present,
+                 file_rows=file_rows)
+    return facts
+
+
+def _generator_section(ev: dict) -> str:
+    """The in-browser .tif generator: the panel markup plus the measurements behind it.
+
+    Nothing here is typed. The provenance block reads docs/submission_meta.json, which
+    scripts/build_submission_payload.py wrote by measuring the artifact; the panel itself is filled
+    by docs/generate_submission.js at click time from the same file. The consistency test is done
+    HERE, at build time: the hash the payload pins must equal the hash build_site re-computes from
+    the artifact bytes, so a stale payload cannot be shipped with a live-looking generator.
+    """
+    f = _payload_facts(ev)
+    if not f["present"]:
+        return ('<h2 id="generate">3. Generate the file from this page, in your browser</h2>'
+                + missing("The site payload has not been built, so there is nothing to generate from.",
+                          "python scripts/build_submission_payload.py && python scripts/build_site.py"))
+
+    gen = f["gen"]
+    enc, grid = f["enc"], f["grid"]
+    fld, blob, rt = f["fld"], f["blob"], f["rt"]
+    steps, verdict = f["steps"], f["verdict"]
+    pinned, live, in_sync = f["pinned"], f["live"], f["in_sync"]
+    n_pass, n_fail = f["n_pass"], f["n_fail"]
+    node, gen_bytes, gen_compression = f["node"], f["gen_bytes"], f["gen_compression"]
+    bits_ok, art_source_tiff = f["bits_ok"], f["art_source_tiff"]
+    file_rows, art = f["file_rows"], f["art"]
 
     def pill(ok, yes="IN SYNC", no="STALE"):
         return f'<span class="pill {"ok" if ok else "bad"}">{e(yes if ok else no)}</span>'
@@ -3587,28 +3665,6 @@ def _generator_section(ev: dict) -> str:
         f'<td class="small mono">{e(json.dumps(s.get("measured"), sort_keys=True)[:150])}{"…" if len(json.dumps(s.get("measured"), sort_keys=True)) > 150 else ""}</td></tr>'
         for s in steps) or ('<tr><td colspan="3" class="small">the generator has not been executed in this '
                             'checkout — run <code>python scripts/check_site_generator.py</code></td></tr>')
-    n_pass = sum(1 for s in steps if s["status"] == "PASS")
-    n_fail = sum(1 for s in steps if s["status"] == "FAIL")
-
-    files = [f"docs/{k}" for k in ("geotiff_writer.js", "generate_submission.js",
-                                   "submission_meta.json", "submission_field.bin")]
-    present = {f: _sha_bytes(f) for f in files}
-    # the numbers the prose cites are pulled out of the evidence once, here, so the sentences below
-    # can only ever print what was measured (a "?" in a rendered page is a loud bug, not a guess)
-    node_step = next((s for s in steps if s["name"].startswith("node ran")), None) or {}
-    nm = node_step.get("measured") or {}
-    r3 = next((s for s in steps if s["name"].startswith("rasterio reads")), None) or {}
-    r3m = r3.get("measured") or {}
-    node = nm.get("node") or gen.get("summary", {}).get("node") or ""
-    gen_bytes = nm.get("bytes") or 0
-    gen_sha = str(nm.get("sha256") or "")
-    gen_compression = str(nm.get("compression") or "uncompressed strips")
-    bits_ok = r3m.get("float32_bits_identical", False)
-    art_source_tiff = grid.get("source_tiff") or {}
-    file_rows = "".join(
-        f'<tr><td class="mono small">{e(f)}</td><td class="num">{present[f].get("bytes", 0):,}</td>'
-        f'<td class="mono small">{e(str(present[f].get("sha256", "NOT COMMITTED"))[:64])}</td></tr>'
-        for f in files)
     gen_note = note(
         "warn",
         "<b>What this file is and is not.</b> It is the adopted artifact's prediction, bit-for-bit, "
@@ -3646,15 +3702,91 @@ Encoder round trip in the builder: float32 buffers identical = <b>{e(rt.get("flo
 under node {e(node) or "(no node in this checkout)"} and its output is judged by tools with no stake
 in the outcome. {n_pass} measured steps passed, {n_fail} failed — verdict <b>{e(verdict)}</b>,
 {e(str(gen.get("generated_utc", "not run in this checkout")))}. The one that carries the weight is
-<code>float32_bits_identical = {e(str(bits_ok)).lower()}</code>: rasterio reads the generated file and
+<code>float32_bits_identical = {e(str(bool(bits_ok))).lower()}</code>: rasterio reads the generated file and
 compares its float32 buffer with the artifact's, all {fmt_bytes(int(grid.get("width", 0)) * int(grid.get("height", 0)) * 4)}
 of it. The container is deliberately <em>not</em> byte-identical — {e(gen_compression)} strips of
 {fmt_bytes(gen_bytes)} against the artifact's {e(str(art_source_tiff.get("compression")))}
 {art_source_tiff.get("blockxsize")}×{art_source_tiff.get("blockysize")} tiles of
-{fmt_bytes(art["bytes"])} — which is why the sentence above is about pixels, not bytes.</p>
+{fmt_bytes(art.get("bytes", 0))} — which is why the sentence above is about pixels, not bytes.</p>
 <table><thead><tr><th>Step</th><th>Status</th><th>Measured</th></tr></thead><tbody>{step_rows}</tbody></table>
 {gen_note}
 """
+
+
+def _submission_builder(ev: dict) -> str:
+    """The submission builder as the FIRST thing a visitor sees: opens index.html and
+    executive_summary.html.
+
+    It answers the standing ask — "the site should be able to generate the TIF required for
+    submission, as easy as clicking a file to download" — by putting the same panel, payload and
+    JavaScript that how_to_submit.html §3 carries at the top of the two pages a reader lands on.
+    One mount per page (the glue binds a single #tif-generator), same two same-origin payload files,
+    same self-checks before a download appears: the bytes a reader downloads from the landing page
+    are judged by the same headless run (data/evidence/site_generator.json) and the same tests
+    (tests/test_site_generator.py). What differs is the framing: here the reader arrives to act, so
+    the panel leads and the audit trail is linked, not reproduced.
+    """
+    f = _payload_facts(ev)
+    head = ('<section id="build-submission" class="build-hero">\n'
+            '<h2 id="generate-here">The file to submit &mdash; build and download it here, in your '
+            'browser</h2>\n')
+    if not f["present"]:
+        return head + missing("the site payload has not been built, so there is no file to generate "
+                              "from this page.",
+                              "python scripts/build_submission_payload.py && python scripts/build_site.py") \
+               + "\n</section>\n"
+
+    enc, grid, blob = f["enc"], f["grid"], f["blob"]
+    in_sync, verdict = f["in_sync"], f["verdict"]
+    steps, n_pass, n_fail = f["steps"], f["n_pass"], f["n_fail"]
+    pill_html = f'<span class="pill {"ok" if in_sync else "bad"}">{e("IN SYNC" if in_sync else "STALE")}</span>'
+    if f["bits_ok"] is None:
+        bits_txt = 'not measured in this checkout (run <code>scripts/check_site_generator.py</code>)'
+    elif f["bits_ok"]:
+        bits_txt = "<b>identical</b>"
+    else:
+        bits_txt = "<b>NOT identical</b>"
+    if steps:
+        verdict_txt = (f'verdict <b>{e(verdict)}</b> — {n_pass} of {len(steps)} measured steps '
+                       f'passed, {n_fail} failed')
+    else:
+        verdict_txt = f'verdict <b>{e(verdict)}</b> — the headless run has not landed in this checkout'
+    p = (
+        f'<p>The DrivenData <em>File to submit</em> dialog asks for a single-band GeoTIFF '
+        f'(<code>.tif</code>) &mdash; or a <code>.zip</code> containing one &mdash; that matches the '
+        f"submission format's CRS, shape and geotransform: "
+        f'<b>{int(grid.get("width") or 0):,} &times; {int(grid.get("height") or 0):,} px &middot; '
+        f'EPSG:{e(grid.get("epsg"))} &middot; {e(grid.get("dtype"))} in [0, 1], NaN outside the '
+        f'footprint</b>. This page ships the pixel field of the adopted, format-validated artifact — '
+        f'measured by <code>scripts/build_submission_payload.py</code> as an {e(enc.get("format"))} '
+        f'stream of {int(enc.get("n_runs") or 0):,} runs for {int(enc.get("expected_pixels") or 0):,} '
+        f'pixels. Click <b>Build submission.tif</b> below: your browser decodes it, writes the '
+        f'GeoTIFF locally with <code>docs/geotiff_writer.js</code>, <b>re-reads its own bytes</b> '
+        f'against the pinned pixels, and offers the download only when every self-check passes. No '
+        f'install, no GPU, no download of the 418 MB feature stack, and nothing is uploaded — the '
+        f'file appears in your Downloads folder. {pill_html} <span class="small">payload pins '
+        f'<code>{e(f["pinned"][:16])}&hellip;</code> &middot; this checkout\'s artifact hashes to '
+        f'<code>{e(f["live"][:16])}&hellip;</code> &middot; both re-hashed at build time</span></p>'
+    )
+    mount = ('<div id="tif-generator" data-meta="submission_meta.json" data-blob="submission_field.bin"\n'
+             f'     data-artifact="{e(SHIPPED_SUBMISSION)}" data-sha256="{e(f["live"])}"></div>\n')
+    foot = (
+        f'<p class="small">How this button is judged: the same JavaScript runs headlessly under '
+        f'node — in this checkout, {verdict_txt} — and the rasterio bit-compare of the generated '
+        f'file against the artifact is {bits_txt}. What this file is and is not: the pixels of '
+        f'<code>{e(SHIPPED_SUBMISSION)}</code> in a container your browser wrote, so it passes the '
+        f'format gate and it is the same field whose surrogate scores are on '
+        f'<a href="results.html">results</a>; only the platform\'s hidden new-fault labels can '
+        f'score it. The full recipe — six routes to the same file, the validation gate, the '
+        f'click-by-click upload, and the rules sentences that bind it: '
+        f'<a href="how_to_submit.html">How to submit</a> (this panel is that page\'s &sect;3, and '
+        f'its claims table names the evidence behind every number). Shipped with the page: '
+        f'<code>submission_field.bin</code>, {int(blob.get("bytes") or 0):,} B, sha256 '
+        f'<code>{e(str(blob.get("sha256"))[:16])}&hellip;</code>; the hashes of all four payload '
+        f'files, re-checked at build time on '
+        f'<a href="how_to_submit.html#generate">the subpage</a>.</p>'
+    )
+    return head + p + "\n" + mount + foot + "\n</section>\n"
 
 
 def build_how_to_submit(ev: dict) -> str:
@@ -3976,7 +4108,8 @@ fold nothing touched, and the measurement <b>re-executed and diffed</b> inside t
 {e(str((base_c or {}).get("measured", {}).get("audit_max_delta", "?")))}).</td></tr>
 </tbody></table>
 """, "Executive summary › how to submit: the exact file, the exact commands, the exact clicks, and "
-     "the gates this checkout passes right now.", tail=GENERATOR_TAIL)
+     "the gates this checkout passes right now.",
+     tail=(GENERATOR_TAIL if (ev.get("site_payload") or {}) else ""))
 
 
 def main(argv=None) -> int:
