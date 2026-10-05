@@ -1,20 +1,28 @@
 {
-  "generated_utc": "2026-09-28T14:01:22+00:00",
-  "generated_by": "scripts/verify_links.py on a host with live HTTP (72 of 84 URLs answered)",
-  "n_urls_reached": 72,
+  "generated_utc": "2026-10-05T14:47:22+00:00",
+  "generated_by": "scripts/verify_links.py on a host with live HTTP (71 of 84 URLs answered)",
+  "n_urls_reached": 71,
   "catalog": "docs/data_catalog.csv",
   "n_rows": 92,
   "n_unique_urls": 84,
   "summary_counts": {
     "BOT_BLOCKED_403": 10,
     "AUTH_REQUIRED": 1,
-    "OK_200": 61,
+    "OK_200": 60,
     "OK_REDIRECTED": 10,
     "OK_202": 1,
-    "LOGIN_REQUIRED": 1
+    "LOGIN_REQUIRED": 1,
+    "UNREACHABLE": 1
   },
-  "n_problems": 0,
-  "problems": [],
+  "n_problems": 1,
+  "problems": [
+    {
+      "url": "https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and",
+      "status": null,
+      "result": "UNREACHABLE",
+      "error": "TimeoutError('The read operation timed out')"
+    }
+  ],
   "n_expected_non_ok": 12,
   "expected_non_ok": [
     {
@@ -141,7 +149,7 @@
       "status": 200,
       "final_url": "https://community.drivendata.org/c/gems-prize-challenge/111",
       "content_type": "text/html",
-      "content_length": 28658,
+      "content_length": 32421,
       "title": "GEMS Prize Challenge - DrivenData Community",
       "redirected": false,
       "redirected_offsite": false,
@@ -601,8 +609,8 @@
       "status": 200,
       "final_url": "https://pypi.org/project/torch/",
       "content_type": "text/html",
-      "content_length": 290956,
-      "title": "torch \u00b7 PyPI",
+      "content_length": 3038,
+      "title": "Client Challenge",
       "redirected": false,
       "redirected_offsite": false,
       "result": "OK_200"
@@ -755,7 +763,7 @@
       "status": 200,
       "final_url": "https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1635344/full",
       "content_type": "text/html",
-      "content_length": 601596,
+      "content_length": 601749,
       "title": "Frontiers | 3D fault detection method using TransVNet",
       "redirected": false,
       "redirected_offsite": false,
@@ -766,7 +774,7 @@
       "status": 200,
       "final_url": "https://www.herox.com/GEMSPrize/resource/2274",
       "content_type": "text/html",
-      "content_length": 93965,
+      "content_length": 93960,
       "title": "GEMS Prize Official Rules",
       "redirected": false,
       "redirected_offsite": false,
@@ -913,14 +921,9 @@
     },
     {
       "url": "https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and",
-      "status": 200,
-      "final_url": "https://www.usgs.gov/data/geodawn-airborne-magnetic-and-radiometric-surveys-northwestern-great-basin-nevada-and",
-      "content_type": "text/html",
-      "content_length": null,
-      "title": "GeoDAWN: Airborne magnetic and radiometric surveys of the northwestern Great Basin, Nevada and California | U.S. Geological Survey",
-      "redirected": false,
-      "redirected_offsite": false,
-      "result": "OK_200"
+      "status": null,
+      "result": "UNREACHABLE",
+      "error": "TimeoutError('The read operation timed out')"
     },
     {
       "url": "https://www.usgs.gov/faqs/where-can-i-find-a-fault-map-united-states-one-available-gis-format",
