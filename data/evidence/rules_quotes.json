@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-10-12T15:32:40Z",
+ "generated_utc": "2026-10-19T13:23:29Z",
  "script": "scripts/verify_rules_quotes.py",
  "source": {
   "url": "/tmp/rules_canonical.pdf",
